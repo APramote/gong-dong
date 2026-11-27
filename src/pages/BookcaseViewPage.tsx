@@ -166,6 +166,24 @@ export function BookcaseViewPage() {
       )}
 
       <section>
+        <h2>{t.view.parts}</h2>
+        <ul className="list">
+          {/* ชั้นบนสุดก่อนเหมือนมองตู้จริง แล้วตามด้วยลิ้นชัก */}
+          {[...[...shelves].reverse(), ...drawers].map((p) => (
+            <li className="row" key={p.id}>
+              <Link to={`/place/${p.id}`} className="row-main">
+                <span className="row-title">{p.name}</span>
+                <span className="row-sub">{t.common.books(inPlace(p.id).length)}</span>
+              </Link>
+              <Link className="btn small" to={`/add?place=${p.id}`}>
+                {t.view.addBooks}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section>
         <h2>{t.view.photo}</h2>
         <StoragePhoto id={id} />
       </section>

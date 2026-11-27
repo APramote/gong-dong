@@ -141,7 +141,8 @@ test('ทำความสะอาดผลอ่านรูปที่เ�
       { books: [] },
     ],
   }
-  expect(cleanStorage({ ...raw, drawerRows: 1.2, drawersPerRow: 0, doors: 5, legs: true }, 'bookcase')).toEqual({
+  // ตู้: เก็บแต่โครงสร้าง ไม่เอาหนังสือ จำนวนชั้นใช้ shelfCount หรือนับจากรายการถ้าไม่มี
+  expect(cleanStorage({ ...raw, shelfCount: 4, drawerRows: 1.2, drawersPerRow: 0, doors: 5, legs: true }, 'bookcase')).toEqual({
     color: '#8b5a2b',
     ratio: 0.8,
     label: 'นิยาย',
@@ -149,11 +150,15 @@ test('ทำความสะอาดผลอ่านรูปที่เ�
     drawersPerRow: 2,
     doors: 2,
     legs: true,
-    shelves: [
-      { books: [{ title: 'ก', authors: '', publisher: '', color: '#aa0000' }, { title: 'ข', authors: '', publisher: '', color: '' }] },
-      { books: [] },
-    ],
+    shelfCount: 4,
+    shelves: [],
   })
+  expect(cleanStorage(raw, 'bookcase').shelfCount).toBe(2)
+  const pileClean = cleanStorage(raw, 'pile')
+  expect(pileClean.shelves[0].books).toEqual([
+    { title: 'ก', authors: '', publisher: '', color: '#aa0000' },
+    { title: 'ข', authors: '', publisher: '', color: '' },
+  ])
   // กองรวมเป็นชั้นเดียว ratio ผิดช่วงเป็น 0
   const pile = cleanStorage({ ...raw, ratio: 50 }, 'pile')
   expect(pile.ratio).toBe(0)
@@ -167,6 +172,7 @@ test('ทำความสะอาดผลอ่านรูปที่เ�
     drawersPerRow: 0,
     doors: 0,
     legs: false,
+    shelfCount: 0,
     shelves: [],
   })
 })

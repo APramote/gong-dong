@@ -204,6 +204,7 @@ export async function scanStorage(
           drawersPerRow: { type: 'INTEGER' },
           doors: { type: 'INTEGER' },
           legs: { type: 'BOOLEAN' },
+          shelfCount: { type: 'INTEGER' },
           shelves: {
             type: 'ARRAY',
             items: {
@@ -213,7 +214,7 @@ export async function scanStorage(
             },
           },
         },
-        required: ['color', 'ratio', 'label', 'drawerRows', 'drawersPerRow', 'doors', 'legs', 'shelves'],
+        required: ['color', 'ratio', 'label', 'drawerRows', 'drawersPerRow', 'doors', 'legs', 'shelfCount', 'shelves'],
       },
     },
   })

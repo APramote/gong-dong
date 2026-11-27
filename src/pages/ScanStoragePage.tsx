@@ -30,6 +30,8 @@ export function ScanStoragePage() {
   /** ตู้: หลายชั้นเรียงบนลงล่างตามรูป / กอง: ชั้นเดียวบนลงล่าง / กล่อง: ชั้นเดียว */
   const [shelves, setShelves] = useState<EditRow[][]>([])
   const [photo, setPhoto] = useState<Blob | null>(null)
+  /** ตู้: จำนวนชั้นวาง (หนังสือเพิ่มทีละชั้นภายหลัง) */
+  const [shelfCount, setShelfCount] = useState(1)
   const camera = useRef<Record<StorageKind, HTMLInputElement | null>>({ bookcase: null, pile: null, box: null })
   const gallery = useRef<HTMLInputElement>(null)
   const ready = aiReady()
@@ -43,8 +45,8 @@ export function ScanStoragePage() {
     setError('')
     setStep('busy')
     try {
-      // ตู้ทั้งตู้มีตัวหนังสือเล็กมาก ใช้ความละเอียดสูงสุด
-      const image = await resizeImage(file, 2400)
+      // ตู้ดูแค่โครงสร้าง ไม่ต้องละเอียดมาก ส่วนกอง/กล่องต้องอ่านชื่อหนังสือ
+      const image = await resizeImage(file, k === 'bookcase' ? 1600 : 2400)
       const result = await scan(await blobToBase64(image), k)
       const titles = existing.map((b) => b.title)
       setPhoto(image)
@@ -62,7 +64,8 @@ export function ScanStoragePage() {
       setLabel(result.label)
       setLocation('')
       const rows = result.shelves.map((s) => toRows(s.books, titles))
-      setShelves(k === 'bookcase' ? (rows.length ? rows : [[]]) : [rows.flat()])
+      setShelfCount(Math.max(1, result.shelfCount))
+      setShelves(k === 'bookcase' ? [] : [rows.flat()])
       setStep('review')
     } catch (err) {
       setError(aiErrorText(err))
@@ -87,8 +90,8 @@ export function ScanStoragePage() {
       id = await repo.addBookcaseWithBooks(
         { name: finalName, room: location.trim() },
         look,
-        // รายการเรียงบนลงล่างตามรูป แต่ชั้นที่ 1 คือชั้นล่างสุด
-        [...shelves].reverse().map((rows) => chosen(rows).map(toBook)),
+        // ตู้สร้างแต่ชั้นเปล่า หนังสือเพิ่มทีละชั้นภายหลังเพื่อความแม่นยำ
+        Array.from({ length: shelfCount }, () => []),
       )
       to = `/view/bookcase/${id}`
     } else {
@@ -109,8 +112,6 @@ export function ScanStoragePage() {
   if (step === 'busy') return <p className="empty">{t.scan.reading}</p>
 
   if (step === 'review') {
-    const preview = (rows: EditRow[]) =>
-      chosen(rows).map((r) => ({ id: `p${r.key}`, title: r.title, pages: null, spineColor: r.color ?? '' }))
     const setRows = (i: number, rows: EditRow[]) => setShelves((all) => all.map((r, j) => (j === i ? rows : r)))
     return (
       <div className="form">
@@ -118,7 +119,7 @@ export function ScanStoragePage() {
         {kind === 'bookcase' ? (
           <div className="view3d-wrap small">
             <Suspense fallback={null}>
-              <Storage3D model={{ shelves: [...shelves].reverse().map(preview), look }} />
+              <Storage3D model={{ shelves: Array.from({ length: shelfCount }, () => []), look }} />
             </Suspense>
           </div>
         ) : (
@@ -140,33 +141,23 @@ export function ScanStoragePage() {
         </label>
         {kind === 'bookcase' && <ShapeFields look={look} onChange={setLook} />}
 
-        {total === 0 && shelves.every((r) => r.length === 0) && <p className="muted">{t.scan.noBooks}</p>}
         {kind === 'bookcase' ? (
           <>
-            <p className="muted">{t.scan.shelvesOrder}</p>
-            <button type="button" className="btn" onClick={() => setShelves((s) => [[], ...s])}>
-              {t.scan.addShelf}
-            </button>
-            {shelves.map((rows, i) => (
-              <section key={i} className="shelf-edit">
-                <div className="section-head">
-                  <h2>{t.scan.shelf(shelves.length - i, shelves.length)}</h2>
-                  {shelves.length > 1 && (
-                    <button
-                      type="button"
-                      className="btn small danger"
-                      onClick={() => setShelves((s) => s.filter((_, j) => j !== i))}
-                    >
-                      {t.scan.removeShelf}
-                    </button>
-                  )}
-                </div>
-                <BookRowsEditor rows={rows} onChange={(r) => setRows(i, r)} />
-              </section>
-            ))}
+            <label>
+              {t.scan.shelfCount}
+              <select value={shelfCount} onChange={(e) => setShelfCount(Number(e.target.value))}>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="muted">{t.scan.booksLater}</p>
           </>
         ) : (
           <section className="shelf-edit">
+            {total === 0 && (shelves[0] ?? []).length === 0 && <p className="muted">{t.scan.noBooks}</p>}
             {kind === 'pile' && <p className="muted">{t.scan.pileOrder}</p>}
             <BookRowsEditor rows={shelves[0] ?? []} onChange={(r) => setRows(0, r)} />
           </section>
