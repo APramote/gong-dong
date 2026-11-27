@@ -12,7 +12,7 @@ import { timeAgo } from '../lib/stats'
 import { placeLabel } from '../placeLabel'
 import { resizeImage } from '../lib/image'
 import { lookupIsbn, normalizeIsbn } from '../lib/isbn'
-import { aiReady, enrich } from '../lib/ai'
+import { aiOn, aiReady, enrich } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { t } from '../th'
 
@@ -341,6 +341,7 @@ export function BookFormPage() {
         </label>
       </div>
 
+      {aiOn() && (
       <div className="ai-box">
         <div className="actions">
           <button
@@ -355,6 +356,7 @@ export function BookFormPage() {
         </div>
         {aiMsg && <p className={aiMsg.ok ? 'ok' : 'error'}>{aiMsg.text}</p>}
       </div>
+      )}
       <label>
         {t.book.synopsis}
         <textarea rows={4} value={form.synopsis} onChange={(e) => set('synopsis', e.target.value)} />

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
 import type { Book } from '../db/types'
-import { aiReady, askJson } from '../lib/ai'
+import { aiOn, aiReady, askJson } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import {
   buildOrganizePrompt,
@@ -220,6 +220,8 @@ export function OrganizePage() {
         {advice.noCategory.length > 0 && <p className="muted">{t.organize.noCategory(advice.noCategory.length)}</p>}
       </section>
 
+      {!aiOn() && <p className="muted">{t.ai.offNote}</p>}
+      {aiOn() && (
       <section>
         <h2>{t.organize.ai}</h2>
         <p className="muted">{t.organize.aiHint}</p>
@@ -332,6 +334,7 @@ export function OrganizePage() {
           </div>
         )}
       </section>
+      )}
     </>
   )
 }

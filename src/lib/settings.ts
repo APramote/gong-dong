@@ -9,6 +9,8 @@ const KEY = 'gong-dong.settings'
 export type Provider = 'gemini' | 'claude'
 
 export interface Settings {
+  /** ปิดแล้วแอปไม่ส่งข้อมูลหรือรูปให้ AI เลย (key ที่บันทึกไว้ยังอยู่) */
+  aiEnabled: boolean
   provider: Provider
   geminiKey: string
   geminiModel: string
@@ -21,6 +23,7 @@ export interface Settings {
 }
 
 const defaults: Settings = {
+  aiEnabled: true,
   provider: 'gemini',
   geminiKey: '',
   geminiModel: '',

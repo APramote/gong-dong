@@ -4,7 +4,7 @@ import { repo } from '../db/repo'
 import type { Look } from '../db/types'
 import { useBlobUrl } from '../components/Cover'
 import { ShapeFields } from '../components/ShapeFields'
-import { aiReady, scanShape } from '../lib/ai'
+import { aiOn, aiReady, scanShape } from '../lib/ai'
 import type { StorageKind } from '../lib/aiCommon'
 import { aiErrorText } from '../lib/aiError'
 import { blobToBase64, resizeImage } from '../lib/image'
@@ -34,6 +34,7 @@ export function ScanStoragePage() {
   const camera = useRef<Record<StorageKind, HTMLInputElement | null>>({ bookcase: null, pile: null, box: null })
   const gallery = useRef<HTMLInputElement>(null)
   const ready = aiReady()
+  const useAi = aiOn()
 
   async function onPhoto(k: StorageKind, e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -182,8 +183,9 @@ export function ScanStoragePage() {
         />
       ))}
       <input ref={gallery} type="file" accept="image/*" hidden data-scan-gallery onChange={(e) => onPhoto(kind, e)} />
-      {option('bookcase', t.scan.bookcase, t.scan.bookcaseHint)}
-      {!ready && (
+      {useAi && option('bookcase', t.scan.bookcase, t.scan.bookcaseHint)}
+      {!useAi && <p className="muted">{t.scan.aiOffBookcase}</p>}
+      {useAi && !ready && (
         <p className="muted">
           {t.scan.needKeyBookcase}{' '}
           <Link to="/settings" className="link">

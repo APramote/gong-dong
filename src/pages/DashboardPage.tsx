@@ -14,7 +14,7 @@ import {
   StatTile,
   TableView,
 } from '../components/charts'
-import { aiReady, askJson } from '../lib/ai'
+import { aiOn, aiReady, askJson } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import {
   coachPrompt,
@@ -285,6 +285,7 @@ export function DashboardPage() {
         </section>
       )}
 
+      {aiOn() && (
       <section>
         <h2>{t.dash.coach}</h2>
         <p className="muted">{t.dash.coachHint}</p>
@@ -343,6 +344,7 @@ export function DashboardPage() {
           </div>
         )}
       </section>
+      )}
     </div>
   )
 }

@@ -5,7 +5,7 @@ import { emptyBook, repo } from '../db/repo'
 import { PlaceSelect } from '../components/PlaceSelect'
 import { BookRowsEditor, chosen as chosenRows, toRows, type EditRow } from '../components/BookRowsEditor'
 import { Scanner } from '../components/Scanner'
-import { aiReady, covers, recognize } from '../lib/ai'
+import { aiOn, aiReady, covers, recognize } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { blobToBase64, cropImage, resizeImage } from '../lib/image'
 import { lookupIsbn } from '../lib/isbn'
@@ -29,6 +29,7 @@ export function AddPage() {
   }
 
   const hasKey = aiReady()
+  const useAi = aiOn()
 
   /** อ่านปกทุกเล่มในรูป และตัดรูปปกของแต่ละเล่มออกมา */
   async function readCovers(file: Blob): Promise<EditRow[]> {
@@ -184,14 +185,16 @@ export function AddPage() {
       <h1>{t.add.title}</h1>
       <PlaceSelect label={t.add.dest} value={placeId} onChange={setPlaceId} />
       {error && <p className="error">{error}</p>}
-      {!hasKey && (
+      {!useAi && <p className="muted">{t.add.aiOffHint}</p>}
+      {useAi && !hasKey && (
         <p className="muted">
           {t.add.needKey} <Link to="/settings" className="link">{t.add.goSettings}</Link>
         </p>
       )}
       {photoInputs}
-      {option(t.add.photoCover, t.add.photoCoverHint, () => inputs.camera.cover.current?.click(), !hasKey)}
-      {option(t.add.photoSpine, t.add.photoSpineHint, () => inputs.camera.spine.current?.click(), !hasKey)}
+      {/* ถ่ายรูปปก/สันปกต้องใช้ AI อ่าน ซ่อนไว้เมื่อปิด AI */}
+      {useAi && option(t.add.photoCover, t.add.photoCoverHint, () => inputs.camera.cover.current?.click(), !hasKey)}
+      {useAi && option(t.add.photoSpine, t.add.photoSpineHint, () => inputs.camera.spine.current?.click(), !hasKey)}
       {hasKey && (
         <p className="muted">
           {t.add.pickInstead}{' '}

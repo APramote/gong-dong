@@ -808,3 +808,26 @@ textarea {
 .cat-add input {
   flex: 1;
 }
+.form label.switch-row,
+.switch-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+}
+.switch-row > span {
+  display: flex;
+  flex-direction: column;
+}
+.switch-row input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+}

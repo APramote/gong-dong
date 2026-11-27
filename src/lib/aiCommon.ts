@@ -1,6 +1,6 @@
 /** ส่วนที่ใช้ร่วมกันระหว่างผู้ให้บริการ AI (Gemini / Claude) */
 
-export type AiErrorKind = 'no-key' | 'bad-key' | 'quota' | 'credit' | 'refusal' | 'network' | 'other'
+export type AiErrorKind = 'off' | 'no-key' | 'bad-key' | 'quota' | 'credit' | 'refusal' | 'network' | 'other'
 
 /** รายละเอียดโควตาที่ได้จากคำตอบ 429 */
 export interface QuotaInfo {

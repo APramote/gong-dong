@@ -80,6 +80,24 @@ export function SettingsPage() {
   return (
     <div className="form">
       <h1>{t.settings.title}</h1>
+      <label className="switch-row">
+        <input
+          type="checkbox"
+          role="switch"
+          checked={settings.aiEnabled}
+          onChange={(e) => {
+            update({ aiEnabled: e.target.checked })
+            setStatus(null)
+          }}
+        />
+        <span>
+          <span className="row-title">{t.settings.aiEnabled}</span>
+          <span className="row-sub">{t.settings.aiEnabledHint}</span>
+        </span>
+      </label>
+      {!settings.aiEnabled && <p className="muted">{t.settings.aiOffNow}</p>}
+      {settings.aiEnabled && (
+      <>
       <fieldset className="fieldset">
         <legend>{t.settings.provider}</legend>
         {providerOption('gemini', t.settings.gemini, t.settings.geminiHint)}
@@ -158,6 +176,8 @@ export function SettingsPage() {
           </button>
         )}
       </div>
+      </>
+      )}
     </div>
   )
 }
