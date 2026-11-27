@@ -1,5 +1,5 @@
-import type { Enrichment, RecognizedBook, StorageKind, StorageScan } from './aiCommon'
-import { enrichBook, recognizeBooks, scanStorage } from './gemini'
+import type { CoverBook, Enrichment, RecognizedBook, StorageKind, StorageScan } from './aiCommon'
+import { enrichBook, recognizeBooks, recognizeCovers, scanStorage } from './gemini'
 import { loadSettings, type Settings } from './settings'
 
 /** ใช้ผู้ให้บริการ AI ตามที่เลือกในหน้าตั้งค่า — โหลด Claude SDK เฉพาะตอนใช้ Claude */
@@ -40,4 +40,11 @@ export async function scan(imageBase64: string, kind: StorageKind): Promise<Stor
   return s.provider === 'claude'
     ? (await claude()).scanStorageClaude(s.claudeKey, s.claudeModel, imageBase64, kind)
     : scanStorage(s.geminiKey, s.geminiModel, imageBase64, kind)
+}
+
+export async function covers(imageBase64: string): Promise<CoverBook[]> {
+  const s = loadSettings()
+  return s.provider === 'claude'
+    ? (await claude()).recognizeCoversClaude(s.claudeKey, s.claudeModel, imageBase64)
+    : recognizeCovers(s.geminiKey, s.geminiModel, imageBase64)
 }

@@ -289,3 +289,59 @@ export function cleanStorage(raw: any, kind: StorageKind): StorageScan {
     shelves,
   }
 }
+
+// ---------- อ่านปกหลายเล่มในรูปเดียว ----------
+
+export interface CoverBook extends RecognizedBook {
+  /** กรอบปกในรูป [ymin, xmin, ymax, xmax] สเกล 0–1000 หรือ null ถ้าไม่ทราบ */
+  box: [number, number, number, number] | null
+}
+
+export const coversPrompt = () =>
+  'This photo shows the front covers of one or more books, usually laid side by side. Return every book whose ' +
+  'cover is visible, ordered left to right, then top to bottom. For each book also return "box": the bounding box ' +
+  'of its whole front cover as [ymin, xmin, ymax, xmax] with values normalised to 0-1000.' +
+  RECOGNIZE_RULES
+
+export const coversSchema = {
+  type: 'object',
+  properties: {
+    books: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          authors: { type: 'string', description: 'Author names separated by ", "' },
+          publisher: { type: 'string' },
+          box: { type: 'array', items: { type: 'integer' } },
+        },
+        required: ['title', 'authors', 'publisher', 'box'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['books'],
+  additionalProperties: false,
+} as const
+
+/** ทำความสะอาดผลอ่านปก: กรอบที่ผิดรูปแบบหรือเล็กเกินไปถือว่าไม่ทราบ */
+export function cleanCovers(rows: unknown): CoverBook[] {
+  if (!Array.isArray(rows)) return []
+  return rows
+    .map((r: any) => {
+      const b = Array.isArray(r?.box) ? r.box.map(Number) : []
+      const ok =
+        b.length === 4 &&
+        b.every((v: number) => Number.isFinite(v) && v >= 0 && v <= 1000) &&
+        b[2] - b[0] >= 20 &&
+        b[3] - b[1] >= 20
+      return {
+        title: str(r?.title),
+        authors: str(r?.authors),
+        publisher: str(r?.publisher),
+        box: ok ? (b as [number, number, number, number]) : null,
+      }
+    })
+    .filter((b) => b.title)
+}

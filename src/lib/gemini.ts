@@ -2,6 +2,9 @@ const BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
 import {
   AiError,
+  cleanCovers,
+  coversPrompt,
+  type CoverBook,
   cleanStorage,
   storagePrompt,
   type StorageKind,
@@ -220,4 +223,43 @@ export async function scanStorage(
   } catch {
     throw new AiError('other', 'unreadable response')
   }
+}
+
+/** อ่านปกหลายเล่มในรูปเดียว พร้อมกรอบของแต่ละปก */
+export async function recognizeCovers(key: string, model: string, imageBase64: string): Promise<CoverBook[]> {
+  const data = await call(`models/${model}:generateContent`, key, {
+    contents: [
+      {
+        parts: [
+          { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
+          { text: coversPrompt() },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            title: { type: 'STRING' },
+            authors: { type: 'STRING' },
+            publisher: { type: 'STRING' },
+            box: { type: 'ARRAY', items: { type: 'INTEGER' }, description: '[ymin, xmin, ymax, xmax] 0-1000' },
+          },
+          required: ['title', 'authors', 'publisher', 'box'],
+        },
+      },
+    },
+  })
+  const text: string = (data?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? '').join('')
+  let parsed: any
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    throw new AiError('other', 'unreadable response')
+  }
+  return cleanCovers(Array.isArray(parsed) ? parsed : parsed?.books)
 }

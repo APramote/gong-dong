@@ -170,3 +170,21 @@ test('ทำความสะอาดผลอ่านรูปที่เ�
     shelves: [],
   })
 })
+
+test('ทำความสะอาดผลอ่านปกหลายเล่ม', async () => {
+  const { cleanCovers } = await import('./aiCommon')
+  expect(
+    cleanCovers([
+      { title: 'ก', authors: 'x', publisher: '', box: [100, 50, 600, 400] },
+      { title: 'ข', authors: '', publisher: '', box: [100, 50, 105, 400] }, // เล็กเกินไป
+      { title: 'ค', authors: '', publisher: '', box: [0, 0, 1200, 10] }, // เกินช่วง
+      { title: '', authors: '', publisher: '', box: [0, 0, 500, 500] },
+      { title: 'ง', authors: '', publisher: '' },
+    ]),
+  ).toEqual([
+    { title: 'ก', authors: 'x', publisher: '', box: [100, 50, 600, 400] },
+    { title: 'ข', authors: '', publisher: '', box: null },
+    { title: 'ค', authors: '', publisher: '', box: null },
+    { title: 'ง', authors: '', publisher: '', box: null },
+  ])
+})

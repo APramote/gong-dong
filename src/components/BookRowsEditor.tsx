@@ -1,4 +1,10 @@
 import { t } from '../th'
+import { useBlobUrl } from './Cover'
+
+function CoverPreview({ blob }: { blob: Blob }) {
+  const url = useBlobUrl(blob)
+  return url ? <img className="thumb review-thumb" src={url} alt="" /> : null
+}
 
 export interface EditRow {
   key: number
@@ -8,6 +14,8 @@ export interface EditRow {
   authors: string
   publisher: string
   color?: string
+  /** รูปปกที่ตัดจากรูปถ่าย */
+  cover?: Blob
 }
 
 let nextKey = 0
@@ -23,7 +31,15 @@ export function toRows(
   const have = new Set(existingTitles.map(norm))
   return found.map((b) => {
     const duplicate = have.has(norm(b.title))
-    return { key: newRowKey(), include: !duplicate, duplicate, ...b }
+    return {
+      key: newRowKey(),
+      include: !duplicate,
+      duplicate,
+      title: b.title,
+      authors: b.authors,
+      publisher: b.publisher,
+      ...(b.color !== undefined && { color: b.color }),
+    }
   })
 }
 
@@ -53,6 +69,7 @@ export function BookRowsEditor({ rows, onChange }: { rows: EditRow[]; onChange: 
                 onChange={(e) => patch(r.key, { include: e.target.checked })}
               />
               {r.color && <span className="swatch" style={{ background: r.color }} aria-hidden />}
+              {r.cover && <CoverPreview blob={r.cover} />}
               <div className="review-fields">
                 <input
                   aria-label={t.book.title}

@@ -5,9 +5,9 @@ import { emptyBook, repo } from '../db/repo'
 import { PlaceSelect } from '../components/PlaceSelect'
 import { BookRowsEditor, chosen as chosenRows, toRows, type EditRow } from '../components/BookRowsEditor'
 import { Scanner } from '../components/Scanner'
-import { aiReady, recognize } from '../lib/ai'
+import { aiReady, covers, recognize } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
-import { blobToBase64, resizeImage } from '../lib/image'
+import { blobToBase64, cropImage, resizeImage } from '../lib/image'
 import { lookupIsbn } from '../lib/isbn'
 import { t } from '../th'
 
@@ -23,7 +23,6 @@ export function AddPage() {
   const [error, setError] = useState('')
   const [rows, setRows] = useState<EditRow[]>([])
   const [mode, setMode] = useState<Mode>('cover')
-  const [photo, setPhoto] = useState<Blob | null>(null)
   const inputs = {
     camera: { cover: useRef<HTMLInputElement>(null), spine: useRef<HTMLInputElement>(null) },
     pick: { cover: useRef<HTMLInputElement>(null), spine: useRef<HTMLInputElement>(null) },
@@ -31,29 +30,57 @@ export function AddPage() {
 
   const hasKey = aiReady()
 
+  /** อ่านปกทุกเล่มในรูป และตัดรูปปกของแต่ละเล่มออกมา */
+  async function readCovers(file: Blob): Promise<EditRow[]> {
+    const image = await resizeImage(file, 2048)
+    const found = await covers(await blobToBase64(image))
+    const titles = [...existing.map((b) => b.title), ...rows.map((r) => r.title)]
+    const result = toRows(found, titles)
+    for (let i = 0; i < found.length; i++) {
+      const box = found[i].box
+      // ไม่รู้กรอบแต่มีเล่มเดียว ใช้ทั้งรูปเป็นปก
+      if (box) result[i].cover = await cropImage(image, box, 480)
+      else if (found.length === 1) result[i].cover = await resizeImage(image, 480)
+    }
+    return result
+  }
+
+  /**
+   * รับรูปจากกล้องหรือคลังรูป (เลือกได้หลายรูป)
+   * ถ้าอยู่ในหน้าตรวจสอบแล้ว เพิ่มต่อท้ายรายการเดิม ไม่ล้างของเก่า
+   */
   async function onPhoto(m: Mode, e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
+    const files = [...(e.target.files ?? [])]
     e.target.value = '' // ให้เลือกรูปเดิมซ้ำได้
-    if (!file) return
+    if (files.length === 0) return
+    const appending = step === 'review' && m === mode
     setMode(m)
     setError('')
-    setBusyText(t.add.reading)
     setStep('busy')
+    let added: EditRow[] = []
     try {
-      // สันปกต้องการความละเอียดสูงกว่าเพื่ออ่านตัวหนังสือเล็ก
-      const image = await resizeImage(file, m === 'spine' ? 2048 : 1280)
-      const found = await recognize(await blobToBase64(image), m)
-      if (found.length === 0) {
-        setError(t.add.none)
-        return setStep('menu')
+      for (let i = 0; i < files.length; i++) {
+        setBusyText(files.length > 1 ? t.add.readingN(i + 1, files.length) : t.add.reading)
+        if (m === 'cover') {
+          added = [...added, ...(await readCovers(files[i]))]
+        } else {
+          // สันปกต้องการความละเอียดสูงเพื่ออ่านตัวหนังสือเล็ก
+          const image = await resizeImage(files[i], 2048)
+          const found = await recognize(await blobToBase64(image), m)
+          added = [...added, ...toRows(found, existing.map((b) => b.title))]
+        }
       }
-      setPhoto(image)
-      setRows(toRows(found, existing.map((b) => b.title)))
-      setStep('review')
     } catch (err) {
       setError(aiErrorText(err))
-      setStep('menu')
     }
+    const next = appending ? [...rows, ...added] : added
+    if (next.length === 0) {
+      setError((e) => e || t.add.none)
+      return setStep(appending ? 'review' : 'menu')
+    }
+    if (added.length === 0 && appending) setError((e) => e || t.add.none)
+    setRows(next)
+    setStep('review')
   }
 
   async function onIsbn(isbn: string) {
@@ -80,11 +107,30 @@ export function AddPage() {
         placeId,
       })),
     )
-    if (mode === 'cover' && ids.length === 1 && photo) {
-      await repo.setCover(ids[0], await resizeImage(photo, 480))
+    for (let i = 0; i < ids.length; i++) {
+      const cover = ordered[i].cover
+      if (cover) await repo.setCover(ids[i], cover)
     }
     navigate(placeId ? `/place/${placeId}` : '/', { replace: true })
   }
+
+  // ปุ่มหลักเปิดกล้องทันที ส่วน input ชุด pick ใช้เลือกรูปที่ถ่ายไว้แล้ว (เลือกได้หลายรูป)
+  const photoInputs = (['cover', 'spine'] as const).flatMap((m) =>
+    (['camera', 'pick'] as const).map((src) => (
+      <input
+        key={m + src}
+        ref={inputs[src][m]}
+        type="file"
+        accept="image/*"
+        capture={src === 'camera' ? 'environment' : undefined}
+        multiple={src === 'pick'}
+        hidden
+        data-mode={m}
+        data-src={src}
+        onChange={(e) => onPhoto(m, e)}
+      />
+    )),
+  )
 
   if (step === 'busy') return <p className="empty">{busyText}</p>
 
@@ -96,13 +142,30 @@ export function AddPage() {
       <div className="form">
         <h1>{t.add.reviewTitle}</h1>
         <p className="muted">{t.add.reviewHint(rows.length)}</p>
+        {error && <p className="error">{error}</p>}
         <PlaceSelect label={t.add.dest} value={placeId} onChange={setPlaceId} />
         <BookRowsEditor rows={rows} onChange={setRows} />
+        {photoInputs}
+        <div className="actions">
+          <button className="btn" onClick={() => inputs.camera[mode].current?.click()}>
+            {t.add.takeMore}
+          </button>
+          <button className="btn" onClick={() => inputs.pick[mode].current?.click()}>
+            {t.add.pickMore}
+          </button>
+        </div>
         <div className="actions">
           <button className="btn primary" disabled={chosen.length === 0} onClick={saveAll}>
             {t.add.saveN(chosen.length)}
           </button>
-          <button className="btn" onClick={() => setStep('menu')}>
+          <button
+            className="btn"
+            onClick={() => {
+              setRows([])
+              setError('')
+              setStep('menu')
+            }}
+          >
             {t.add.retake}
           </button>
         </div>
@@ -126,22 +189,7 @@ export function AddPage() {
           {t.add.needKey} <Link to="/settings" className="link">{t.add.goSettings}</Link>
         </p>
       )}
-      {/* ปุ่มหลักเปิดกล้องทันที ส่วน input ชุด pick ใช้เลือกรูปที่ถ่ายไว้แล้ว */}
-      {(['cover', 'spine'] as const).flatMap((m) =>
-        (['camera', 'pick'] as const).map((src) => (
-          <input
-            key={m + src}
-            ref={inputs[src][m]}
-            type="file"
-            accept="image/*"
-            capture={src === 'camera' ? 'environment' : undefined}
-            hidden
-            data-mode={m}
-            data-src={src}
-            onChange={(e) => onPhoto(m, e)}
-          />
-        )),
-      )}
+      {photoInputs}
       {option(t.add.photoCover, t.add.photoCoverHint, () => inputs.camera.cover.current?.click(), !hasKey)}
       {option(t.add.photoSpine, t.add.photoSpineHint, () => inputs.camera.spine.current?.click(), !hasKey)}
       {hasKey && (
