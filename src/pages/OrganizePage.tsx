@@ -7,6 +7,7 @@ import { aiOn, aiReady, askJson } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { AiError } from '../lib/aiCommon'
 import {
+  BATCH,
   batches,
   buildCategoryPrompt,
   buildLayoutPrompt,
@@ -311,7 +312,7 @@ export function OrganizePage() {
       {aiOn() && (
       <section>
         <h2>{t.organize.ai}</h2>
-        <p className="muted">{t.organize.aiHint}</p>
+        <p className="muted">{t.organize.aiHint(BATCH)}</p>
         {error && (
           <p className="error" role="alert">
             {error}

@@ -64,7 +64,7 @@ export function ruleAdvice(
 export const DEFAULT_LIMIT = 12
 
 /** จำนวนเล่มต่อการจัดหมวดหนึ่งครั้ง */
-export const BATCH = 60
+export const BATCH = 20
 
 /** แบ่งรายการเป็นชุด */
 export function batches<T>(rows: T[], size = BATCH): T[][] {
