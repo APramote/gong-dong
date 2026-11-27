@@ -239,3 +239,34 @@ export async function recognizeCovers(key: string, model: string, imageBase64: s
   }
   return cleanCovers(Array.isArray(parsed) ? parsed : parsed?.books)
 }
+
+/** แปลง JSON Schema มาตรฐานเป็นรูปแบบ schema ของ Gemini (ชนิดตัวพิมพ์ใหญ่ ไม่มี additionalProperties) */
+export function toGeminiSchema(schema: any): any {
+  if (!schema || typeof schema !== 'object') return schema
+  const out: any = {}
+  if (schema.type) out.type = String(schema.type).toUpperCase()
+  if (schema.description) out.description = schema.description
+  if (schema.enum) out.enum = schema.enum
+  if (schema.properties) {
+    out.properties = Object.fromEntries(
+      Object.entries(schema.properties).map(([k, v]) => [k, toGeminiSchema(v)]),
+    )
+  }
+  if (schema.items) out.items = toGeminiSchema(schema.items)
+  if (schema.required) out.required = schema.required
+  return out
+}
+
+/** ส่งคำสั่งข้อความแล้วรับ JSON ตาม schema กลับมา */
+export async function generateJson(key: string, model: string, prompt: string, schema: object): Promise<any> {
+  const data = await call(`models/${model}:generateContent`, key, {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: 'application/json', responseSchema: toGeminiSchema(schema) },
+  })
+  const text: string = (data?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? '').join('')
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new AiError('other', 'unreadable response')
+  }
+}

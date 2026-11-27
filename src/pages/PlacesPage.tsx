@@ -52,9 +52,14 @@ export function PlacesPage() {
     <>
       <div className="page-head">
         <h1>{t.nav.places}</h1>
-        <Link to="/scan" className="btn primary">
-          {t.scan.open}
-        </Link>
+        <div className="actions">
+          <Link to="/organize" className="btn">
+            {t.organize.open}
+          </Link>
+          <Link to="/scan" className="btn primary">
+            {t.scan.open}
+          </Link>
+        </div>
       </div>
 
       {section(

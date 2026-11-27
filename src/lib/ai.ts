@@ -1,5 +1,5 @@
 import type { BookcaseScan, CoverBook, Enrichment, RecognizedBook } from './aiCommon'
-import { enrichBook, recognizeBooks, recognizeCovers, scanBookcase } from './gemini'
+import { enrichBook, generateJson, recognizeBooks, recognizeCovers, scanBookcase } from './gemini'
 import { loadSettings, type Settings } from './settings'
 
 /** ใช้ผู้ให้บริการ AI ตามที่เลือกในหน้าตั้งค่า — โหลด Claude SDK เฉพาะตอนใช้ Claude */
@@ -48,4 +48,12 @@ export async function covers(imageBase64: string): Promise<CoverBook[]> {
   return s.provider === 'claude'
     ? (await claude()).recognizeCoversClaude(s.claudeKey, s.claudeModel, imageBase64)
     : recognizeCovers(s.geminiKey, s.geminiModel, imageBase64)
+}
+
+/** ถามด้วยข้อความ รับ JSON ตาม schema (JSON Schema มาตรฐาน) */
+export async function askJson<T>(prompt: string, schema: object): Promise<T> {
+  const s = loadSettings()
+  return s.provider === 'claude'
+    ? (await claude()).generateJsonClaude(s.claudeKey, s.claudeModel, prompt, schema)
+    : generateJson(s.geminiKey, s.geminiModel, prompt, schema)
 }

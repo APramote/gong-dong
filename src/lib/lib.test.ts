@@ -164,3 +164,74 @@ test('ทำความสะอาดผลอ่านปกหลายเ�
     { title: 'ง', authors: '', publisher: '', box: null },
   ])
 })
+
+test('แปลง JSON Schema เป็นรูปแบบของ Gemini', async () => {
+  const { toGeminiSchema } = await import('./gemini')
+  expect(
+    toGeminiSchema({
+      type: 'object',
+      properties: { a: { type: 'array', items: { type: 'string' } }, b: { type: 'integer', description: 'x' } },
+      required: ['a'],
+      additionalProperties: false,
+    }),
+  ).toEqual({
+    type: 'OBJECT',
+    properties: { a: { type: 'ARRAY', items: { type: 'STRING' } }, b: { type: 'INTEGER', description: 'x' } },
+    required: ['a'],
+  })
+})
+
+test('คำแนะนำการจัดเก็บจากกฎ และการอ่านแผนของ AI', async () => {
+  const { ruleAdvice, buildOrganizePrompt, readPlan } = await import('./organize')
+  const now = new Date(2026, 10, 27).getTime()
+  const old = now - 400 * 86400000
+  const book = (id: string, o: object) =>
+    ({ id, title: id, authors: '', category: '', status: 'dong', placeId: 'shelf', takenAt: null, finishedAt: null, createdAt: old, ...o }) as any
+  const places = [
+    { id: 'shelf', kind: 'shelf', name: 'ชั้นที่ 1', bookcaseId: null, label: '', location: '' },
+    { id: 'box', kind: 'box', name: 'กล่อง 1', bookcaseId: null, label: 'เก่า', location: 'ใต้เตียง' },
+  ] as any
+  const books = [
+    book('doneOld', { status: 'done', finishedAt: old }),
+    book('doneRecent', { status: 'done', finishedAt: now - 10 * 86400000 }),
+    book('dongInBox', { placeId: 'box' }),
+    book('loose', { placeId: null, category: 'นิยาย' }),
+    book('inHand', { placeId: null, takenAt: now }),
+  ]
+  // เล่มที่อ่านจบนานแล้วแต่เพิ่งหยิบอ่านซ้ำ ไม่ควรถูกแนะนำให้เก็บ
+  const sessions = [{ bookId: 'doneRecent', startedAt: now - 5 * 86400000, endedAt: now - 5 * 86400000 }] as any
+  const advice = ruleAdvice(books, places, sessions, now)
+  expect(advice.toBox.map((b) => b.id)).toEqual(['doneOld'])
+  expect(advice.outOfBox.map((b) => b.id)).toEqual(['dongInBox'])
+  expect(advice.unplaced.map((b) => b.id)).toEqual(['loose'])
+  expect(advice.noCategory.map((b) => b.id)).toEqual(['doneOld', 'doneRecent', 'dongInBox', 'inHand'])
+
+  const input = buildOrganizePrompt(books, places, [], sessions)
+  expect(input.prompt).toContain('p2 | box | กล่อง 1 | 1 books | label "เก่า", at ใต้เตียง')
+  expect([...input.bookIds.values()]).not.toContain('inHand') // หนังสือในมือไม่ส่ง
+  const code = (id: string) => [...input.bookIds].find(([, v]) => v === id)![0]
+  const plan = readPlan(
+    {
+      summary: ' สรุป ',
+      tips: ['a', '', 'b'],
+      categories: [
+        { book: code('doneOld'), category: 'ประวัติศาสตร์' },
+        { book: code('doneOld'), category: 'ซ้ำ' },
+        { book: 'b999', category: 'ไม่มีจริง' },
+      ],
+      moves: [
+        { book: code('doneOld'), to: 'p2', reason: 'อ่านจบนานแล้ว' },
+        { book: code('dongInBox'), to: 'p2', reason: 'ที่เดิม' },
+        { book: code('loose'), to: 'p9', reason: 'ไม่มีที่นี้' },
+      ],
+    },
+    input,
+    books,
+  )
+  expect(plan).toEqual({
+    summary: 'สรุป',
+    tips: ['a', 'b'],
+    categories: [{ bookId: 'doneOld', category: 'ประวัติศาสตร์' }],
+    moves: [{ bookId: 'doneOld', toPlaceId: 'box', reason: 'อ่านจบนานแล้ว' }],
+  })
+})

@@ -128,6 +128,10 @@ export function createRepo(db: GongDongDB = defaultDb) {
       })
     },
 
+    async setCategory(id: string, category: string): Promise<void> {
+      await db.books.update(id, { category, updatedAt: Date.now() })
+    },
+
     async moveBook(id: string, placeId: string | null): Promise<void> {
       const old = await db.books.get(id)
       if (!old || old.takenAt || old.placeId === placeId) return

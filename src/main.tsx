@@ -12,6 +12,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { ReadingPage } from './pages/ReadingPage'
 import { ScanStoragePage } from './pages/ScanStoragePage'
 import { BookcaseViewPage } from './pages/BookcaseViewPage'
+import { OrganizePage } from './pages/OrganizePage'
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/reading" element={<ReadingPage />} />
           <Route path="/scan" element={<ScanStoragePage />} />
+          <Route path="/organize" element={<OrganizePage />} />
           <Route path="/view/bookcase/:id" element={<BookcaseViewPage />} />
           <Route path="/book/new" element={<BookFormPage />} />
           <Route path="/book/:id" element={<BookFormPage />} />

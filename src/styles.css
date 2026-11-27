@@ -549,3 +549,40 @@ textarea {
   height: 62px;
   margin-top: 4px;
 }
+.card.advice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface);
+}
+.pick {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.inline-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  flex: 1;
+  min-width: 180px;
+}
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.plan .card {
+  background: var(--surface);
+  margin: 0;
+}
+.tips {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+.dest-group h4 {
+  margin: 12px 0 6px;
+  font-size: 0.95rem;
+}
