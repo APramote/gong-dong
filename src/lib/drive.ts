@@ -28,7 +28,7 @@ interface TokenResponse {
   error?: string
 }
 interface TokenClient {
-  requestAccessToken(opts?: { prompt?: string }): void
+  requestAccessToken(opts?: { prompt?: string; login_hint?: string }): void
 }
 declare global {
   interface Window {
@@ -41,6 +41,7 @@ declare global {
             callback: (r: TokenResponse) => void
             error_callback?: (e: { type?: string }) => void
           }): TokenClient
+          revoke(accessToken: string, done?: () => void): void
         }
       }
     }
@@ -68,7 +69,7 @@ function loadGis(): Promise<void> {
 let token: { value: string; clientId: string; expires: number } | null = null
 
 /** ขอโทเคน (เปิดหน้าต่างของ Google ให้ผู้ใช้อนุญาต) ต้องเรียกจากการกดปุ่ม ไม่อย่างนั้นเบราว์เซอร์จะบล็อกหน้าต่าง */
-export async function signIn(clientId: string): Promise<string> {
+export async function signIn(clientId: string, hint = ''): Promise<string> {
   const id = clientId.trim()
   if (!/^[\w-]+\.apps\.googleusercontent\.com$/.test(id)) throw new DriveError('no-client')
   if (token && token.clientId === id && token.expires > Date.now() + 60_000) return token.value
@@ -88,12 +89,27 @@ export async function signIn(clientId: string): Promise<string> {
       },
       error_callback: (e) => reject(new DriveError(e.type === 'popup_failed_to_open' ? 'blocked' : 'denied', e.type)),
     })
-    client.requestAccessToken({ prompt: '' })
+    // รู้บัญชีอยู่แล้วก็บอก Google ไว้ จะได้ไม่ต้องเลือกบัญชีซ้ำ
+    client.requestAccessToken(hint ? { prompt: '', login_hint: hint } : { prompt: 'select_account' })
   })
 }
 
+/** ออกจากระบบ: ยกเลิกสิทธิ์ของโทเคนที่ถืออยู่ (ถ้ามี) แล้วลืมโทเคน */
 export function signOut(): void {
+  if (token) window.google?.accounts.oauth2.revoke(token.value)
   token = null
+}
+
+export interface Account {
+  email: string
+  name: string
+}
+
+/** บัญชี Google ที่อนุญาตไว้ (ถามจาก Drive ใช้สิทธิ์เดิม ไม่ต้องขอสิทธิ์อ่านโปรไฟล์เพิ่ม) */
+export async function account(accessToken: string): Promise<Account> {
+  const res = await call(accessToken, 'https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)')
+  const user = ((await res.json()) as { user?: { displayName?: string; emailAddress?: string } }).user
+  return { email: String(user?.emailAddress ?? ''), name: String(user?.displayName ?? '') }
 }
 
 async function call(accessToken: string, url: string, init: RequestInit = {}): Promise<Response> {

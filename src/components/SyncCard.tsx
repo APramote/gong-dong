@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { db } from '../db/db'
-import { download } from '../lib/ics'
+import { download } from '../lib/download'
 import { DEFAULT_GOOGLE_CLIENT_ID, loadSettings, saveSettings } from '../lib/settings'
 import { dayKey, timeAgo } from '../lib/stats'
 import { t } from '../th'
@@ -29,13 +29,17 @@ export function SyncCard() {
     setS(next)
   }
 
+  /** เข้าสู่ระบบ (ถ้ายังไม่เข้า) แล้วซิงก์ทันที */
   async function sync() {
     setMsg(null)
-    setBusy(t.sync.syncing)
+    setBusy(s.googleAccount ? t.sync.syncing : t.sync.signingIn)
     try {
       // โหลดโค้ด sync เฉพาะเมื่อใช้ และขอสิทธิ์จาก Google ในจังหวะกดปุ่ม (ไม่งั้นหน้าต่างถูกบล็อก)
-      const [{ signIn, driveStore }, { syncAll }] = await Promise.all([import('../lib/drive'), import('../lib/sync')])
-      const token = await signIn(s.googleClientId || DEFAULT_GOOGLE_CLIENT_ID)
+      const [{ signIn, driveStore, account }, { syncAll }] = await Promise.all([import('../lib/drive'), import('../lib/sync')])
+      const token = await signIn(s.googleClientId || DEFAULT_GOOGLE_CLIENT_ID, s.googleAccount)
+      const who = await account(token)
+      update({ googleAccount: who.email })
+      setBusy(t.sync.syncing)
       const r = await syncAll(db, driveStore(token), (done, total) => setBusy(t.sync.covers(done, total)))
       update({ lastSyncAt: Date.now() })
       setMsg({ ok: true, text: t.sync.done(r.pushed, r.pulled) })
@@ -43,6 +47,13 @@ export function SyncCard() {
       setMsg({ ok: false, text: errorText(e) })
     }
     setBusy('')
+  }
+
+  async function logout() {
+    const { signOut } = await import('../lib/drive')
+    signOut()
+    update({ googleAccount: '' })
+    setMsg({ ok: true, text: t.sync.signedOut })
   }
 
   async function exportFile() {
@@ -76,12 +87,30 @@ export function SyncCard() {
       <p className="muted">{t.sync.lead}</p>
 
       <h3>{t.sync.driveTitle}</h3>
-      <div className="actions">
-        <button type="button" className="btn primary" disabled={Boolean(busy)} onClick={sync}>
-          {t.sync.syncNow}
-        </button>
-        <span className="muted">{s.lastSyncAt ? t.sync.last(timeAgo(s.lastSyncAt)) : t.sync.never}</span>
-      </div>
+      {s.googleAccount ? (
+        <>
+          <p className="account">
+            <span className="account-dot" aria-hidden />
+            {t.sync.signedInAs(s.googleAccount)}
+          </p>
+          <div className="actions">
+            <button type="button" className="btn primary" disabled={Boolean(busy)} onClick={sync}>
+              {t.sync.syncNow}
+            </button>
+            <button type="button" className="btn" disabled={Boolean(busy)} onClick={logout}>
+              {t.sync.signOut}
+            </button>
+          </div>
+          <p className="muted">{s.lastSyncAt ? t.sync.last(timeAgo(s.lastSyncAt)) : t.sync.never}</p>
+        </>
+      ) : (
+        <div className="actions">
+          <button type="button" className="btn primary" disabled={Boolean(busy)} onClick={sync}>
+            {t.sync.signIn}
+          </button>
+          <span className="muted">{t.sync.signInHint}</span>
+        </div>
+      )}
       <p className="muted">{t.sync.privacy}</p>
       <details className="more" open={Boolean(s.googleClientId)}>
         <summary>{t.sync.advanced}</summary>

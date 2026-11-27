@@ -537,6 +537,17 @@ export function createRepo(db: GongDongDB = defaultDb) {
 
     openSession,
 
+    /**
+     * ล้างสถิติการอ่าน: ลบประวัติการอ่านทั้งหมด (ทำเครื่องหมายลบ จึงตามไปทุกเครื่องเมื่อซิงก์)
+     * หนังสือ หน้าที่คั่น และสถานะอ่านจบยังอยู่ การหยิบที่ยังไม่วางคืนคงไว้ให้วางคืนได้ตามปกติ
+     */
+    async clearStats(): Promise<number> {
+      const now = Date.now()
+      return db.sessions
+        .filter((s) => s.deletedAt === null && s.endedAt !== null)
+        .modify({ deletedAt: now, updatedAt: now })
+    },
+
     async listSessions(): Promise<ReadingSession[]> {
       return alive(await db.sessions.toArray()).sort(latestFirst)
     },

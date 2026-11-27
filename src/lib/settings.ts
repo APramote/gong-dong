@@ -25,13 +25,12 @@ export interface Settings {
   dailyGoalPages: number
   /** เป้าจำนวนเล่มที่อ่านจบต่อปี */
   yearGoalBooks: number
-  /** เตือนเวลาอ่าน: วันในสัปดาห์ (0 = อาทิตย์) และเวลา HH:MM */
-  reminderDays: number[]
-  reminderTime: string
   /** OAuth Client ID ที่ผู้ใช้ใส่เอง (ว่าง = ใช้ค่าของแอป) */
   googleClientId: string
   /** เวลาที่ sync สำเร็จล่าสุด (0 = ยังไม่เคย) */
   lastSyncAt: number
+  /** อีเมลบัญชี Google ที่เข้าสู่ระบบไว้ (ว่าง = ยังไม่เข้า) — เก็บไว้แสดงผล ไม่ใช่โทเคน */
+  googleAccount: string
 }
 
 const defaults: Settings = {
@@ -44,10 +43,9 @@ const defaults: Settings = {
   dailyGoalMinutes: 20,
   dailyGoalPages: 20,
   yearGoalBooks: 12,
-  reminderDays: [0, 1, 2, 3, 4, 5, 6],
-  reminderTime: '21:00',
   googleClientId: '',
   lastSyncAt: 0,
+  googleAccount: '',
 }
 
 export function loadSettings(): Settings {

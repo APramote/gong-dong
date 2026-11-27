@@ -280,9 +280,6 @@ export function ReadingPage() {
               {t.reading.allStats}
             </Link>
           )}
-          <Link to="/settings#remind" className="link">
-            {t.remind.link}
-          </Link>
         </p>
       </section>
     </div>

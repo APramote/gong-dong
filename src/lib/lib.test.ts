@@ -5,7 +5,6 @@ import { pace } from './stats'
 import { dongFor, dongPool, findMatches, nearMatcher, pickOne } from './picks'
 import { ranges, summarize } from './series'
 import { dashboard } from './dashboard'
-import { buildIcs, firstStart, fold } from './ics'
 import { yearReview } from './yearReview'
 import { emptyBook } from '../db/repo'
 import type { Book } from '../db/types'
@@ -340,16 +339,6 @@ test('มูลค่าคลังรวมจากราคาที่ใ�
   expect(d.collection).toEqual({ value: 349.5, priced: 2, signed: 1 })
 })
 
-test('ไฟล์ปฏิทิน: นัดซ้ำตามวันที่เลือก เวลาท้องถิ่น มีการเตือน', () => {
-  const now = new Date(2026, 10, 27, 10, 0) // ศุกร์
-  expect(firstStart({ days: [1], time: '21:30' }, now)).toEqual(new Date(2026, 10, 30, 21, 30))
-  const ics = buildIcs({ days: [5, 1], time: '21:30', minutes: 20, title: 'อ่าน, หนังสือ', description: '' }, now, 'x')
-  expect(ics).toContain('DTSTART:20261127T213000\r\n')
-  expect(ics).toContain('DTEND:20261127T215000')
-  expect(ics).toContain('RRULE:FREQ=WEEKLY;BYDAY=MO,FR')
-  expect(ics).toContain('SUMMARY:อ่าน\\, หนังสือ')
-  expect(ics).toContain('BEGIN:VALARM')
-})
 
 test('สรุปปี: นับเฉพาะปีที่เลือก หาเล่มที่ใช้เวลามากสุดและวันต่อเนื่อง', () => {
   const at = (m: number, d: number, h = 21) => new Date(2026, m, d, h).getTime()
@@ -384,14 +373,6 @@ test('ชุดหนังสือ: เล่มซ้ำไม่ทำให
   expect(wild.total).toBe(3)
 })
 
-test('ไฟล์ปฏิทิน: บรรทัดยาวถูกพับไม่เกิน 75 ไบต์ และ escape backslash', () => {
-  const lines = fold('DESCRIPTION:' + 'หนังสือ'.repeat(30)).split('\r\n')
-  expect(lines.length).toBeGreaterThan(1)
-  for (const l of lines) expect(new TextEncoder().encode(l).length).toBeLessThanOrEqual(75)
-  expect(lines.slice(1).every((l) => l.startsWith(' '))).toBe(true)
-  expect(lines.map((l, i) => (i ? l.slice(1) : l)).join('')).toBe('DESCRIPTION:' + 'หนังสือ'.repeat(30))
-  expect(buildIcs({ days: [1], time: '08:00', minutes: 20, title: 'a\\b', description: '' })).toContain('SUMMARY:a\\\\b')
-})
 
 test('สถิติจากการคั่นหน้า: นับหน้ารายวัน วันที่มีแต่หน้าก็นับต่อเนื่อง การหยิบติดตัวไม่นับ', () => {
   const now = new Date(2026, 5, 10, 22).getTime()

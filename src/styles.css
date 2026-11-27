@@ -2159,3 +2159,20 @@ details.more[open] {
 .desk .actions .link-btn {
   min-height: 40px;
 }
+
+/* ---------- บัญชี Google ---------- */
+.account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.account-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--series-2);
+}

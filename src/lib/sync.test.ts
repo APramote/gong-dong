@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { expect, test } from 'vitest'
 import { GongDongDB } from '../db/db'
 import { createRepo, emptyBook } from '../db/repo'
-import { exportBackup, importBackup, parseSnapshot, syncAll, type RemoteStore } from './sync'
+import { exportBackup, importBackup, parseSnapshot, syncAll, wipeLocal, wipeRemote, type RemoteStore } from './sync'
 
 let n = 0
 const device = () => {
@@ -93,4 +93,49 @@ test('ไฟล์สำรอง: กู้คืนในเครื่อง
   await expect(importBackup(b.db, new Blob(['{"version":2}']))).rejects.toThrow('bad-file')
   // แถวที่ไม่มี id หรือเวลาแก้ไขถูกทิ้ง
   expect(parseSnapshot('{"version":1,"tables":{"books":[{"title":"x"},{"id":"1","updatedAt":5}]}}').tables.books).toHaveLength(1)
+})
+
+test('ล้างสถิติ: ลบประวัติการอ่าน หนังสือและการหยิบที่ค้างยังอยู่ และการลบตามไปอีกเครื่อง', async () => {
+  const a = device()
+  const b = device()
+  const drive = memoryStore()
+  const id = await a.repo.addBook({ ...emptyBook, title: 'อ่านอยู่', pages: 100 })
+  await a.repo.takeBook(id)
+  await a.repo.checkIn(id, { page: 20, minutes: 15 })
+  await syncAll(a.db, drive)
+  await syncAll(b.db, drive)
+  expect((await b.repo.listSessions()).length).toBe(2)
+
+  await tick()
+  expect(await a.repo.clearStats()).toBe(1) // เฉพาะการอ่านที่จบแล้ว การหยิบที่ค้างคงไว้
+  expect((await a.repo.listSessions()).map((s) => s.kind)).toEqual(['carry'])
+  expect((await a.repo.getBook(id))!).toMatchObject({ currentPage: 20 })
+  expect((await a.repo.getBook(id))!.takenAt).not.toBeNull()
+  await syncAll(a.db, drive)
+  await syncAll(b.db, drive)
+  expect((await b.repo.listSessions()).map((s) => s.kind)).toEqual(['carry'])
+})
+
+test('ล้างทั้งหมด: เครื่องว่าง สำเนากลางว่าง และซิงก์ใหม่ไม่ดึงอะไรกลับมา', async () => {
+  const a = device()
+  const drive = memoryStore()
+  const id = await a.repo.addBook({ ...emptyBook, title: 'จะหายไป' })
+  await a.repo.setCover(id, new Blob(['ปก'], { type: 'image/jpeg' }))
+  await syncAll(a.db, drive)
+  expect(await wipeRemote(drive)).toBe(2)
+  await wipeLocal(a.db)
+  expect(await a.repo.listBooks()).toEqual([])
+  expect(await a.db.covers.count()).toBe(0)
+  expect(await syncAll(a.db, drive)).toEqual({ pushed: 0, pulled: 0 })
+  expect(await a.repo.listBooks()).toEqual([])
+})
+
+test('ล้างเฉพาะเครื่อง: ซิงก์อีกครั้งข้อมูลกลับมาจากสำเนากลาง', async () => {
+  const a = device()
+  const drive = memoryStore()
+  await a.repo.addBook({ ...emptyBook, title: 'ยังอยู่ใน Drive' })
+  await syncAll(a.db, drive)
+  await wipeLocal(a.db)
+  expect((await syncAll(a.db, drive)).pulled).toBe(1)
+  expect((await a.repo.listBooks()).map((x) => x.title)).toEqual(['ยังอยู่ใน Drive'])
 })

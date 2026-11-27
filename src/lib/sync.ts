@@ -156,6 +156,20 @@ export async function syncAll(
   return { pushed, pulled }
 }
 
+/** ลบสำเนาทั้งหมดในที่เก็บกลาง คืนจำนวนไฟล์ที่ลบ */
+export async function wipeRemote(store: RemoteStore): Promise<number> {
+  const names = [...(await store.names())]
+  for (const name of names) await store.del(name)
+  return names.length
+}
+
+/** ล้างข้อมูลทั้งหมดในเครื่องนี้ (ลบจริง ไม่เหลือเครื่องหมายลบ) */
+export async function wipeLocal(db: GongDongDB): Promise<void> {
+  await db.transaction('rw', db.tables, async () => {
+    for (const table of db.tables) await table.clear()
+  })
+}
+
 // ---------- สำรองเป็นไฟล์เดียว ----------
 
 async function toBase64(blob: Blob): Promise<string> {

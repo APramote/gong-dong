@@ -5,8 +5,8 @@ import { CLAUDE_MODELS } from '../lib/claudeModels'
 import { pickDefaultModel } from '../lib/gemini'
 import { loadSettings, saveSettings, type Provider, type Settings } from '../lib/settings'
 import { t } from '../th'
-import { ReminderCard } from '../components/ReminderCard'
 import { SyncCard } from '../components/SyncCard'
+import { WipeCard } from '../components/WipeCard'
 
 type Status = { ok: boolean; text: string } | null
 
@@ -181,7 +181,7 @@ export function SettingsPage() {
       </>
       )}
       <SyncCard />
-      <ReminderCard />
+      <WipeCard />
     </div>
   )
 }
