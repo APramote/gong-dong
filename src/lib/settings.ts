@@ -25,6 +25,8 @@ export interface Settings {
   dailyGoalPages: number
   /** เป้าจำนวนเล่มที่อ่านจบต่อปี */
   yearGoalBooks: number
+  /** จำนวนหมวดสูงสุดที่อยากมี AI จะไม่ตั้งหมวดเกินนี้ */
+  maxCategories: number
   /** OAuth Client ID ที่ผู้ใช้ใส่เอง (ว่าง = ใช้ค่าของแอป) */
   googleClientId: string
   /** เวลาที่ sync สำเร็จล่าสุด (0 = ยังไม่เคย) */
@@ -43,6 +45,7 @@ const defaults: Settings = {
   dailyGoalMinutes: 20,
   dailyGoalPages: 20,
   yearGoalBooks: 12,
+  maxCategories: 12,
   googleClientId: '',
   lastSyncAt: 0,
   googleAccount: '',

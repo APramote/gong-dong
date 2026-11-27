@@ -401,3 +401,31 @@ test('สถิติจากการคั่นหน้า: นับหน
   expect(d).toMatchObject({ todayPages: 25, todayMinutes: 30, weekPages: 35, streak: 2, sessions: 2 })
   expect(pace(sessions as never)).toBe(1.2)
 })
+
+test('คุมจำนวนหมวด: คำขอบอกเพดาน อ่านข้อเสนอรวมหมวด และด่านสุดท้ายรวมเป็นอื่น ๆ', async () => {
+  const { buildCategoryPrompt, buildMergePrompt, readMerges, capCategories } = await import('./organize')
+  const b = [{ id: 'x', title: 'เล่ม', authors: '', publisher: '', tags: [], synopsis: '', blurb: '' }] as any
+  // ยังมีที่ว่าง: บอกจำนวนที่ตั้งเพิ่มได้ เต็มแล้ว: ห้ามตั้งใหม่
+  expect(buildCategoryPrompt(b, ['ก', 'ข'], 5).prompt).toContain('at most 3 new broad category')
+  expect(buildCategoryPrompt(b, ['ก', 'ข', 'ค'], 3).prompt).toContain('choose ONLY from the categories already in use')
+
+  const prompt = buildMergePrompt([{ name: 'นิยาย', count: 40, samples: ['ก'] }, { name: 'นิยายแปล', count: 2, samples: ['ข "x"'] }], 1, ['นิยาย'])
+  expect(prompt).toContain('"นิยาย" | 40 books | fixed |')
+  expect(prompt).toContain('"นิยายแปล" | 2 books | can merge | e.g. "ข \\"x\\""')
+  const names = ['นิยาย', 'นิยายแปล', 'วรรณกรรม', 'การ์ตูน']
+  const map = readMerges(
+    { merges: [{ from: 'นิยายแปล', to: 'วรรณกรรม' }, { from: 'วรรณกรรม', to: 'นิยาย' }, { from: 'นิยาย', to: 'อะไรก็ได้' }, { from: 'ไม่มีจริง', to: 'x' }, { from: 'การ์ตูน', to: 'การ์ตูน' }] },
+    names,
+    ['นิยาย'],
+  )
+  // ไล่ลูกโซ่ถึงปลายทาง หมวดที่ล็อกไว้ไม่ถูกรวม หมวดที่ไม่มีจริงและรวมเข้าตัวเองถูกทิ้ง
+  expect([...map]).toEqual([['นิยายแปล', 'นิยาย'], ['วรรณกรรม', 'นิยาย']])
+
+  const sug = [...Array(5).fill('ก'), ...Array(3).fill('ข'), 'ค', 'ง', 'เดิม'].map((category, i) => ({ bookId: String(i), category }))
+  // มีหมวดเดิม 1 เพดาน 3: เหลือที่ 2 = หมวดใหม่ที่ใหญ่สุด 1 หมวด + "อื่น ๆ"
+  const capped = capCategories(sug, ['เดิม'], 3).map((x) => x.category)
+  expect([...new Set(capped)].sort()).toEqual(['ก', 'อื่น ๆ', 'เดิม'].sort())
+  expect(capped.filter((x) => x === 'อื่น ๆ')).toHaveLength(5)
+  // ไม่เกินเพดาน ไม่แตะ
+  expect(capCategories(sug, ['เดิม'], 10)).toBe(sug)
+})

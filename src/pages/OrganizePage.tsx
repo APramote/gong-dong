@@ -10,7 +10,11 @@ import {
   batches,
   buildCategoryPrompt,
   buildLayoutPrompt,
+  buildMergePrompt,
+  capCategories,
   categorySchema,
+  mergeSchema,
+  readMerges,
   layoutSchema,
   planMoves,
   readCategories,
@@ -20,6 +24,7 @@ import {
 import { placeGroups, placeLabel } from '../placeLabel'
 import { useLeaveGuard } from '../components/useLeaveGuard'
 import { Ring } from '../components/Ring'
+import { loadSettings } from '../lib/settings'
 import { t } from '../th'
 
 /** รายการหนังสือแบบติ๊กเลือกได้ */
@@ -170,17 +175,20 @@ export function OrganizePage() {
       // ขั้นที่ 1: จัดหมวดเล่มที่ยังไม่มีหมวด ทีละชุด (หมวดจากชุดก่อนส่งต่อให้ชุดถัดไปใช้ชื่อเดียวกัน)
       const todo = all.filter((b) => !b.categoryId)
       const known = categories.map((c) => c.name)
-      const suggestions: OrganizePlan['categories'] = []
+      let suggestions: OrganizePlan['categories'] = []
+      const existing = categories.map((c) => c.name)
+      const limit = Math.max(existing.length, loadSettings().maxCategories)
       let attempted = 0
       const groups = batches(todo)
       const steps = groups.length + (places.length > 0 ? 1 : 0)
+      const titleOf = new Map(all.map((b) => [b.id, b.title]))
       let step = 0
       setRatio(0)
       for (const group of groups) {
         setProgress(t.organize.progressCats(attempted, todo.length))
         attempted += group.length
         try {
-          const input = buildCategoryPrompt(group, known)
+          const input = buildCategoryPrompt(group, known, limit)
           for (const c of readCategories(await askJson(input.prompt, categorySchema), input)) {
             suggestions.push(c)
             if (!known.some((k) => k.toLowerCase() === c.category.toLowerCase())) known.push(c.category)
@@ -191,6 +199,24 @@ export function OrganizePage() {
         }
         setRatio(++step / steps)
       }
+
+      // คุมจำนวนหมวด: ถ้าหมวดใหม่ทำให้เกินที่ตั้งไว้ ให้ AI รวมหมวดใหม่เข้าหมวดที่กว้างกว่า (หมวดเดิมของผู้ใช้ไม่แตะ)
+      if (known.length > limit && !(firstError && fatal(firstError))) {
+        setProgress(t.organize.progressMerge)
+        const stats = known.map((name) => {
+          const mine = suggestions.filter((c) => c.category === name)
+          const count = mine.length + all.filter((b) => b.categoryId && catName(b) === name).length
+          return { name, count, samples: mine.slice(0, 3).map((c) => titleOf.get(c.bookId) ?? '') }
+        })
+        try {
+          const map = readMerges(await askJson(buildMergePrompt(stats, limit, existing), mergeSchema), known, existing)
+          suggestions = suggestions.map((c) => ({ ...c, category: map.get(c.category) ?? c.category }))
+        } catch (e) {
+          firstError ??= e
+        }
+      }
+      // ด่านสุดท้ายไม่พึ่ง AI: ยังเกินอยู่ก็รวมหมวดใหม่ที่เล็กที่สุดเป็น "อื่น ๆ"
+      suggestions = capCategories(suggestions, existing, limit)
 
       // ขั้นที่ 2: ให้ AI วางผังระดับหมวด แล้วแอปคิดการย้ายรายเล่มเอง
       let layout: Pick<OrganizePlan, 'summary' | 'tips' | 'moves'> = { summary: '', tips: [], moves: [] }

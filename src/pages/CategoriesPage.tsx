@@ -3,10 +3,14 @@ import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { normName, repo } from '../db/repo'
 import type { Category } from '../db/types'
-import { aiOn } from '../lib/ai'
+import { Ring } from '../components/Ring'
+import { aiOn, aiReady, askJson } from '../lib/ai'
+import { aiErrorText } from '../lib/aiError'
+import { buildMergePrompt, mergeSchema, readMerges } from '../lib/organize'
+import { loadSettings, saveSettings } from '../lib/settings'
 import { t } from '../th'
 
-/** จัดการหมวด: เพิ่ม เปลี่ยนชื่อ (ชื่อซ้ำ = รวมหมวด) ลบ และแตะเพื่อดูหนังสือในหมวด */
+/** จัดการหมวด: เพิ่ม เปลี่ยนชื่อ รวมหมวด ลบ คุมจำนวนหมวดไม่ให้มากเกินไป และแตะเพื่อดูหนังสือในหมวด */
 export function CategoriesPage() {
   const categories = useLiveQuery(() => repo.listCategories(), [])
   const books = useLiveQuery(() => repo.listBooks(), []) ?? []
@@ -14,6 +18,15 @@ export function CategoriesPage() {
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [msg, setMsg] = useState('')
+  const [limit, setLimit] = useState(() => loadSettings().maxCategories)
+  /** หมวดที่กำลังเลือกปลายทางเพื่อรวม */
+  const [merging, setMerging] = useState<string | null>(null)
+  const [mergeTo, setMergeTo] = useState('')
+  /** ข้อเสนอรวมหมวดจาก AI: ชื่อเดิม → ชื่อใหม่ */
+  const [proposal, setProposal] = useState<{ from: string; to: string }[] | null>(null)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
   if (!categories) return <p className="empty">{t.common.loading}</p>
   const count = (id: string | null) => books.filter((b) => b.categoryId === id).length
@@ -23,6 +36,49 @@ export function CategoriesPage() {
     await repo.ensureCategory(name)
     setName('')
   }
+
+  async function merge(c: Category) {
+    const into = categories!.find((x) => x.id === mergeTo)
+    if (!into || !confirm(t.categories.confirmMerge(c.name, into.name, count(c.id)))) return
+    await repo.mergeCategory(c.id, into.id)
+    setMerging(null)
+    setMsg(t.categories.merged(into.name))
+  }
+
+  /** ให้ AI ดูทุกหมวด (จำนวนเล่มและชื่อหนังสือตัวอย่าง) แล้วเสนอว่าหมวดไหนควรรวมกัน */
+  async function suggest() {
+    setBusy(true)
+    setError('')
+    setMsg('')
+    setProposal(null)
+    try {
+      const stats = categories!.map((c) => {
+        const mine = books.filter((b) => b.categoryId === c.id)
+        return { name: c.name, count: mine.length, samples: mine.slice(0, 3).map((b) => b.title) }
+      })
+      const names = stats.map((x) => x.name)
+      const map = readMerges(await askJson(buildMergePrompt(stats, limit), mergeSchema), names)
+      const rows = [...map].map(([from, to]) => ({ from, to }))
+      setProposal(rows)
+      setPicked(new Set(rows.map((x) => x.from)))
+    } catch (e) {
+      setError(aiErrorText(e))
+    }
+    setBusy(false)
+  }
+
+  async function applyProposal() {
+    const rows = (proposal ?? []).filter((x) => picked.has(x.from))
+    for (const row of rows) {
+      const from = (await repo.listCategories()).find((c) => c.name === row.from)
+      // ปลายทางเป็นหมวดที่มีอยู่ = รวมเข้า ไม่มี = เปลี่ยนชื่อเป็นหมวดกว้างใหม่ (รายการถัดไปจะรวมเข้าหมวดนี้)
+      if (from) await repo.renameCategory(from.id, row.to)
+    }
+    setProposal(null)
+    setMsg(t.categories.aiMergeDone(rows.length, (await repo.listCategories()).length))
+  }
+
+  const over = categories.length - limit
 
   async function rename(c: Category) {
     const kept = await repo.renameCategory(c.id, draft)
@@ -54,7 +110,79 @@ export function CategoriesPage() {
           {t.categories.add}
         </button>
       </form>
-      {msg && <p className="ok">{msg}</p>}
+      {msg && (
+        <p className="ok" role="status">
+          {msg}
+        </p>
+      )}
+
+      {/* คุมจำนวนหมวด: หมวดมากเกินไปหาหนังสือยาก */}
+      <section className="cat-limit">
+        <label className="narrow">
+          {t.categories.limit}
+          <input
+            inputMode="numeric"
+            defaultValue={limit}
+            onBlur={(e) => {
+              const n = Math.min(50, Math.max(3, parseInt(e.target.value, 10) || 12))
+              e.target.value = String(n)
+              setLimit(n)
+              saveSettings({ ...loadSettings(), maxCategories: n })
+            }}
+          />
+        </label>
+        <p className={over > 0 ? 'error' : 'muted'}>
+          {t.categories.status(categories.length, limit)}
+          {over > 0 && ` · ${t.categories.over(over)}`}
+        </p>
+        {aiOn() && <p className="muted">{t.categories.limitHint}</p>}
+        {aiOn() && aiReady() && categories.length > 1 && !proposal && (
+          <button className="btn" disabled={busy} onClick={suggest}>
+            {busy && <Ring size={18} />}
+            {busy ? t.categories.aiMergeBusy : t.categories.aiMerge}
+          </button>
+        )}
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        {proposal && proposal.length === 0 && <p className="muted">{t.categories.aiMergeNone}</p>}
+        {proposal && proposal.length > 0 && (
+          <div className="card">
+            <h3>{t.categories.aiMergeTitle(proposal.length)}</h3>
+            <ul className="list">
+              {proposal.map((row) => (
+                <li className="row" key={row.from}>
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      checked={picked.has(row.from)}
+                      onChange={() =>
+                        setPicked((cur) => {
+                          const next = new Set(cur)
+                          if (next.has(row.from)) next.delete(row.from)
+                          else next.add(row.from)
+                          return next
+                        })
+                      }
+                    />
+                    {t.categories.aiMergeRow(row.from, row.to, count(categories.find((c) => c.name === row.from)?.id ?? ''))}
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <div className="actions">
+              <button className="btn primary" disabled={picked.size === 0} onClick={applyProposal}>
+                {t.categories.aiMergeApply(picked.size)}
+              </button>
+              <button className="btn" onClick={() => setProposal(null)}>
+                {t.common.cancel}
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
 
       <section>
         {categories.length === 0 ? (
@@ -77,16 +205,59 @@ export function CategoriesPage() {
                       {t.common.cancel}
                     </button>
                   </form>
+                ) : merging === c.id ? (
+                  <form
+                    className="cat-add grow"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      merge(c)
+                    }}
+                  >
+                    <select autoFocus aria-label={t.categories.mergePick} value={mergeTo} onChange={(e) => setMergeTo(e.target.value)}>
+                      <option value="">{`${c.name} → ${t.categories.mergePick}`}</option>
+                      {categories
+                        .filter((x) => x.id !== c.id)
+                        .map((x) => (
+                          <option key={x.id} value={x.id}>
+                            {x.name}
+                          </option>
+                        ))}
+                    </select>
+                    <button className="btn small primary" disabled={!mergeTo}>
+                      {t.categories.mergeDo}
+                    </button>
+                    <button type="button" className="btn small" onClick={() => setMerging(null)}>
+                      {t.common.cancel}
+                    </button>
+                  </form>
                 ) : (
                   <>
                     <Link to={`/?cat=${c.id}`} className="row-main">
                       <span className="row-title">{c.name}</span>
-                      <span className="row-sub">{t.common.books(count(c.id))}</span>
+                      <span className="row-sub">
+                        {t.common.books(count(c.id))}
+                        {/* หมวดที่มีไม่เกิน 2 เล่ม น่ารวมกับหมวดอื่น */}
+                        {categories.length > 3 && count(c.id) <= 2 && ` · ${t.categories.small}`}
+                      </span>
                     </Link>
+                    {categories.length > 1 && (
+                      <button
+                        className="btn small"
+                        onClick={() => {
+                          setMerging(c.id)
+                          setMergeTo('')
+                          setEditing(null)
+                          setMsg('')
+                        }}
+                      >
+                        {t.categories.mergeInto}
+                      </button>
+                    )}
                     <button
                       className="btn small"
                       onClick={() => {
                         setEditing(c.id)
+                        setMerging(null)
                         setDraft(c.name)
                         setMsg('')
                       }}

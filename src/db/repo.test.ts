@@ -433,3 +433,15 @@ test('ผลจากการตรวจ: ตำแหน่งซ้ำกั
   expect(after.map((x) => x.id)).toEqual([before[1], before[0], before[2]])
   expect(after.map((x) => x.position)).toEqual([0, 1, 2])
 })
+
+test('รวมหมวด: หนังสือย้ายไปหมวดปลายทาง หมวดต้นทางหายไป', async () => {
+  const a = await repo.ensureCategory('นิยายแปล')
+  const b = await repo.ensureCategory('นิยาย')
+  const id = await repo.addBook({ ...emptyBook, title: 'เล่ม', categoryId: a })
+  await repo.mergeCategory(a, b)
+  expect((await repo.getBook(id))!.categoryId).toBe(b)
+  expect((await repo.listCategories()).map((c) => c.name)).toEqual(['นิยาย'])
+  await repo.mergeCategory(b, a) // ปลายทางถูกลบไปแล้ว ไม่ทำอะไร
+  expect((await repo.getBook(id))!.categoryId).toBe(b)
+  expect((await repo.listCategories()).length).toBe(1)
+})

@@ -429,6 +429,18 @@ export function createRepo(db: GongDongDB = defaultDb) {
       return id
     },
 
+    /** รวมหมวดหนึ่งเข้ากับอีกหมวด: ย้ายหนังสือทั้งหมดแล้วลบหมวดต้นทาง */
+    async mergeCategory(fromId: string, intoId: string): Promise<void> {
+      if (fromId === intoId) return
+      const now = Date.now()
+      await db.transaction('rw', db.books, db.categories, async () => {
+        const into = await db.categories.get(intoId)
+        if (!into || into.deletedAt !== null) return
+        await db.books.where('categoryId').equals(fromId).modify({ categoryId: intoId, updatedAt: now })
+        await db.categories.update(fromId, { deletedAt: now, updatedAt: now })
+      })
+    },
+
     /** ลบหมวด หนังสือในหมวดกลายเป็นไม่มีหมวด (ไม่ถูกลบ) */
     async deleteCategory(id: string): Promise<void> {
       const now = Date.now()

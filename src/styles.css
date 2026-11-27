@@ -2281,3 +2281,25 @@ details.more[open] {
 .btn .ring {
   margin-right: 8px;
 }
+
+/* ---------- คุมจำนวนหมวด ---------- */
+.cat-limit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0;
+}
+.cat-limit p {
+  margin: 0;
+}
+.cat-limit .card {
+  width: 100%;
+}
+.cat-row {
+  flex-wrap: wrap;
+}
+.cat-add select {
+  flex: 1;
+  min-width: 0;
+}
