@@ -355,3 +355,6 @@ textarea {
   padding-left: 20px;
   overflow-wrap: anywhere;
 }
+.error {
+  white-space: pre-line;
+}

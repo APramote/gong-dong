@@ -2,12 +2,47 @@ const BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
 export type GeminiErrorKind = 'no-key' | 'bad-key' | 'quota' | 'network' | 'other'
 
+/** รายละเอียดโควตาที่ Google แนบมากับคำตอบ 429 */
+export interface QuotaInfo {
+  /** 'day' = โควตารายวัน, 'minute' = ส่งถี่เกินต่อนาที, '' = ไม่ทราบ */
+  period: 'day' | 'minute' | ''
+  /** โควตาของการค้นเว็บ (Google Search) ไม่ใช่ของการเรียกโมเดล */
+  search: boolean
+  model: string
+  limit: string
+  retrySeconds: number | null
+  /** ชื่อโควตาดิบจาก Google ใช้แสดงประกอบเพื่อตรวจสอบ */
+  id: string
+}
+
 export class GeminiError extends Error {
   constructor(
     public kind: GeminiErrorKind,
     message: string = kind,
+    public quota?: QuotaInfo,
   ) {
     super(message)
+  }
+}
+
+export function parseQuota(body: string): QuotaInfo {
+  let details: any[] = []
+  try {
+    details = JSON.parse(body)?.error?.details ?? []
+  } catch {
+    // ไม่ใช่ JSON ใช้ค่าว่าง
+  }
+  const v = details.find((d) => /QuotaFailure$/.test(d?.['@type'] ?? ''))?.violations?.[0] ?? {}
+  const retry = details.find((d) => /RetryInfo$/.test(d?.['@type'] ?? ''))?.retryDelay
+  const id = `${v.quotaId ?? ''} ${v.quotaMetric ?? ''}`.trim()
+  const seconds = parseFloat(String(retry ?? ''))
+  return {
+    period: /PerDay/i.test(id) ? 'day' : /PerMinute/i.test(id) ? 'minute' : '',
+    search: /search|ground/i.test(id),
+    model: String(v.quotaDimensions?.model ?? ''),
+    limit: String(v.quotaValue ?? ''),
+    retrySeconds: Number.isFinite(seconds) ? Math.ceil(seconds) : null,
+    id,
   }
 }
 
@@ -31,7 +66,7 @@ async function call(path: string, key: string, body?: unknown): Promise<any> {
   }
   if (res.ok) return res.json()
   const detail = await res.text().catch(() => '')
-  if (res.status === 429) throw new GeminiError('quota', detail)
+  if (res.status === 429) throw new GeminiError('quota', detail, parseQuota(detail))
   // key ผิดรูปแบบได้ 400, key ถูกปิดหรือไม่มีสิทธิ์ได้ 401/403
   if (res.status === 401 || res.status === 403 || /API key not valid|API_KEY_INVALID/.test(detail))
     throw new GeminiError('bad-key', detail)

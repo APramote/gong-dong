@@ -6,7 +6,8 @@ import { useBlobUrl } from '../components/Cover'
 import { PlaceSelect } from '../components/PlaceSelect'
 import { resizeImage } from '../lib/image'
 import { lookupIsbn, normalizeIsbn } from '../lib/isbn'
-import { enrichBook, GeminiError } from '../lib/gemini'
+import { enrichBook } from '../lib/gemini'
+import { aiErrorText } from '../lib/aiError'
 import { loadSettings } from '../lib/settings'
 import { t } from '../th'
 
@@ -122,7 +123,7 @@ export function BookFormPage() {
       const n = fillEmpty({ ...rest, isbn: normalizeIsbn(isbn) ?? '' })
       setAiMsg({ ok: true, text: n ? t.book.aiFilled(n) : t.book.aiNothingNew })
     } catch (e) {
-      setAiMsg({ ok: false, text: t.ai[e instanceof GeminiError ? e.kind : 'other'] })
+      setAiMsg({ ok: false, text: aiErrorText(e) })
     } finally {
       setAiBusy(false)
     }

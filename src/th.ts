@@ -112,7 +112,17 @@ export const t = {
   ai: {
     'no-key': 'ยังไม่ได้ใส่ Gemini API key',
     'bad-key': 'API key ไม่ถูกต้องหรือถูกปิดใช้งาน ตรวจสอบในหน้าตั้งค่า',
-    quota: 'โควตาฟรีของ Gemini หมดชั่วคราว รอสักครู่แล้วลองใหม่ (โควตารายวันจะรีเซ็ตวันถัดไป)',
+    quota: 'โควตาฟรีของ Gemini หมดชั่วคราว รอสักครู่แล้วลองใหม่',
+    quotaDay: (what: string, model: string, limit: string) =>
+      `โควตาฟรีรายวันของ${what}${model ? ` รุ่น ${model}` : ''}${limit ? ` (${limit} ครั้ง/วัน)` : ''} ใช้หมดแล้ว ` +
+      'จะรีเซ็ตทุกวันราว 14:00–15:00 น. เวลาไทย หรือเปลี่ยนไปใช้รุ่นอื่นในหน้าตั้งค่า (แต่ละรุ่นมีโควตาแยกกัน)',
+    quotaMinute: (what: string, seconds: number | null) =>
+      `ใช้${what} ถี่เกินโควตาต่อนาที รอ${seconds ? ` ${seconds} วินาที` : 'สักครู่'}แล้วลองใหม่`,
+    quotaNone: (what: string, model: string) =>
+      `${what}${model ? ` ด้วยรุ่น ${model}` : ''} ไม่มีโควตาฟรีให้ใช้ (Google ตั้งไว้ 0 ครั้ง) ลองเปลี่ยนรุ่นในหน้าตั้งค่า`,
+    whatModel: 'การเรียก Gemini',
+    whatSearch: 'การค้นเว็บ',
+    quotaId: (id: string) => `รายละเอียดจาก Google: ${id}`,
     network: 'เชื่อมต่อ Gemini ไม่ได้ ตรวจสอบอินเทอร์เน็ต',
     other: 'Gemini ตอบกลับผิดพลาด ลองใหม่อีกครั้ง',
   },

@@ -4,7 +4,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { emptyBook, repo } from '../db/repo'
 import { PlaceSelect } from '../components/PlaceSelect'
 import { Scanner } from '../components/Scanner'
-import { GeminiError, recognizeBooks } from '../lib/gemini'
+import { recognizeBooks } from '../lib/gemini'
+import { aiErrorText } from '../lib/aiError'
 import { blobToBase64, resizeImage } from '../lib/image'
 import { lookupIsbn } from '../lib/isbn'
 import { loadSettings } from '../lib/settings'
@@ -68,7 +69,7 @@ export function AddPage() {
       )
       setStep('review')
     } catch (err) {
-      setError(t.ai[err instanceof GeminiError ? err.kind : 'other'])
+      setError(aiErrorText(err))
       setStep('menu')
     }
   }

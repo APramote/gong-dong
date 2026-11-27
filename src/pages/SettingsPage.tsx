@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { GeminiError, listModels, pickDefaultModel } from '../lib/gemini'
+import { listModels, pickDefaultModel } from '../lib/gemini'
+import { aiErrorText } from '../lib/aiError'
 import { loadSettings, saveSettings } from '../lib/settings'
 import { t } from '../th'
 
@@ -27,7 +28,7 @@ export function SettingsPage() {
       setStatus({ ok: true, text: t.settings.ok(ids.length) })
     } catch (e) {
       update({ geminiKey: key })
-      setStatus({ ok: false, text: t.ai[e instanceof GeminiError ? e.kind : 'other'] })
+      setStatus({ ok: false, text: aiErrorText(e) })
     } finally {
       setBusy(false)
     }

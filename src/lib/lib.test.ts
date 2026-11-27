@@ -75,3 +75,35 @@ test('แปลงผลค้นเว็บ: ตัดเลขอ้างอ
   expect(r.links).toEqual([{ title: 'A', url: 'https://a.example/1' }])
   expect(() => parseEnrichment({ candidates: [{ content: { parts: [{ text: 'ไม่พบ' }] } }] })).toThrow()
 })
+
+test('อ่านรายละเอียดโควตาจากคำตอบ 429 ของ Google', async () => {
+  const { parseQuota } = await import('./gemini')
+  const body = JSON.stringify({
+    error: {
+      code: 429,
+      status: 'RESOURCE_EXHAUSTED',
+      details: [
+        {
+          '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+          violations: [
+            {
+              quotaMetric: 'generativelanguage.googleapis.com/generate_content_free_tier_requests',
+              quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier',
+              quotaDimensions: { location: 'global', model: 'gemini-3.6-flash' },
+              quotaValue: '20',
+            },
+          ],
+        },
+        { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '37.2s' },
+      ],
+    },
+  })
+  expect(parseQuota(body)).toMatchObject({
+    period: 'day',
+    search: false,
+    model: 'gemini-3.6-flash',
+    limit: '20',
+    retrySeconds: 38,
+  })
+  expect(parseQuota('not json')).toMatchObject({ period: '', search: false, id: '' })
+})
