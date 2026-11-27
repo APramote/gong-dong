@@ -6,9 +6,8 @@ import { useBlobUrl } from '../components/Cover'
 import { PlaceSelect } from '../components/PlaceSelect'
 import { resizeImage } from '../lib/image'
 import { lookupIsbn, normalizeIsbn } from '../lib/isbn'
-import { enrichBook } from '../lib/gemini'
+import { aiReady, enrich } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
-import { loadSettings } from '../lib/settings'
 import { t } from '../th'
 
 const toNumber = (v: string) => {
@@ -112,12 +111,11 @@ export function BookFormPage() {
   }
 
   async function fillFromAi() {
-    const { geminiKey, geminiModel } = loadSettings()
     if (!form.title.trim()) return setError(t.book.titleRequired)
     setAiBusy(true)
     setAiMsg(null)
     try {
-      const r = await enrichBook(geminiKey, geminiModel, form)
+      const r = await enrich(form)
       if (!r.found) return setAiMsg({ ok: false, text: t.book.aiNotFound })
       const { found: _f, isbn, ...rest } = r
       const n = fillEmpty({ ...rest, isbn: normalizeIsbn(isbn) ?? '' })
@@ -260,12 +258,12 @@ export function BookFormPage() {
           <button
             type="button"
             className="btn small"
-            disabled={aiBusy || !loadSettings().geminiKey}
+            disabled={aiBusy || !aiReady()}
             onClick={fillFromAi}
           >
             {aiBusy ? t.book.aiSearching : t.book.aiFill}
           </button>
-          {!loadSettings().geminiKey && <span className="muted">{t.add.needKey}</span>}
+          {!aiReady() && <span className="muted">{t.add.needKey}</span>}
         </div>
         {aiMsg && <p className={aiMsg.ok ? 'ok' : 'error'}>{aiMsg.text}</p>}
       </div>

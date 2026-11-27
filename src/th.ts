@@ -93,7 +93,7 @@ export const t = {
     scanIsbnHint: 'สแกนบาร์โค้ดหลังปก ไม่ใช้ AI',
     manual: 'กรอกเอง',
     manualHint: 'พิมพ์ข้อมูลหนังสือด้วยตัวเอง',
-    needKey: 'ต้องใส่ Gemini API key ในหน้าตั้งค่าก่อน จึงจะใช้การถ่ายรูปได้',
+    needKey: 'ต้องใส่ API key ของ AI ในหน้าตั้งค่าก่อน จึงจะใช้ได้',
     goSettings: 'ไปหน้าตั้งค่า',
     reading: 'กำลังให้ AI อ่านรูป…',
     none: 'AI อ่านชื่อหนังสือจากรูปนี้ไม่ได้ ลองถ่ายใหม่ให้ชัดและสว่างขึ้น หรือกรอกเอง',
@@ -110,9 +110,9 @@ export const t = {
   },
 
   ai: {
-    'no-key': 'ยังไม่ได้ใส่ Gemini API key',
+    'no-key': 'ยังไม่ได้ใส่ API key ของ AI ในหน้าตั้งค่า',
     'bad-key': 'API key ไม่ถูกต้องหรือถูกปิดใช้งาน ตรวจสอบในหน้าตั้งค่า',
-    quota: 'โควตาฟรีของ Gemini หมดชั่วคราว รอสักครู่แล้วลองใหม่',
+    quota: 'ใช้ AI ถี่เกินกำหนดหรือโควตาหมดชั่วคราว รอสักครู่แล้วลองใหม่',
     quotaDay: (what: string, model: string, limit: string) =>
       `โควตาฟรีรายวันของ${what}${model ? ` รุ่น ${model}` : ''}${limit ? ` (${limit} ครั้ง/วัน)` : ''} ใช้หมดแล้ว ` +
       'จะรีเซ็ตทุกวันราว 14:00–15:00 น. เวลาไทย หรือเปลี่ยนไปใช้รุ่นอื่นในหน้าตั้งค่า (แต่ละรุ่นมีโควตาแยกกัน)',
@@ -120,27 +120,40 @@ export const t = {
       `ใช้${what} ถี่เกินโควตาต่อนาที รอ${seconds ? ` ${seconds} วินาที` : 'สักครู่'}แล้วลองใหม่`,
     quotaNone: (what: string, model: string) =>
       `${what}${model ? ` ด้วยรุ่น ${model}` : ''} ไม่มีโควตาฟรีให้ใช้ (Google ตั้งไว้ 0 ครั้ง) ลองเปลี่ยนรุ่นในหน้าตั้งค่า`,
-    whatModel: 'การเรียก Gemini',
+    whatModel: 'การเรียก AI',
     whatSearch: 'การค้นเว็บ',
-    quotaId: (id: string) => `รายละเอียดจาก Google: ${id}`,
-    network: 'เชื่อมต่อ Gemini ไม่ได้ ตรวจสอบอินเทอร์เน็ต',
-    other: 'Gemini ตอบกลับผิดพลาด ลองใหม่อีกครั้ง',
+    detail: (d: string) => `รายละเอียดจากผู้ให้บริการ: ${d}`,
+    credit: 'เครดิตใน Claude Console หมด เติมเครดิตแล้วลองใหม่',
+    refusal: 'AI ปฏิเสธคำขอนี้ ลองใหม่อีกครั้งหรือกรอกเอง',
+    network: 'เชื่อมต่อ AI ไม่ได้ ตรวจสอบอินเทอร์เน็ต',
+    other: 'AI ตอบกลับผิดพลาด ลองใหม่อีกครั้ง',
   },
+
 
   settings: {
     title: 'ตั้งค่า',
-    gemini: 'Gemini API',
+    provider: 'AI ที่ใช้อ่านรูปและค้นข้อมูล',
+    gemini: 'Gemini (Google)',
+    geminiHint: 'ใช้ฟรีภายในโควตา เมื่อโควตาหมดต้องรอ',
+    claude: 'Claude (Anthropic)',
+    claudeHint: 'จ่ายตามการใช้งาน ตัดจากเครดิตใน Claude Console',
     keyLabel: 'API key',
-    keyHint:
-      'สร้างได้ที่ aistudio.google.com → Get API key — key เก็บไว้ในเครื่องนี้เท่านั้น และส่งให้ Google โดยตรงตอนอ่านรูป',
+    geminiKeyHint:
+      'สร้างได้ที่ aistudio.google.com → Get API key — key เก็บไว้ในเครื่องนี้เท่านั้น และส่งให้ Google โดยตรง',
+    claudeKeyHint:
+      'สร้างได้ที่ platform.claude.com → API keys (ต้องเติมเครดิตก่อน และควรตั้ง spend limit) — key เก็บไว้ในเครื่องนี้เท่านั้น และส่งให้ Anthropic โดยตรง',
     model: 'รุ่นที่ใช้',
     modelNone: 'กดตรวจสอบ key เพื่อโหลดรายการรุ่น',
+    price: (p: string) => `${p} ต่อล้าน token (input / output)`,
+    searchCost: 'การค้นเว็บคิดเพิ่มราว $10 ต่อ 1,000 ครั้ง',
     check: 'บันทึกและตรวจสอบ key',
     checking: 'กำลังตรวจสอบ…',
     ok: (n: number) => `ใช้งานได้ พบ ${n} รุ่น`,
+    claudeOk: 'ใช้งานได้',
     saved: 'บันทึกแล้ว',
     clear: 'ลบ key ออกจากเครื่องนี้',
   },
+
 
   places: {
     bookcases: 'ตู้หนังสือ',

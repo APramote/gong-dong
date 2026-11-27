@@ -358,3 +358,35 @@ textarea {
 .error {
   white-space: pre-line;
 }
+.fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.fieldset legend {
+  margin-bottom: 4px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.form label.radio {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+}
+.radio input {
+  width: auto;
+  margin-top: 4px;
+}
+.radio > span {
+  display: flex;
+  flex-direction: column;
+}

@@ -1,28 +1,34 @@
 import { useState } from 'react'
-import { listModels, pickDefaultModel } from '../lib/gemini'
 import { aiErrorText } from '../lib/aiError'
-import { loadSettings, saveSettings } from '../lib/settings'
+import { checkClaudeKey } from '../lib/ai'
+import { CLAUDE_MODELS } from '../lib/claudeModels'
+import { listModels, pickDefaultModel } from '../lib/gemini'
+import { loadSettings, saveSettings, type Provider, type Settings } from '../lib/settings'
 import { t } from '../th'
+
+type Status = { ok: boolean; text: string } | null
 
 export function SettingsPage() {
   const [settings, setSettings] = useState(loadSettings)
-  const [models, setModels] = useState<string[]>(settings.geminiModel ? [settings.geminiModel] : [])
-  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null)
+  const [geminiModels, setGeminiModels] = useState<string[]>(
+    settings.geminiModel ? [settings.geminiModel] : [],
+  )
+  const [status, setStatus] = useState<Status>(null)
   const [busy, setBusy] = useState(false)
 
-  const update = (patch: Partial<typeof settings>) => {
+  const update = (patch: Partial<Settings>) => {
     const next = { ...settings, ...patch }
     setSettings(next)
     saveSettings(next)
   }
 
-  async function check() {
+  async function checkGemini() {
     const key = settings.geminiKey.trim()
     setBusy(true)
     setStatus(null)
     try {
       const ids = await listModels(key)
-      setModels(ids)
+      setGeminiModels(ids)
       const model = ids.includes(settings.geminiModel) ? settings.geminiModel : pickDefaultModel(ids)
       update({ geminiKey: key, geminiModel: model })
       setStatus({ ok: true, text: t.settings.ok(ids.length) })
@@ -34,46 +40,117 @@ export function SettingsPage() {
     }
   }
 
+  async function checkClaude() {
+    const key = settings.claudeKey.trim()
+    update({ claudeKey: key })
+    setBusy(true)
+    setStatus(null)
+    try {
+      await checkClaudeKey(key, settings.claudeModel)
+      setStatus({ ok: true, text: t.settings.claudeOk })
+    } catch (e) {
+      setStatus({ ok: false, text: aiErrorText(e) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const isClaude = settings.provider === 'claude'
+  const key = isClaude ? settings.claudeKey : settings.geminiKey
+  const claudeModel = CLAUDE_MODELS.find((m) => m.id === settings.claudeModel)
+
+  const providerOption = (value: Provider, title: string, hint: string) => (
+    <label className="radio">
+      <input
+        type="radio"
+        name="provider"
+        checked={settings.provider === value}
+        onChange={() => {
+          update({ provider: value })
+          setStatus(null)
+        }}
+      />
+      <span>
+        <span className="row-title">{title}</span>
+        <span className="row-sub">{hint}</span>
+      </span>
+    </label>
+  )
+
   return (
     <div className="form">
       <h1>{t.settings.title}</h1>
-      <h2>{t.settings.gemini}</h2>
+      <fieldset className="fieldset">
+        <legend>{t.settings.provider}</legend>
+        {providerOption('gemini', t.settings.gemini, t.settings.geminiHint)}
+        {providerOption('claude', t.settings.claude, t.settings.claudeHint)}
+      </fieldset>
+
       <label>
         {t.settings.keyLabel}
         <input
           type="password"
           autoComplete="off"
-          value={settings.geminiKey}
-          onChange={(e) => update({ geminiKey: e.target.value })}
+          value={key}
+          onChange={(e) =>
+            update(isClaude ? { claudeKey: e.target.value } : { geminiKey: e.target.value })
+          }
         />
       </label>
-      <p className="muted">{t.settings.keyHint}</p>
-      <label>
-        {t.settings.model}
-        <select
-          value={settings.geminiModel}
-          disabled={models.length === 0}
-          onChange={(e) => update({ geminiModel: e.target.value })}
-        >
-          {models.length === 0 && <option value="">{t.settings.modelNone}</option>}
-          {models.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-      </label>
+      <p className="muted">{isClaude ? t.settings.claudeKeyHint : t.settings.geminiKeyHint}</p>
+
+      {isClaude ? (
+        <label>
+          {t.settings.model}
+          <select value={settings.claudeModel} onChange={(e) => update({ claudeModel: e.target.value })}>
+            {CLAUDE_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+          {claudeModel && (
+            <span className="muted">
+              {t.settings.price(claudeModel.price)} · {t.settings.searchCost}
+            </span>
+          )}
+        </label>
+      ) : (
+        <label>
+          {t.settings.model}
+          <select
+            value={settings.geminiModel}
+            disabled={geminiModels.length === 0}
+            onChange={(e) => update({ geminiModel: e.target.value })}
+          >
+            {geminiModels.length === 0 && <option value="">{t.settings.modelNone}</option>}
+            {geminiModels.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       {status && <p className={status.ok ? 'ok' : 'error'}>{status.text}</p>}
       <div className="actions">
-        <button className="btn primary" disabled={busy || !settings.geminiKey.trim()} onClick={check}>
+        <button
+          className="btn primary"
+          disabled={busy || !key.trim()}
+          onClick={isClaude ? checkClaude : checkGemini}
+        >
           {busy ? t.settings.checking : t.settings.check}
         </button>
-        {settings.geminiKey && (
+        {key && (
           <button
             className="btn danger"
             onClick={() => {
-              update({ geminiKey: '', geminiModel: '' })
-              setModels([])
+              if (isClaude) update({ claudeKey: '' })
+              else {
+                update({ geminiKey: '', geminiModel: '' })
+                setGeminiModels([])
+              }
               setStatus(null)
             }}
           >

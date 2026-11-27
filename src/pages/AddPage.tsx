@@ -4,11 +4,10 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { emptyBook, repo } from '../db/repo'
 import { PlaceSelect } from '../components/PlaceSelect'
 import { Scanner } from '../components/Scanner'
-import { recognizeBooks } from '../lib/gemini'
+import { aiReady, recognize } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { blobToBase64, resizeImage } from '../lib/image'
 import { lookupIsbn } from '../lib/isbn'
-import { loadSettings } from '../lib/settings'
 import { t } from '../th'
 
 type Mode = 'cover' | 'spine'
@@ -40,7 +39,7 @@ export function AddPage() {
     pick: { cover: useRef<HTMLInputElement>(null), spine: useRef<HTMLInputElement>(null) },
   }
 
-  const hasKey = Boolean(loadSettings().geminiKey && loadSettings().geminiModel)
+  const hasKey = aiReady()
 
   async function onPhoto(m: Mode, e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -51,10 +50,9 @@ export function AddPage() {
     setBusyText(t.add.reading)
     setStep('busy')
     try {
-      const { geminiKey, geminiModel } = loadSettings()
       // สันปกต้องการความละเอียดสูงกว่าเพื่ออ่านตัวหนังสือเล็ก
       const image = await resizeImage(file, m === 'spine' ? 2048 : 1280)
-      const found = await recognizeBooks(geminiKey, geminiModel, await blobToBase64(image), m)
+      const found = await recognize(await blobToBase64(image), m)
       if (found.length === 0) {
         setError(t.add.none)
         return setStep('menu')
