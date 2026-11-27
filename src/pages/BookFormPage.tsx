@@ -19,6 +19,7 @@ import { lookupIsbnStatus, normalizeIsbn } from '../lib/isbn'
 import { aiOn, aiReady, enrich } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { MAX_VOLUMES } from '../lib/series'
+import { Ring } from '../components/Ring'
 import { t } from '../th'
 
 const toNumber = (v: string) => {
@@ -406,6 +407,7 @@ export function BookFormPage() {
       </div>
       <div className="actions">
         <button type="button" className="btn small" disabled={looking || !form.isbn} onClick={fillFromIsbn}>
+          {looking && <Ring size={18} />}
           {looking ? t.book.searching : t.book.lookupIsbn}
         </button>
         {isbnMsg && <span className="muted">{isbnMsg}</span>}
@@ -481,6 +483,7 @@ export function BookFormPage() {
             disabled={aiBusy || !aiReady()}
             onClick={fillFromAi}
           >
+            {aiBusy && <Ring size={18} />}
             {aiBusy ? t.book.aiSearching : t.book.aiFill}
           </button>
           {!aiReady() && <span className="muted">{t.add.needKey}</span>}

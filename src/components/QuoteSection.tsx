@@ -6,6 +6,7 @@ import { aiOn, aiReady, readPage } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { blobToBase64, resizeImage } from '../lib/image'
 import { t } from '../th'
+import { Ring } from './Ring'
 
 /** การ์ดประโยคหนึ่งอัน ใช้ทั้งในหน้าหนังสือและหน้ารวมประโยค */
 export function QuoteCard({ quote, source }: { quote: Quote; source?: React.ReactNode }) {
@@ -121,7 +122,8 @@ export function QuoteSection({ bookId }: { bookId: string }) {
       {open ? (
         <div className="form card">
           {busy && (
-            <p className="muted" role="status">
+            <p className="muted working" role="status">
+              <Ring />
               {t.quotes.reading}
             </p>
           )}

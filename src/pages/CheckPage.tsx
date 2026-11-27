@@ -10,6 +10,7 @@ import { blobToBase64, resizeImage } from '../lib/image'
 import { lookupIsbnStatus, normalizeIsbn } from '../lib/isbn'
 import { matcher, nearMatcher } from '../lib/picks'
 import { placeLabel } from '../placeLabel'
+import { Ring } from '../components/Ring'
 import { t } from '../th'
 
 /** เล่มที่กำลังเช็ก: ชื่อเรื่องที่พิมพ์ หรือได้จากบาร์โค้ด/ปก */
@@ -125,7 +126,8 @@ export function CheckPage() {
         )}
       </div>
       {busy && (
-        <p className="muted" role="status">
+        <p className="muted working" role="status">
+          <Ring />
           {busy}
         </p>
       )}

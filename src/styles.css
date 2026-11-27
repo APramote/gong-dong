@@ -2276,3 +2276,8 @@ details.more[open] {
 .empty.working {
   justify-content: center;
 }
+
+/* วงแหวนในปุ่ม: เว้นระยะจากข้อความ */
+.btn .ring {
+  margin-right: 8px;
+}
