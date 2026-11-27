@@ -2214,3 +2214,22 @@ details.more[open] {
 .backup-hint span {
   flex: 1 1 200px;
 }
+
+/* ---------- ลิงก์ย้อนกลับของหน้าย่อย ---------- */
+.back-line {
+  margin: 0 0 4px;
+}
+.back-line a,
+.back-line .link-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: none;
+}
+@media print {
+  .back-line {
+    display: none;
+  }
+}

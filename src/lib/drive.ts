@@ -49,7 +49,7 @@ declare global {
 }
 
 let gis: Promise<void> | null = null
-/** โหลดสคริปต์เข้าสู่ระบบของ Google เฉพาะเมื่อผู้ใช้กด sync */
+/** โหลดสคริปต์เข้าสู่ระบบของ Google เมื่อต้องใช้: ตอนแตะปุ่มเข้าสู่ระบบ หรือล่วงหน้าสำหรับผู้ที่เข้าสู่ระบบไว้แล้ว */
 function loadGis(): Promise<void> {
   gis ??= new Promise<void>((resolve, reject) => {
     const s = document.createElement('script')
@@ -89,17 +89,20 @@ export async function signIn(clientId: string, hint = ''): Promise<string> {
   const oauth = window.google?.accounts.oauth2
   if (!oauth) throw new DriveError('network')
   return new Promise<string>((resolve, reject) => {
+    // Google ไม่ตอบกลับ (เช่น ปิดหน้าต่างแล้วไม่มีสัญญาณกลับมา) ต้องไม่ค้างตลอดไป
+    const timeout = setTimeout(() => reject(new DriveError('denied', 'timeout')), 3 * 60_000)
     const client = oauth.initTokenClient({
       client_id: id,
       scope: SCOPE,
       callback: (r) => {
+        clearTimeout(timeout)
         if (!r.access_token) return reject(new DriveError(r.error === 'access_denied' ? 'denied' : 'auth', r.error))
         // หน้าขออนุญาตของ Google มีช่องให้ติ๊กทีละสิทธิ์ ถ้าไม่ติ๊ก โทเคนจะใช้กับ Drive ไม่ได้
         if (r.scope !== undefined && !r.scope.split(' ').includes(SCOPE)) return reject(new DriveError('scope'))
         token = { value: r.access_token, clientId: id, expires: Date.now() + (r.expires_in ?? 3600) * 1000 }
         resolve(r.access_token)
       },
-      error_callback: (e) => reject(new DriveError(e.type === 'popup_failed_to_open' ? 'blocked' : 'denied', e.type)),
+      error_callback: (e) => (clearTimeout(timeout), reject(new DriveError(e.type === 'popup_failed_to_open' ? 'blocked' : 'denied', e.type))),
     })
     // รู้บัญชีอยู่แล้วก็บอก Google ไว้ จะได้ไม่ต้องเลือกบัญชีซ้ำ
     client.requestAccessToken(hint ? { prompt: '', login_hint: hint } : { prompt: 'select_account' })

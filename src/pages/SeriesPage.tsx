@@ -26,7 +26,8 @@ const status = (s: SeriesSummary) =>
 export function SeriesListPage() {
   const series = useLiveQuery(() => repo.listSeries(), [])
   const books = useLiveQuery(() => repo.listBooks(), []) ?? []
-  const rows = useMemo(() => (series ?? []).map((s) => summarize(s, books)), [series, books])
+  // ชุดที่ยังไม่มีเล่ม (เช่น ตั้งชื่อชุดไว้แล้วไม่ได้บันทึกหนังสือ) ไม่ต้องแสดง
+  const rows = useMemo(() => (series ?? []).map((s) => summarize(s, books)).filter((s) => s.books.length > 0), [series, books])
   if (!series) return <p className="empty">{t.common.loading}</p>
 
   return (

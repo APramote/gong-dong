@@ -1,6 +1,6 @@
 import { lazy, StrictMode, Suspense, type ComponentType } from 'react'
 import { createRoot } from 'react-dom/client'
-import { createHashRouter, NavLink, Outlet, RouterProvider, useRouteError } from 'react-router-dom'
+import { createHashRouter, Link, NavLink, Outlet, RouterProvider, useLocation, useNavigate, useRouteError } from 'react-router-dom'
 import '@fontsource-variable/noto-serif-thai/wght.css'
 import './styles.css'
 import { t } from './th'
@@ -81,13 +81,28 @@ const ICONS = {
     'M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2-1.2L14.2 3h-4.4l-.4 2.6a7 7 0 0 0-2 1.2l-2.3-.9-2 3.4 2 1.5a7 7 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2 1.2l.4 2.6h4.4l.4-2.6a7 7 0 0 0 2-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z',
 }
 
+/** หน้าย่อยแต่ละหน้าอยู่ใต้แท็บไหน ใช้ไฮไลต์แท็บและทำลิงก์ย้อนกลับ */
+const GROUPS: { root: string; label: string; paths: string[] }[] = [
+  { root: '/reading', label: t.nav.reading, paths: ['/reading'] },
+  { root: '/places', label: t.nav.places, paths: ['/places', '/place', '/view', '/labels', '/organize', '/scan'] },
+  { root: '/stats', label: t.nav.stats, paths: ['/stats', '/year'] },
+  { root: '/', label: t.nav.library, paths: ['/add', '/book', '/check', '/wishlist', '/series', '/quotes', '/random', '/categories'] },
+]
+/** หน้าที่มีลิงก์ย้อนกลับของตัวเองอยู่แล้ว */
+const OWN_BACK = ['/categories', '/place', '/view']
+const under = (path: string, base: string) => path === base || path.startsWith(`${base}/`)
+
 function Layout() {
   const sync = useAutoSync()
-  const tab = (to: string, label: string, icon: string, end = false) => (
-    <NavLink to={to} end={end}>
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const group = pathname === '/' ? GROUPS[3] : GROUPS.find((g) => g.paths.some((p) => under(pathname, p)))
+  const isRoot = pathname === '/' || GROUPS.some((g) => g.root === pathname)
+  const tab = (to: string, label: string, icon: string) => (
+    <Link to={to} className={group?.root === to ? 'active' : undefined} aria-current={pathname === to ? 'page' : undefined}>
       <Icon d={icon} />
       <span>{label}</span>
-    </NavLink>
+    </Link>
   )
   return (
     <>
@@ -109,12 +124,24 @@ function Layout() {
       <UpdateBanner />
       <SyncBanner />
       <main>
+        {/* หน้าย่อย: ทางกลับไปหน้าหลักของแท็บ (หน้าตั้งค่ากลับไปหน้าก่อนหน้า) */}
+        {!isRoot && !OWN_BACK.some((p) => under(pathname, p)) && (
+          <p className="muted back-line">
+            {group ? (
+              <Link to={group.root}>‹ {group.label}</Link>
+            ) : (
+              <button className="link-btn" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}>
+                ‹ {t.common.back}
+              </button>
+            )}
+          </p>
+        )}
         <Suspense fallback={<p className="empty">{t.common.loading}</p>}>
           <Outlet />
         </Suspense>
       </main>
       <nav className="tabbar" aria-label={t.nav.menu}>
-        {tab('/', t.nav.library, ICONS.library, true)}
+        {tab('/', t.nav.library, ICONS.library)}
         {tab('/reading', t.nav.reading, ICONS.reading)}
         {tab('/places', t.nav.places, ICONS.places)}
         {tab('/stats', t.nav.stats, ICONS.stats)}

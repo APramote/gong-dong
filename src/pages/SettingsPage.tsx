@@ -19,7 +19,8 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false)
 
   const update = (patch: Partial<Settings>) => {
-    const next = { ...settings, ...patch }
+    // อ่านค่าล่าสุดจากเครื่องก่อนรวม (การ์ดซิงก์บันทึกบัญชีและเวลาซิงก์แยกต่างหาก ต้องไม่ถูกทับด้วยค่าเก่า)
+    const next = { ...loadSettings(), ...patch }
     setSettings(next)
     saveSettings(next)
   }

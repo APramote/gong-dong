@@ -3,6 +3,7 @@ import { db } from '../db/db'
 import { repo } from '../db/repo'
 import { DEFAULT_GOOGLE_CLIENT_ID, loadSettings, saveSettings } from '../lib/settings'
 import { reset } from '../lib/autosync'
+import { useAutoSync } from './SyncBanner'
 import { t } from '../th'
 
 type Msg = { ok: boolean; text: string } | null
@@ -14,7 +15,7 @@ export function WipeCard() {
   const [drive, setDrive] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<Msg>(null)
-  const signedIn = Boolean(loadSettings().googleAccount)
+  const signedIn = Boolean(useAutoSync().account)
 
   async function clearStats() {
     if (!confirm(t.wipe.confirmStats)) return
@@ -27,6 +28,8 @@ export function WipeCard() {
     setMsg(null)
     try {
       const { wipeLocal, wipeRemote } = await import('../lib/sync')
+      // หยุดการซิงก์ที่อาจกำลังทำอยู่ก่อน ไม่ให้เขียนทับสำเนากลางด้วยข้อมูลที่กำลังจะถูกล้าง
+      await reset()
       let files = 0
       if (drive) {
         // ลบใน Drive ก่อน ถ้าไม่สำเร็จจะยังไม่แตะข้อมูลในเครื่อง
@@ -44,7 +47,7 @@ export function WipeCard() {
         signOut()
         saveSettings({ ...loadSettings(), lastSyncAt: 0, googleAccount: '' })
       }
-      reset()
+      await reset()
       setMsg({ ok: true, text: drive ? t.wipe.allDoneDrive(files) : signedIn ? t.wipe.allDone : t.wipe.allDoneLocal })
       setOpen(false)
       setWord('')

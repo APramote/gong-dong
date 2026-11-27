@@ -191,42 +191,51 @@ const empty = (): Snapshot => ({ version: 1, savedAt: 0, tables: {}, covers: [] 
  * รวมตารางข้อมูลกับ snapshot ปลายทาง: เขียนรายการที่ปลายทางใหม่กว่าลงเครื่อง
  * คืน snapshot ที่รวมแล้ว (ไว้ส่งขึ้น) และจำนวนรายการที่ต่างกันแต่ละทาง
  */
-async function mergeTables(db: GongDongDB, remote: Snapshot) {
+async function mergeTables(db: GongDongDB, remote: Snapshot, fromSync = false) {
   let pushed = 0
   let pulled = 0
   for (const name of TABLES) {
     const table = db.table<Row, string>(name)
-    const local = await table.toArray()
-    const merged = new Map(local.map((r) => [r.id, r]))
     const remoteRows = remote.tables[name] ?? []
     const remoteById = new Map(remoteRows.map((r) => [r.id, r]))
-    const incoming: Row[] = []
-    for (const r of remoteRows) {
-      const mine = merged.get(r.id)
-      if (!mine || r.updatedAt > mine.updatedAt) {
-        incoming.push(r)
-        merged.set(r.id, r)
+    // อ่าน เทียบ และเขียนในธุรกรรมเดียว การแก้ไขที่เกิดขึ้นระหว่างนั้นจะไม่ถูกทับ
+    await db.transaction('rw', table, async (tx) => {
+      if (fromSync) markSync(tx)
+      const local = await table.toArray()
+      const mine = new Map(local.map((r) => [r.id, r]))
+      const incoming = remoteRows.filter((r) => {
+        const l = mine.get(r.id)
+        return !l || r.updatedAt > l.updatedAt
+      })
+      for (const l of local) {
+        const theirs = remoteById.get(l.id)
+        if (!theirs || l.updatedAt > theirs.updatedAt) pushed++
       }
-    }
-    for (const l of local) {
-      const theirs = remoteById.get(l.id)
-      if (!theirs || l.updatedAt > theirs.updatedAt) pushed++
-    }
-    if (incoming.length) await table.bulkPut(incoming)
-    pulled += incoming.length
+      if (incoming.length) await table.bulkPut(incoming)
+      pulled += incoming.length
+    })
   }
   // รวมแล้วอาจมีข้อมูลที่อ้างถึงกันไม่ครบ ซ่อมก่อน (รายการที่ซ่อมต้องส่งขึ้นด้วย)
-  if (pulled > 0) pushed += await repair(db)
+  if (pulled > 0) pushed += await repair(db, Date.now(), fromSync)
   return { pushed, pulled }
 }
+
+/**
+ * ทำเครื่องหมายว่าธุรกรรมนี้เป็นการเขียนของตัวซิงก์เอง (ข้อมูลที่รับมาจากที่เก็บกลาง)
+ * ตัวซิงก์อัตโนมัติใช้แยกออกจากการแก้ไขของผู้ใช้ จะได้ไม่นับเป็น "มีการแก้ไขที่ยังไม่ได้ซิงก์"
+ */
+const SYNC_MARK = '_gongDongSync'
+const markSync = (tx: object) => void ((tx as Record<string, unknown>)[SYNC_MARK] = true)
+export const isSyncWrite = (tx: unknown) => Boolean(tx && (tx as Record<string, unknown>)[SYNC_MARK])
 
 /**
  * ซ่อมความสัมพันธ์ของข้อมูลหลังรวมจากเครื่องอื่น คืนจำนวนรายการที่แก้
  * - หนังสือที่ชี้ไปยังที่เก็บหรือชุดที่ถูกลบแล้ว: ย้ายไป "ยังไม่ระบุที่เก็บ" / ออกจากชุด (ไม่ให้หายจากทุกหน้า)
  * - การหยิบที่ค้างอยู่ของเล่มที่ไม่ได้อยู่ในมือแล้ว หรือค้างซ้อนกันหลายอัน: ปิดให้เหลืออันเดียว
  */
-export async function repair(db: GongDongDB, now = Date.now()): Promise<number> {
-  return db.transaction('rw', [db.books, db.places, db.series, db.sessions], async () => {
+export async function repair(db: GongDongDB, now = Date.now(), fromSync = false): Promise<number> {
+  return db.transaction('rw', [db.books, db.places, db.series, db.sessions], async (tx) => {
+    if (fromSync) markSync(tx)
     let fixed = 0
     const live = async (name: 'places' | 'series') =>
       new Set((await db.table<Row, string>(name).toArray()).filter((x) => x.deletedAt === null).map((x) => x.id))
@@ -272,13 +281,19 @@ export async function syncAll(
   db: GongDongDB,
   store: RemoteStore,
   onProgress: (done: number, total: number) => void = () => {},
+  /** คืน true เมื่อผู้ใช้ออกจากระบบหรือล้างข้อมูลระหว่างซิงก์ ต้องหยุดก่อนเขียนอะไรเพิ่ม */
+  cancelled: () => boolean = () => false,
 ): Promise<SyncResult> {
+  const stop = () => {
+    if (cancelled()) throw new Error('cancelled')
+  }
   const names = await store.names()
   const got = names.has(DATA_FILE) ? await store.get(DATA_FILE) : null
   // ไฟล์ว่าง = สร้างไว้แต่ส่งเนื้อหาไม่สำเร็จ (เน็ตหลุดกลางทาง) ถือว่ายังไม่มีไฟล์ แล้วเขียนใหม่
   const file = got && got.size > 0 ? got : null
   const remote = file ? parseSnapshot(await file.text()) : empty()
-  const merged = await mergeTables(db, remote)
+  stop()
+  const merged = await mergeTables(db, remote, true)
   let { pushed, pulled } = merged
 
   // รูปปก: เทียบจากรายการ (ไม่โหลดรูปทั้งหมด) แล้วรับส่งเฉพาะรูปที่ต่างกัน
@@ -301,6 +316,7 @@ export async function syncAll(
   const total = up.length + down.length
   let done = 0
   for (const meta of up) {
+    stop()
     const row = await db.covers.get(meta.id)
     if (row?.blob) await store.put(coverFile(meta.id), row.blob)
     else if (names.has(coverFile(meta.id))) await store.del(coverFile(meta.id))
@@ -313,7 +329,11 @@ export async function syncAll(
     const blob = meta.deletedAt === null ? await store.get(coverFile(meta.id)) : null
     // รายการบอกว่ามีรูปแต่ไฟล์หายหรือไม่ใช่รูป: ข้ามไป ไม่ทับรูปในเครื่อง
     if (meta.deletedAt === null && (!blob || !IMAGE.test(blob.type))) continue
-    await db.covers.put({ ...meta, blob, thumb: null })
+    stop()
+    await db.transaction('rw', db.covers, (tx) => {
+      markSync(tx)
+      return db.covers.put({ ...meta, blob, thumb: null })
+    })
     pulled++
   }
 
@@ -321,6 +341,8 @@ export async function syncAll(
   if (pushed > 0 || !file) {
     // อ่านจากเครื่องอีกครั้งตอนจะเขียน รวมสิ่งที่แก้ระหว่างรับส่งรูปด้วย
     const snapshot: Snapshot = { version: 1, savedAt: Date.now(), tables: await readTables(db), covers: [...manifest.values()] }
+    // ล้างข้อมูลหรือออกจากระบบไปแล้วระหว่างนี้: อย่าเขียนทับสำเนากลางด้วยข้อมูลที่ถูกล้าง
+    stop()
     await store.put(DATA_FILE, new Blob([JSON.stringify(snapshot)], { type: 'application/json' }))
   }
   return { pushed, pulled }

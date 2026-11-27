@@ -35,7 +35,7 @@ export function ScanStoragePage() {
   const camera = useRef<Record<StorageKind, HTMLInputElement | null>>({ bookcase: null, pile: null, box: null })
   const gallery = useRef<HTMLInputElement>(null)
   const ready = aiReady()
-  const allowLeave = useLeaveGuard(step === 'review', t.add.unsavedLeave)
+  const allowLeave = useLeaveGuard(step === 'review', t.scan.unsavedLeave)
   const useAi = aiOn()
 
   async function onPhoto(k: StorageKind, e: ChangeEvent<HTMLInputElement>) {

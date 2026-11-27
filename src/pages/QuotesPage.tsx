@@ -43,7 +43,7 @@ export function QuotesPage() {
         </div>
       )}
       {shown.length === 0 ? (
-        <p className="empty">{quotes.length ? t.library.noMatch : t.quotes.empty}</p>
+        <p className="empty">{quotes.length ? t.quotes.noMatch : t.quotes.empty}</p>
       ) : (
         <div className="quotes">
           {shown.map((x) => (

@@ -13,6 +13,7 @@ import {
   type OrganizePlan,
 } from '../lib/organize'
 import { placeGroups, placeLabel } from '../placeLabel'
+import { useLeaveGuard } from '../components/useLeaveGuard'
 import { t } from '../th'
 
 /** รายการหนังสือแบบติ๊กเลือกได้ */
@@ -126,6 +127,8 @@ export function OrganizePage() {
   const [done, setDone] = useState('')
   const [plan, setPlan] = useState<OrganizePlan | null>(null)
   const [skipped, setSkipped] = useState(0)
+  // แผนจาก AI ยังไม่ได้ใช้ ออกจากหน้าแล้วต้องเรียก AI (และเสียค่าใช้จ่าย) ใหม่
+  useLeaveGuard(Boolean(plan), t.organize.unsavedLeave)
   const [pickedCats, setPickedCats] = useState<Set<string>>(new Set())
   const [pickedMoves, setPickedMoves] = useState<Set<string>>(new Set())
 

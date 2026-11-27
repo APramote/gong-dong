@@ -16,6 +16,10 @@ export function SyncBanner() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const show = state.needsTap && !hidden
+  // ซ่อนไว้แล้วแต่มีของค้างรอบใหม่ (ซิงก์สำเร็จไปแล้วครั้งหนึ่ง) ให้แถบกลับมาได้
+  useEffect(() => {
+    if (!state.needsTap) setHidden(false)
+  }, [state.needsTap])
   // เตรียมหน้าต่างเข้าสู่ระบบไว้ก่อน กดปุ่มแล้วเปิดได้ทันที
   useEffect(() => {
     if (show) void import('../lib/drive').then((m) => m.preload())

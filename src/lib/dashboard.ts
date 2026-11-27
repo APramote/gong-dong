@@ -182,7 +182,8 @@ export function motivation(d: Dashboard, goals: Goals): string[] {
   if (goals.yearBooks > 0) {
     if (d.finishedYear >= goals.yearBooks) out.push(`ปีนี้อ่านจบ ${d.finishedYear} เล่ม ครบเป้า ${goals.yearBooks} เล่มแล้ว สุดยอด`)
     else if (d.finishedYear >= expected) out.push(`เป้าปีนี้นำอยู่ อ่านจบแล้ว ${d.finishedYear} จาก ${goals.yearBooks} เล่ม`)
-    else out.push(`เป้าปีนี้ยังตามอยู่ ${Math.ceil(expected - d.finishedYear)} เล่ม หยิบเล่มบาง ๆ จากกองดองมาอ่านกัน`)
+    // เพิ่งเริ่มใช้ (ยังไม่เคยบันทึกการอ่านหรืออ่านจบ) ไม่ต้องบอกว่าตามเป้าอยู่
+    else if (d.sessions > 0 || d.finishedYear > 0 || d.status.done > 0) out.push(`เป้าปีนี้ยังตามอยู่ ${Math.ceil(expected - d.finishedYear)} เล่ม หยิบเล่มบาง ๆ จากกองดองมาอ่านกัน`)
   }
 
   const month = d.monthly[d.monthly.length - 1]

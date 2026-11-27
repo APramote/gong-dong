@@ -49,15 +49,25 @@ async function openLibrary(isbn: string): Promise<IsbnResult | null> {
   }
 }
 
-/** ค้นข้อมูลหนังสือจาก ISBN: Google Books ก่อน แล้ว Open Library — null คือไม่พบทั้งสองที่ */
-export async function lookupIsbn(isbn: string): Promise<IsbnResult | null> {
+/**
+ * ค้นข้อมูลหนังสือจาก ISBN: Google Books ก่อน แล้ว Open Library
+ * failed = ติดต่อไม่ได้เลยสักแหล่ง (ออฟไลน์) ซึ่งต่างจาก "ค้นแล้วไม่พบ"
+ */
+export async function lookupIsbnStatus(isbn: string): Promise<{ hit: IsbnResult | null; failed: boolean }> {
+  let answered = false
   for (const source of [googleBooks, openLibrary]) {
     try {
       const hit = await source(isbn)
-      if (hit) return hit
+      answered = true
+      if (hit) return { hit, failed: false }
     } catch {
-      // แหล่งนี้ล่ม ลองแหล่งถัดไป
+      // แหล่งนี้ติดต่อไม่ได้ ลองแหล่งถัดไป
     }
   }
-  return null
+  return { hit: null, failed: !answered }
+}
+
+/** แบบย่อ: null คือไม่พบหรือค้นไม่ได้ */
+export async function lookupIsbn(isbn: string): Promise<IsbnResult | null> {
+  return (await lookupIsbnStatus(isbn)).hit
 }

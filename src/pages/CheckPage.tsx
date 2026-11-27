@@ -7,7 +7,7 @@ import { Scanner } from '../components/Scanner'
 import { aiOn, aiReady, covers } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { blobToBase64, resizeImage } from '../lib/image'
-import { lookupIsbn, normalizeIsbn } from '../lib/isbn'
+import { lookupIsbnStatus, normalizeIsbn } from '../lib/isbn'
 import { matcher, nearMatcher } from '../lib/picks'
 import { placeLabel } from '../placeLabel'
 import { t } from '../th'
@@ -62,8 +62,10 @@ export function CheckPage() {
   async function onIsbn(isbn: string) {
     setScanning(false)
     setBusy(t.check.lookingUp)
-    const hit = await lookupIsbn(isbn)
+    const { hit, failed } = await lookupIsbnStatus(isbn)
     setBusy('')
+    // ค้นชื่อจาก ISBN ไม่ได้ (ออฟไลน์): เช็กได้แค่จากเลข ISBN เล่มในคลังที่ไม่ได้ใส่ ISBN จะไม่เจอ ต้องบอกผู้ใช้
+    setError(failed ? t.check.isbnOffline : '')
     // เช็กทั้ง ISBN และชื่อ เล่มในคลังอาจยังไม่ได้ใส่ ISBN
     fill({ title: hit?.title ?? '', authors: hit?.authors ?? '', isbn })
   }
@@ -148,7 +150,7 @@ export function CheckPage() {
           ) : (
             <div className="verdict fresh" role="status">
               <strong>{t.check.fresh}</strong>
-              <span>{t.check.freshHint}</span>
+              <span>{result.near.length > 0 ? t.check.freshNear : t.check.freshHint}</span>
             </div>
           )}
 

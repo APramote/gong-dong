@@ -28,19 +28,24 @@ function WeekStrip({ sessions, now }: { sessions: ReadingSession[]; now: number 
       return { key: dayKey(at), day: new Date(at).getDay(), ...(per.get(dayKey(at)) ?? { minutes: 0, pages: 0 }) }
     })
   }, [sessions, now])
-  const max = Math.max(30, ...days.map((d) => d.minutes))
+  // แท่งแสดงจำนวนหน้า (สิ่งที่บันทึกจริง) วันที่มีแต่เวลา (ประวัติแบบเก่า) ใช้เวลาแทนให้ยังเห็นว่าได้อ่าน
+  const byPages = days.some((d) => d.pages > 0)
+  const value = (d: (typeof days)[number]) => (byPages ? d.pages || (d.minutes ? 1 : 0) : d.minutes)
+  const max = Math.max(byPages ? 20 : 30, ...days.map(value))
   const total = days.reduce((n, d) => n + d.minutes, 0)
+  const tip = (d: (typeof days)[number]) =>
+    [d.pages ? t.dash.pagesN(d.pages) : '', d.minutes ? formatMinutes(d.minutes) : ''].filter(Boolean).join(' · ') || '–'
   return (
     <div className="week">
       <div
         className="week-bars"
         role="img"
-        aria-label={`${t.reading.weekLabel}: ${days.map((d) => `${WEEKDAYS_SHORT[d.day]} ${formatMinutes(d.minutes)}`).join(', ')}`}
+        aria-label={`${t.reading.weekLabel}: ${days.map((d) => `${WEEKDAYS_SHORT[d.day]} ${tip(d)}`).join(', ')}`}
       >
         {days.map((d, i) => (
-          <div className={`week-day${i === 6 ? ' today' : ''}`} key={d.key} title={formatMinutes(d.minutes)}>
+          <div className={`week-day${i === 6 ? ' today' : ''}`} key={d.key} title={tip(d)}>
             <span className="week-track">
-              <span className={d.minutes ? 'week-fill' : 'week-dot'} style={d.minutes ? { height: `${Math.max(8, (d.minutes / max) * 100)}%` } : undefined} />
+              <span className={value(d) ? 'week-fill' : 'week-dot'} style={value(d) ? { height: `${Math.max(8, (value(d) / max) * 100)}%` } : undefined} />
             </span>
             <span className="week-label">{WEEKDAYS_SHORT[d.day]}</span>
           </div>
@@ -49,7 +54,7 @@ function WeekStrip({ sessions, now }: { sessions: ReadingSession[]; now: number 
       <span className="muted">
         {t.reading.week(
           days.reduce((n, d) => n + d.pages, 0),
-          formatMinutes(total),
+          total ? formatMinutes(total) : '',
         )}
       </span>
     </div>
@@ -191,10 +196,12 @@ function Suggestions({ books }: { books: Book[] }) {
   return (
     <div className="empty-hand">
       <h2>{t.reading.emptyTitle}</h2>
-      <p className="muted">{dong.length ? t.reading.emptyLead : t.reading.noDongLead}</p>
+      <p className="muted">
+        {books.length === 0 ? t.reading.noBooksLead : dong.length ? t.reading.emptyLead : t.reading.noDongLead}
+      </p>
       {dong.length === 0 && (
-        <Link to="/" className="btn">
-          {t.reading.goLibrary}
+        <Link to={books.length === 0 ? '/add' : '/'} className="btn">
+          {books.length === 0 ? t.reading.addFirst : t.reading.goLibrary}
         </Link>
       )}
       {picks.length > 0 && (
@@ -279,7 +286,7 @@ export function ReadingPage() {
       )}
 
       <WeekStrip sessions={sessions} now={now} />
-      <p className="muted month-line">{t.reading.month(formatMinutes(s.minutesMonth), s.pagesMonth, s.finishedMonth)}</p>
+      <p className="muted month-line">{t.reading.month(s.minutesMonth ? formatMinutes(s.minutesMonth) : '', s.pagesMonth, s.finishedMonth)}</p>
 
       <section>
         <h2>{t.reading.recent}</h2>

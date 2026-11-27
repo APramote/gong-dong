@@ -15,7 +15,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { timeAgo } from '../lib/stats'
 import { placeLabel } from '../placeLabel'
 import { resizeImage } from '../lib/image'
-import { lookupIsbn, normalizeIsbn } from '../lib/isbn'
+import { lookupIsbnStatus, normalizeIsbn } from '../lib/isbn'
 import { aiOn, aiReady, enrich } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { MAX_VOLUMES } from '../lib/series'
@@ -32,7 +32,7 @@ const toPrice = (v: string) => {
 
 interface Prefill {
   prefill?: Partial<BookInput> & { category?: string }
-  isbnFound?: boolean
+  isbnFound?: boolean | 'offline'
 }
 
 export function BookFormPage() {
@@ -57,7 +57,7 @@ export function BookFormPage() {
   const [state, setState] = useState<'loading' | 'ready' | 'missing'>(id ? 'loading' : 'ready')
   const [error, setError] = useState('')
   const [isbnMsg, setIsbnMsg] = useState(
-    isbnFound === undefined ? '' : isbnFound ? t.book.isbnFilled : t.book.isbnNotFound,
+    isbnFound === undefined ? '' : isbnFound === 'offline' ? t.book.isbnOffline : isbnFound ? t.book.isbnFilled : t.book.isbnNotFound,
   )
   const [looking, setLooking] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)
@@ -139,6 +139,18 @@ export function BookFormPage() {
   if (state === 'loading') return <p className="empty">{t.common.loading}</p>
   if (state === 'missing') return <p className="empty">{t.book.notFound}</p>
 
+  /**
+   * รับค่าที่ระบบเพิ่งบันทึกเอง (คั่นหน้า วางคืน) เข้ามาในฟอร์ม
+   * ปรับจุดเทียบ "ยังไม่ได้บันทึก" ไปด้วย ไม่อย่างนั้นจะถูกถามตอนออกจากหน้าทั้งที่ไม่ได้แก้อะไร
+   */
+  const adopt = (patch: Partial<BookInput>) => {
+    setForm((f) => ({ ...f, ...patch }))
+    setBaseline((prev) => {
+      if (prev === null) return prev
+      const base = JSON.parse(prev) as { form: BookInput; tagsText: string }
+      return JSON.stringify({ ...base, form: { ...base.form, ...patch } })
+    })
+  }
   const set = <K extends keyof BookInput>(key: K, value: BookInput[K]) =>
     setForm((f) => ({ ...f, [key]: value }))
 
@@ -232,9 +244,9 @@ export function BookFormPage() {
     if (!isbn) return setIsbnMsg(t.book.isbnInvalid)
     setLooking(true)
     setIsbnMsg('')
-    const hit = await lookupIsbn(isbn)
+    const { hit, failed } = await lookupIsbnStatus(isbn)
     setLooking(false)
-    if (!hit) return setIsbnMsg(t.book.isbnNotFound)
+    if (!hit) return setIsbnMsg(failed ? t.book.isbnOffline : t.book.isbnNotFound)
     const { category, ...fields } = hit
     if (category && !form.categoryId) setCatSuggestion(category)
     fillEmpty({ ...fields, isbn })
@@ -270,7 +282,7 @@ export function BookFormPage() {
                 onDone={() => {
                   setCheckingIn(false)
                   // หน้าที่อ่านและสถานะเปลี่ยนแล้ว ให้ฟอร์มตามทัน
-                  repo.getBook(live.id).then((b) => b && setForm((f) => ({ ...f, status: b.status, currentPage: b.currentPage })))
+                  repo.getBook(live.id).then((b) => b && adopt({ status: b.status, currentPage: b.currentPage }))
                 }}
                 onCancel={() => setCheckingIn(false)}
               />
@@ -282,13 +294,7 @@ export function BookFormPage() {
                   setReturning(false)
                   // ค่าในฟอร์มอาจเก่าแล้ว (หน้าที่อ่าน สถานะ ที่เก็บ)
                   repo.getBook(live.id).then((b) => {
-                    if (!b) return
-                    setForm((f) => ({
-                      ...f,
-                      placeId: b.placeId,
-                      status: b.status,
-                      currentPage: b.currentPage,
-                    }))
+                    if (b) adopt({ placeId: b.placeId, status: b.status, currentPage: b.currentPage })
                   })
                 }}
                 onCancel={() => setReturning(false)}

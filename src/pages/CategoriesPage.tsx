@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { normName, repo } from '../db/repo'
 import type { Category } from '../db/types'
+import { aiOn } from '../lib/ai'
 import { t } from '../th'
 
 /** จัดการหมวด: เพิ่ม เปลี่ยนชื่อ (ชื่อซ้ำ = รวมหมวด) ลบ และแตะเพื่อดูหนังสือในหมวด */
@@ -57,7 +58,7 @@ export function CategoriesPage() {
 
       <section>
         {categories.length === 0 ? (
-          <p className="empty">{t.categories.empty}</p>
+          <p className="empty">{aiOn() ? t.categories.empty : t.categories.emptyNoAi}</p>
         ) : (
           <ul className="list">
             {categories.map((c) => (
@@ -113,11 +114,13 @@ export function CategoriesPage() {
             {t.categories.uncategorized(count(null))}
           </Link>
         </p>
-        <p>
-          <Link className="btn" to="/organize">
-            {t.categories.organize}
-          </Link>
-        </p>
+        {aiOn() && (
+          <p>
+            <Link className="btn" to="/organize">
+              {t.categories.organize}
+            </Link>
+          </p>
+        )}
       </section>
     </>
   )

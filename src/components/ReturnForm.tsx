@@ -39,9 +39,11 @@ export function ReturnForm({
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    const n = toNumber(page)
     await repo.returnBook(book.id, {
       placeId,
-      page: toNumber(page),
+      // เลขหน้าเกินจำนวนหน้าของเล่ม ใช้หน้าสุดท้าย
+      page: n !== null && book.pages ? Math.min(n, book.pages) : n,
       minutes: null,
       finished,
     })

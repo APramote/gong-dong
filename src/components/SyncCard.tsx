@@ -3,7 +3,7 @@ import { db } from '../db/db'
 import { download } from '../lib/download'
 import { loadSettings, saveSettings } from '../lib/settings'
 import { dayKey, timeAgo } from '../lib/stats'
-import { reset, syncNow } from '../lib/autosync'
+import { refresh, reset, syncNow } from '../lib/autosync'
 import { syncErrorText } from '../lib/syncError'
 import { t } from '../th'
 import { useAutoSync } from './SyncBanner'
@@ -22,7 +22,8 @@ export function SyncCard() {
   const [advanced] = useState(() => Boolean(loadSettings().googleClientId))
   // โหลดโค้ดซิงก์ไว้ล่วงหน้า ตอนกดปุ่มจะได้เปิดหน้าต่างของ Google ทันที (ช้าไปเบราว์เซอร์จะบล็อก)
   useEffect(() => {
-    void import('../lib/drive').then((m) => m.preload())
+    // โหลดสคริปต์ของ Google ล่วงหน้าเฉพาะเมื่อเคยเข้าสู่ระบบแล้ว (ผู้ที่ไม่ใช้ Google ไม่ต้องติดต่อ Google เลย)
+    void import('../lib/drive').then((m) => loadSettings().googleAccount && m.preload())
     void import('../lib/sync')
   }, [])
   const [withCovers, setWithCovers] = useState(true)
@@ -31,13 +32,14 @@ export function SyncCard() {
     const next = { ...loadSettings(), ...patch }
     saveSettings(next)
     setS(next)
+    refresh()
   }
 
   /** เข้าสู่ระบบ (ถ้ายังไม่เข้า) แล้วซิงก์ทันที */
   async function sync() {
     setArea('drive')
     setMsg(null)
-    setBusy(s.googleAccount ? t.sync.syncing : t.sync.signingIn)
+    setBusy(auto.account ? t.sync.syncing : t.sync.signingIn)
     try {
       const r = await syncNow(true, (done, total) => setBusy(t.sync.covers(done, total)))
       update({}) // อ่านบัญชีและเวลาซิงก์ล่าสุดที่เพิ่งบันทึก
@@ -49,10 +51,11 @@ export function SyncCard() {
   }
 
   async function logout() {
-    const { signOut } = await import('../lib/drive')
     setArea('drive')
+    const { signOut } = await import('../lib/drive')
+    // หยุดการซิงก์ที่กำลังทำอยู่ก่อน ไม่ให้บันทึกบัญชีกลับมาหลังออกจากระบบ
+    await reset()
     const revoked = signOut()
-    reset()
     update({ googleAccount: '' })
     setMsg({ ok: true, text: revoked ? t.sync.signedOut : t.sync.signedOutLocal })
   }
@@ -98,11 +101,11 @@ export function SyncCard() {
       <p className="muted">{t.sync.lead}</p>
 
       <h3>{t.sync.driveTitle}</h3>
-      {s.googleAccount ? (
+      {auto.account ? (
         <>
           <p className="account">
             <span className="account-dot" aria-hidden />
-            {t.sync.signedInAs(s.googleAccount)}
+            {t.sync.signedInAs(auto.account)}
           </p>
           <div className="actions">
             <button type="button" className="btn primary" disabled={Boolean(busy)} onClick={sync}>
@@ -116,11 +119,19 @@ export function SyncCard() {
             {auto.lastSyncAt ? t.sync.last(timeAgo(auto.lastSyncAt)) : t.sync.never}
             {auto.pending && ` · ${t.sync.pending}`}
           </p>
-          <p className="muted">{t.sync.autoHint}</p>
+          <p className="muted">{auto.error && auto.pending ? t.sync.autoRetry : t.sync.autoHint}</p>
         </>
       ) : (
         <div className="actions">
-          <button type="button" className="btn primary" disabled={Boolean(busy)} onClick={sync}>
+          {/* ยังไม่เคยเข้าสู่ระบบ: เริ่มโหลดสคริปต์ของ Google ตอนนิ้วแตะปุ่ม ทันเปิดหน้าต่างตอนปล่อยนิ้ว */}
+          <button
+            type="button"
+            className="btn primary"
+            disabled={Boolean(busy)}
+            onPointerDown={() => void import('../lib/drive').then((m) => m.preload())}
+            onFocus={() => void import('../lib/drive').then((m) => m.preload())}
+            onClick={sync}
+          >
             {t.sync.signIn}
           </button>
           <span className="muted">{t.sync.signInHint}</span>

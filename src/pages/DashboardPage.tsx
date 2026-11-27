@@ -200,20 +200,8 @@ export function DashboardPage() {
 
       {hasHistory && (
         <section className="charts">
-          <ChartCard title={t.dash.daily}>
-            <p className="muted">{t.dash.sessions(d.sessions, formatMinutes(d.avgMinutes), d.avgPages)}</p>
-            <ColumnChart
-              label={t.dash.daily}
-              labels={d.daily.map((x) => shortDate(x.day))}
-              series={[{ name: t.dash.minutes, color: S1, values: dailyAxis.values }]}
-              format={dailyAxis.format}
-              tipFormat={dailyAxis.tipFormat}
-              tickLabel={(i) => (i % 7 === 1 || i === 29 ? shortDate(d.daily[i].day) : '')}
-            />
-            <TableView head={[t.dash.date, t.dash.minutes]} rows={d.daily.map((x) => [shortDate(x.day), x.minutes])} />
-          </ChartCard>
-
           <ChartCard title={t.dash.dailyPages}>
+            <p className="muted">{t.dash.sessions(d.sessions, formatMinutes(d.avgMinutes), d.avgPages)}</p>
             <ColumnChart
               label={t.dash.dailyPages}
               labels={d.daily.map((x) => shortDate(x.day))}
@@ -223,6 +211,18 @@ export function DashboardPage() {
               height={130}
             />
             <TableView head={[t.dash.date, t.dash.pages]} rows={d.daily.map((x) => [shortDate(x.day), x.pages])} />
+          </ChartCard>
+
+          <ChartCard title={t.dash.daily}>
+            <ColumnChart
+              label={t.dash.daily}
+              labels={d.daily.map((x) => shortDate(x.day))}
+              series={[{ name: t.dash.minutes, color: S1, values: dailyAxis.values }]}
+              format={dailyAxis.format}
+              tipFormat={dailyAxis.tipFormat}
+              tickLabel={(i) => (i % 7 === 1 || i === 29 ? shortDate(d.daily[i].day) : '')}
+            />
+            <TableView head={[t.dash.date, t.dash.minutes]} rows={d.daily.map((x) => [shortDate(x.day), x.minutes])} />
           </ChartCard>
 
           <ChartCard title={t.dash.hours}>

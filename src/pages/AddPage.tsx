@@ -9,7 +9,7 @@ import { useLeaveGuard } from '../components/useLeaveGuard'
 import { aiOn, aiReady, covers, recognize } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { blobToBase64, cropImage, resizeImage } from '../lib/image'
-import { lookupIsbn } from '../lib/isbn'
+import { lookupIsbnStatus } from '../lib/isbn'
 import { t } from '../th'
 
 type Mode = 'cover' | 'spine'
@@ -90,9 +90,9 @@ export function AddPage() {
   async function onIsbn(isbn: string) {
     setBusyText(t.book.searching)
     setStep('busy')
-    const hit = await lookupIsbn(isbn)
+    const { hit, failed } = await lookupIsbnStatus(isbn)
     navigate('/book/new', {
-      state: { prefill: { ...(hit ?? { isbn }), placeId }, isbnFound: Boolean(hit) },
+      state: { prefill: { ...(hit ?? { isbn }), placeId }, isbnFound: hit ? true : failed ? 'offline' : false },
     })
   }
 
