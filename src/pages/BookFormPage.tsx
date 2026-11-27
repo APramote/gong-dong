@@ -6,6 +6,8 @@ import { useBlobUrl } from '../components/Cover'
 import { PlaceSelect } from '../components/PlaceSelect'
 import { resizeImage } from '../lib/image'
 import { lookupIsbn, normalizeIsbn } from '../lib/isbn'
+import { enrichBook, GeminiError } from '../lib/gemini'
+import { loadSettings } from '../lib/settings'
 import { t } from '../th'
 
 const toNumber = (v: string) => {
@@ -36,6 +38,8 @@ export function BookFormPage() {
     isbnFound === undefined ? '' : isbnFound ? t.book.isbnFilled : t.book.isbnNotFound,
   )
   const [looking, setLooking] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiMsg, setAiMsg] = useState<{ ok: boolean; text: string } | null>(null)
   // undefined = ยังไม่แตะรูปปก, null = ลบรูป, Blob = รูปใหม่
   const [newCover, setNewCover] = useState<Blob | null | undefined>(undefined)
   const [savedCover, setSavedCover] = useState<Blob | null>(null)
@@ -89,6 +93,41 @@ export function BookFormPage() {
     navigate(-1)
   }
 
+  /** เติมเฉพาะช่องที่ยังว่าง ไม่ทับสิ่งที่ผู้ใช้พิมพ์ไว้ คืนจำนวนช่องที่เติม */
+  function fillEmpty(values: Partial<BookInput>): number {
+    let filled = 0
+    const next = { ...form }
+    for (const [k, v] of Object.entries(values) as [keyof BookInput, never][]) {
+      const cur = next[k] as unknown
+      const empty = cur === '' || cur === null || (Array.isArray(cur) && cur.length === 0)
+      const has = v !== null && v !== '' && !(Array.isArray(v) && (v as unknown[]).length === 0)
+      if (empty && has) {
+        next[k] = v
+        filled++
+      }
+    }
+    setForm(next)
+    return filled
+  }
+
+  async function fillFromAi() {
+    const { geminiKey, geminiModel } = loadSettings()
+    if (!form.title.trim()) return setError(t.book.titleRequired)
+    setAiBusy(true)
+    setAiMsg(null)
+    try {
+      const r = await enrichBook(geminiKey, geminiModel, form)
+      if (!r.found) return setAiMsg({ ok: false, text: t.book.aiNotFound })
+      const { found: _f, isbn, ...rest } = r
+      const n = fillEmpty({ ...rest, isbn: normalizeIsbn(isbn) ?? '' })
+      setAiMsg({ ok: true, text: n ? t.book.aiFilled(n) : t.book.aiNothingNew })
+    } catch (e) {
+      setAiMsg({ ok: false, text: t.ai[e instanceof GeminiError ? e.kind : 'other'] })
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
   async function fillFromIsbn() {
     const isbn = normalizeIsbn(form.isbn)
     if (!isbn) return setIsbnMsg(t.book.isbnInvalid)
@@ -97,14 +136,8 @@ export function BookFormPage() {
     const hit = await lookupIsbn(isbn)
     setLooking(false)
     if (!hit) return setIsbnMsg(t.book.isbnNotFound)
-    // เติมเฉพาะช่องที่ยังว่าง ไม่ทับสิ่งที่ผู้ใช้พิมพ์ไว้
-    setForm((f) => {
-      const next = { ...f, isbn }
-      for (const [k, v] of Object.entries(hit) as [keyof BookInput, never][]) {
-        if (v !== null && v !== '' && (f[k] === '' || f[k] === null)) next[k] = v
-      }
-      return next
-    })
+    fillEmpty({ ...hit, isbn })
+    set('isbn', isbn)
     setIsbnMsg(t.book.isbnFilled)
   }
 
@@ -221,10 +254,53 @@ export function BookFormPage() {
         </label>
       </div>
 
+      <div className="ai-box">
+        <div className="actions">
+          <button
+            type="button"
+            className="btn small"
+            disabled={aiBusy || !loadSettings().geminiKey}
+            onClick={fillFromAi}
+          >
+            {aiBusy ? t.book.aiSearching : t.book.aiFill}
+          </button>
+          {!loadSettings().geminiKey && <span className="muted">{t.add.needKey}</span>}
+        </div>
+        {aiMsg && <p className={aiMsg.ok ? 'ok' : 'error'}>{aiMsg.text}</p>}
+      </div>
       <label>
         {t.book.synopsis}
         <textarea rows={4} value={form.synopsis} onChange={(e) => set('synopsis', e.target.value)} />
       </label>
+      <label>
+        {t.book.blurb}
+        <textarea rows={3} value={form.blurb} onChange={(e) => set('blurb', e.target.value)} />
+      </label>
+      <label>
+        {t.book.reviewSummary}
+        <textarea
+          rows={3}
+          value={form.reviewSummary}
+          onChange={(e) => set('reviewSummary', e.target.value)}
+        />
+      </label>
+      {form.links.length > 0 && (
+        <div className="links">
+          <span className="muted">{t.book.links}</span>
+          <ul>
+            {form.links.map((l) => (
+              <li key={l.url}>
+                <a className="link" href={l.url} target="_blank" rel="noopener noreferrer">
+                  {l.title || l.url}
+                </a>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="link-btn" onClick={() => set('links', [])}>
+            {t.book.clearLinks}
+          </button>
+        </div>
+      )}
       <label>
         {t.book.note}
         <textarea rows={3} value={form.note} onChange={(e) => set('note', e.target.value)} />

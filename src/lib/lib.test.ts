@@ -35,3 +35,43 @@ test('ตรวจรูปแบบ ISBN', () => {
   expect(normalizeIsbn('0-306-40615-x')).toBe('030640615X')
   expect(normalizeIsbn('12345')).toBeNull()
 })
+
+test('แปลงผลค้นเว็บ: ตัดเลขอ้างอิง เก็บลิงก์ https ไม่ซ้ำ และรับ JSON ที่มีข้อความปน', async () => {
+  const { parseEnrichment } = await import('./gemini')
+  const data = {
+    candidates: [
+      {
+        content: {
+          parts: [
+            {
+              text:
+                'นี่คือผล:\n```json\n{"found": true, "authors": "ชาติ กอบจิตติ", "year": "พ.ศ. 2524 (1981)",' +
+                ' "pages": "320", "isbn": "978-974-8", "synopsis": "เรื่องของฟัก [1, 2]", "blurb": "",' +
+                ' "reviewSummary": "ผู้อ่านชื่นชม [3]"}\n```',
+            },
+          ],
+        },
+        groundingMetadata: {
+          groundingChunks: [
+            { web: { uri: 'https://a.example/1', title: 'A' } },
+            { web: { uri: 'https://a.example/1', title: 'A ซ้ำ' } },
+            { web: { uri: 'javascript:alert(1)', title: 'ไม่ปลอดภัย' } },
+          ],
+        },
+      },
+    ],
+  }
+  const r = parseEnrichment(data)
+  expect(r).toMatchObject({
+    found: true,
+    authors: 'ชาติ กอบจิตติ',
+    year: '2524',
+    pages: 320,
+    isbn: '9789748',
+    synopsis: 'เรื่องของฟัก',
+    reviewSummary: 'ผู้อ่านชื่นชม',
+    publisher: '',
+  })
+  expect(r.links).toEqual([{ title: 'A', url: 'https://a.example/1' }])
+  expect(() => parseEnrichment({ candidates: [{ content: { parts: [{ text: 'ไม่พบ' }] } }] })).toThrow()
+})

@@ -24,6 +24,9 @@ export const emptyBook: BookInput = {
   category: '',
   tags: [],
   synopsis: '',
+  blurb: '',
+  reviewSummary: '',
+  links: [],
   note: '',
   status: 'dong',
   currentPage: null,
@@ -52,7 +55,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
 
     async getBook(id: string): Promise<Book | undefined> {
       const b = await db.books.get(id)
-      return b && b.deletedAt === null ? b : undefined
+      return b && b.deletedAt === null ? { ...emptyBook, ...b } : undefined
     },
 
     async addBook(input: BookInput): Promise<string> {

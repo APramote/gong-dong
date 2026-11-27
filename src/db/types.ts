@@ -7,6 +7,11 @@ export interface SyncFields {
   deletedAt: number | null
 }
 
+export interface BookLink {
+  title: string
+  url: string
+}
+
 export type ReadingStatus = 'dong' | 'reading' | 'done' | 'dropped'
 
 export interface Book extends SyncFields {
@@ -19,6 +24,12 @@ export interface Book extends SyncFields {
   category: string
   tags: string[]
   synopsis: string
+  /** คำโปรยบนปกหลัง */
+  blurb: string
+  /** สรุปรีวิวสั้น ๆ จากเว็บ (ไม่คัดลอกรีวิวเต็ม) */
+  reviewSummary: string
+  /** ลิงก์ต้นทางของข้อมูลที่ AI ค้นมา */
+  links: BookLink[]
   note: string
   status: ReadingStatus
   currentPage: number | null
