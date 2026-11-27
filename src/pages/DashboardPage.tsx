@@ -99,9 +99,14 @@ export function DashboardPage() {
     <div className="dash">
       <div className="page-head">
         <h1>{t.dash.title}</h1>
-        <button className="btn small" onClick={() => setEditing((e) => !e)}>
-          {t.dash.editGoals}
-        </button>
+        <div className="actions">
+          <Link to="/year" className="btn small">
+            {t.year.link(new Date().getFullYear())}
+          </Link>
+          <button className="btn small" onClick={() => setEditing((e) => !e)}>
+            {t.dash.editGoals}
+          </button>
+        </div>
       </div>
 
       {editing && (

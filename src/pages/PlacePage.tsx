@@ -48,6 +48,11 @@ export function PlacePage() {
             <button className="btn small" onClick={() => setEditing(true)}>
               {t.common.edit}
             </button>
+            {(place.kind === 'box' || place.kind === 'pile') && (
+              <Link className="btn small" to={`/labels?ids=${place.id}`}>
+                {t.labels.printOne}
+              </Link>
+            )}
             {/* ลิ้นชักเพิ่ม/ลดผ่านรูปทรงตู้ ไม่ลบทีละช่อง */}
             {place.kind !== 'drawer' && (
               <button className="btn small danger" onClick={remove}>

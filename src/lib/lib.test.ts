@@ -4,6 +4,8 @@ import { normalizeIsbn } from './isbn'
 import { dongFor, dongPool, findMatches, pickOne } from './picks'
 import { ranges, summarize } from './series'
 import { dashboard } from './dashboard'
+import { buildIcs, firstStart } from './ics'
+import { yearReview } from './yearReview'
 import { emptyBook } from '../db/repo'
 import type { Book } from '../db/types'
 
@@ -335,4 +337,31 @@ test('ชุดหนังสือ: หาเล่มที่ขาด เ�
 test('มูลค่าคลังรวมจากราคาที่ใส่ไว้', () => {
   const d = dashboard([pbook({ price: 250 }), pbook({ price: 99.5, signed: true }), pbook({})], [], 0)
   expect(d.collection).toEqual({ value: 349.5, priced: 2, signed: 1 })
+})
+
+test('ไฟล์ปฏิทิน: นัดซ้ำตามวันที่เลือก เวลาท้องถิ่น มีการเตือน', () => {
+  const now = new Date(2026, 10, 27, 10, 0) // ศุกร์
+  expect(firstStart({ days: [1], time: '21:30' }, now)).toEqual(new Date(2026, 10, 30, 21, 30))
+  const ics = buildIcs({ days: [5, 1], time: '21:30', minutes: 20, title: 'อ่าน, หนังสือ', description: '' }, now, 'x')
+  expect(ics).toContain('DTSTART:20261127T213000\r\n')
+  expect(ics).toContain('DTEND:20261127T215000')
+  expect(ics).toContain('RRULE:FREQ=WEEKLY;BYDAY=MO,FR')
+  expect(ics).toContain('SUMMARY:อ่าน\\, หนังสือ')
+  expect(ics).toContain('BEGIN:VALARM')
+})
+
+test('สรุปปี: นับเฉพาะปีที่เลือก หาเล่มที่ใช้เวลามากสุดและวันต่อเนื่อง', () => {
+  const at = (m: number, d: number, h = 21) => new Date(2026, m, d, h).getTime()
+  const a = pbook({ id: 'a', title: 'ก', pages: 500, finishedAt: at(2, 1), createdAt: at(0, 5) })
+  const b = pbook({ id: 'b', title: 'ข', pages: 120, finishedAt: at(0, 1) - 86400000 * 400 })
+  const sess = (id: string, bookId: string, t: number, minutes: number) => ({
+    id, bookId, createdAt: t, updatedAt: t, deletedAt: null, fromPlaceId: null, toPlaceId: null,
+    startedAt: t, endedAt: t + minutes * 60000, startPage: 0, endPage: 10, minutes, timerMs: 0, timerStartedAt: null,
+  })
+  const sessions = [sess('1', 'a', at(1, 1), 30), sess('2', 'a', at(1, 2), 40), sess('3', 'a', at(1, 3), 20), sess('4', 'b', at(4, 9, 7), 10)]
+  const r = yearReview(2026, [a, b], sessions)
+  expect(r.finished.map((x) => x.id)).toEqual(['a'])
+  expect(r).toMatchObject({ minutes: 100, pages: 40, daysRead: 4, bestStreak: 3, added: 1, bestHour: 21, bestMonth: 1 })
+  expect(r.mostTime).toMatchObject({ book: { id: 'a' }, minutes: 90 })
+  expect(r.longest?.id).toBe('a')
 })

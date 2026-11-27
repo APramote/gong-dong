@@ -1826,3 +1826,181 @@ details.more[open] {
 .month-line {
   margin: -8px 0 0;
 }
+
+/* ---------- ป้ายกล่องพร้อม QR ---------- */
+.label-sheet {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+.label-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1.5px solid var(--text);
+  border-radius: 10px;
+  background: #fff;
+  color: #1b1712;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.label-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.label-head > div {
+  flex: 1;
+  min-width: 0;
+}
+.label-head h2 {
+  margin: 2px 0;
+  font-family: var(--serif);
+  font-size: 1.5rem;
+  line-height: 1.25;
+}
+.label-head p {
+  margin: 0;
+  color: #5a5047;
+}
+.label-kind {
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  color: #5a5047;
+}
+.label-qr {
+  flex: none;
+  width: 96px;
+  height: 96px;
+  image-rendering: pixelated;
+}
+.label-titles {
+  margin: 0;
+  padding: 8px 0 0 20px;
+  border-top: 1px solid #d8d0c4;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.label-more {
+  list-style: none;
+  margin-left: -20px;
+  color: #5a5047;
+}
+.label-foot {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #5a5047;
+}
+@media print {
+  .topbar,
+  .tabbar,
+  .no-print,
+  .update-banner {
+    display: none !important;
+  }
+  body,
+  main {
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+  .label-sheet {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6mm;
+    margin: 0;
+  }
+  .label-card {
+    border-color: #000;
+  }
+}
+
+/* ---------- สรุปปี: การ์ดสำหรับบันทึกเป็นรูป ---------- */
+.year-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 28px 22px 22px;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+.year-big {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 2.1rem;
+  line-height: 1.25;
+}
+.year-lead {
+  margin: -8px 0 0;
+  color: var(--muted);
+}
+.year-covers {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.year-covers .thumb {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 3;
+  border-radius: 3px;
+  font-size: 1.1rem;
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.15);
+}
+.year-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.year-stats div {
+  display: flex;
+  flex-direction: column;
+}
+.year-stats strong {
+  font-family: var(--serif);
+  font-size: 1.35rem;
+}
+.year-stats span,
+.year-facts dt {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.year-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+.year-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+.year-quote {
+  margin: 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--accent);
+}
+.year-quote blockquote {
+  margin: 0 0 4px;
+  font-family: var(--serif);
+  font-style: italic;
+  line-height: 1.7;
+}
+.year-quote figcaption {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.year-brand {
+  align-self: flex-end;
+  font-family: var(--serif);
+  font-weight: 700;
+  color: var(--accent);
+}

@@ -20,6 +20,9 @@ export interface Settings {
   dailyGoalMinutes: number
   /** เป้าจำนวนเล่มที่อ่านจบต่อปี */
   yearGoalBooks: number
+  /** เตือนเวลาอ่าน: วันในสัปดาห์ (0 = อาทิตย์) และเวลา HH:MM */
+  reminderDays: number[]
+  reminderTime: string
 }
 
 const defaults: Settings = {
@@ -31,6 +34,8 @@ const defaults: Settings = {
   claudeModel: DEFAULT_CLAUDE_MODEL,
   dailyGoalMinutes: 20,
   yearGoalBooks: 12,
+  reminderDays: [0, 1, 2, 3, 4, 5, 6],
+  reminderTime: '21:00',
 }
 
 export function loadSettings(): Settings {

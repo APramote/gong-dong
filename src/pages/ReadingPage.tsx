@@ -224,13 +224,16 @@ export function ReadingPage() {
       <section>
         <h2>{t.reading.recent}</h2>
         <SessionList sessions={sessions.slice(0, 5)} placeName={placeName} books={byId} />
-        {sessions.length > 0 && (
-          <p>
+        <p className="actions">
+          {sessions.length > 0 && (
             <Link to="/stats" className="link">
               {t.reading.allStats}
             </Link>
-          </p>
-        )}
+          )}
+          <Link to="/settings#remind" className="link">
+            {t.remind.link}
+          </Link>
+        </p>
       </section>
     </div>
   )

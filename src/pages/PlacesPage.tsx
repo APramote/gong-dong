@@ -53,6 +53,9 @@ export function PlacesPage() {
       <div className="page-head">
         <h1>{t.nav.places}</h1>
         <div className="actions">
+          <Link to="/labels" className="btn">
+            {t.labels.title}
+          </Link>
           <Link to="/organize" className="btn">
             {t.organize.open}
           </Link>
