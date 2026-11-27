@@ -126,6 +126,7 @@ export function BookFormPage() {
             ref={coverInput}
             type="file"
             accept="image/*"
+            capture="environment"
             hidden
             data-cover
             onChange={async (e) => {
@@ -136,6 +137,20 @@ export function BookFormPage() {
           />
           <button type="button" className="btn small" onClick={() => coverInput.current?.click()}>
             {coverUrl ? t.book.changeCover : t.book.takeCover}
+          </button>
+          <button
+            type="button"
+            className="btn small"
+            onClick={() => {
+              // ใช้ input เดิมแต่ปิดโหมดกล้องชั่วคราว เพื่อเปิดตัวเลือกรูปของเครื่อง
+              const el = coverInput.current
+              if (!el) return
+              el.removeAttribute('capture')
+              el.click()
+              el.setAttribute('capture', 'environment')
+            }}
+          >
+            {t.book.pickCover}
           </button>
           {coverUrl && (
             <button type="button" className="btn small danger" onClick={() => setNewCover(null)}>

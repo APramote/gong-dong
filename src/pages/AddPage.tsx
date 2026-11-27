@@ -34,7 +34,10 @@ export function AddPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [mode, setMode] = useState<Mode>('cover')
   const [photo, setPhoto] = useState<Blob | null>(null)
-  const inputs = { cover: useRef<HTMLInputElement>(null), spine: useRef<HTMLInputElement>(null) }
+  const inputs = {
+    camera: { cover: useRef<HTMLInputElement>(null), spine: useRef<HTMLInputElement>(null) },
+    pick: { cover: useRef<HTMLInputElement>(null), spine: useRef<HTMLInputElement>(null) },
+  }
 
   const hasKey = Boolean(loadSettings().geminiKey && loadSettings().geminiModel)
 
@@ -187,19 +190,36 @@ export function AddPage() {
           {t.add.needKey} <Link to="/settings" className="link">{t.add.goSettings}</Link>
         </p>
       )}
-      {(['cover', 'spine'] as const).map((m) => (
-        <input
-          key={m}
-          ref={inputs[m]}
-          type="file"
-          accept="image/*"
-          hidden
-          data-mode={m}
-          onChange={(e) => onPhoto(m, e)}
-        />
-      ))}
-      {option(t.add.photoCover, t.add.photoCoverHint, () => inputs.cover.current?.click(), !hasKey)}
-      {option(t.add.photoSpine, t.add.photoSpineHint, () => inputs.spine.current?.click(), !hasKey)}
+      {/* ปุ่มหลักเปิดกล้องทันที ส่วน input ชุด pick ใช้เลือกรูปที่ถ่ายไว้แล้ว */}
+      {(['cover', 'spine'] as const).flatMap((m) =>
+        (['camera', 'pick'] as const).map((src) => (
+          <input
+            key={m + src}
+            ref={inputs[src][m]}
+            type="file"
+            accept="image/*"
+            capture={src === 'camera' ? 'environment' : undefined}
+            hidden
+            data-mode={m}
+            data-src={src}
+            onChange={(e) => onPhoto(m, e)}
+          />
+        )),
+      )}
+      {option(t.add.photoCover, t.add.photoCoverHint, () => inputs.camera.cover.current?.click(), !hasKey)}
+      {option(t.add.photoSpine, t.add.photoSpineHint, () => inputs.camera.spine.current?.click(), !hasKey)}
+      {hasKey && (
+        <p className="muted">
+          {t.add.pickInstead}{' '}
+          <button type="button" className="link-btn" onClick={() => inputs.pick.cover.current?.click()}>
+            {t.add.pickCover}
+          </button>
+          {' · '}
+          <button type="button" className="link-btn" onClick={() => inputs.pick.spine.current?.click()}>
+            {t.add.pickSpine}
+          </button>
+        </p>
+      )}
       {option(t.add.scanIsbn, t.add.scanIsbnHint, () => setStep('scan'))}
       {option(t.add.manual, t.add.manualHint, () =>
         navigate(placeId ? `/book/new?place=${placeId}` : '/book/new'),

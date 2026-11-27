@@ -334,3 +334,12 @@ textarea {
   border-radius: 10px;
   background: #000;
 }
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
