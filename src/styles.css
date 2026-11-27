@@ -1623,3 +1623,206 @@ details.more[open] {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
+
+/* ---------- หน้าอ่าน: โต๊ะอ่านหนังสือ ---------- */
+.reading {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.reading .page-head {
+  margin-bottom: 0;
+}
+.desk {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  transition: border-color 0.3s;
+}
+.desk.is-running {
+  border-color: var(--accent);
+}
+.desk-top {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+.desk-cover .thumb {
+  width: 96px;
+  height: 140px;
+  border-radius: 4px;
+  font-size: 2.2rem;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.18);
+}
+.desk-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.desk-title {
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+  text-decoration: none;
+}
+.desk-info .progress {
+  margin: 4px 0;
+  height: 5px;
+}
+.desk-clock {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+}
+.clock {
+  font-family: var(--serif);
+  font-size: 2.6rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.clock-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.pulse {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}
+
+/* มือว่าง */
+.empty-hand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 22px 20px;
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+}
+.empty-hand h2 {
+  margin: 0;
+  font-family: var(--serif);
+}
+.empty-hand p {
+  margin: 0;
+}
+.suggest-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin: 6px 0;
+}
+.suggest-book {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.suggest-book .thumb {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 3;
+  border-radius: 4px;
+  font-size: 1.8rem;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.14);
+}
+.suggest-title {
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.suggest-take {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* แถบ 7 วัน */
+.week {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.week-bars {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+.week-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.week-track {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: 56px;
+}
+.week-fill {
+  width: 60%;
+  max-width: 22px;
+  border-radius: 4px 4px 2px 2px;
+  background: var(--accent);
+  opacity: 0.55;
+}
+.week-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.week-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.week-day.today .week-fill {
+  opacity: 1;
+}
+.week-day.today .week-label {
+  color: var(--text);
+  font-weight: 700;
+}
+.month-line {
+  margin: -8px 0 0;
+}

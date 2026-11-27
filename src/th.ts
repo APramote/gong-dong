@@ -262,6 +262,24 @@ export const t = {
       addedMonth: 'เข้าคลังเดือนนี้',
     },
     books: (n: number) => `${n} เล่ม`,
+    todayRead: (m: string) => `วันนี้อ่านแล้ว ${m}`,
+    todayNone: 'วันนี้ยังไม่ได้เปิดอ่าน',
+    week: (m: string) => `7 วันนี้ ${m}`,
+    weekLabel: 'เวลาอ่าน 7 วันล่าสุด',
+    progress: (page: number, total: number | null) =>
+      total ? `หน้า ${page} จาก ${total} · ${Math.min(100, Math.round((page / total) * 100))}%` : `หน้า ${page}`,
+    notStarted: 'ยังไม่ได้คั่นหน้า',
+    go: 'เริ่มอ่าน',
+    pause: 'พักก่อน',
+    readingNow: 'กำลังอ่าน',
+    paused: 'พักอยู่',
+    emptyTitle: 'มือยังว่าง',
+    emptyLead: 'หยิบสักเล่มจากกองดองมาอ่านกัน',
+    suggestShort: (n: number) => `สั้นสุด ${n} หน้า`,
+    random: 'ให้กองดองเลือกให้',
+    month: (min: string, pages: number, done: number) =>
+      [`เดือนนี้อ่าน ${min}`, pages ? `${pages} หน้า` : '', done ? `จบ ${done} เล่ม` : ''].filter(Boolean).join(' · '),
+    allStats: 'ดูสถิติทั้งหมด',
   },
 
   scan: {

@@ -100,8 +100,8 @@ function Layout() {
       <nav className="tabbar" aria-label={t.nav.menu}>
         {tab('/', t.nav.library, ICONS.library, true)}
         {tab('/reading', t.nav.reading, ICONS.reading)}
-        {tab('/stats', t.nav.stats, ICONS.stats)}
         {tab('/places', t.nav.places, ICONS.places)}
+        {tab('/stats', t.nav.stats, ICONS.stats)}
       </nav>
     </>
   )
