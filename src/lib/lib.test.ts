@@ -487,3 +487,31 @@ test('จัดระเบียบ: ชุดอยู่ด้วยกัน
   // (ชื่อชุดภาษาไทยมาก่อนชื่ออังกฤษตามการเรียงของภาษาไทย)
   expect(arrange(mixed, 'full', categoryOf, seriesName)).toEqual(['m1', 'm2', 'm3', 'n1', 'n2', 'p1'])
 })
+
+test('จัดระเบียบ: หนังสือที่วางกองไว้ไม่ถูกนำมาจัด และกองไม่เป็นปลายทาง', async () => {
+  const { ruleAdvice, buildLayoutPrompt, planMoves } = await import('./organize')
+  const now = new Date(2026, 10, 27).getTime()
+  const old = now - 500 * 86400000
+  const mk = (id: string, o: object) =>
+    ({ id, title: id, authors: '', categoryId: null, status: 'dong', placeId: 'A', takenAt: null, finishedAt: null, createdAt: now, seriesId: null, seriesNo: null, ...o }) as any
+  const place = (id: string, kind: string) => ({ id, kind, name: id, bookcaseId: null, label: '', location: '' })
+  const places = [place('A', 'shelf'), place('PILE', 'pile'), place('BOX', 'box')] as any
+  const books = [
+    mk('onShelf', { placeId: null }),
+    mk('pileDong', { placeId: 'PILE' }),
+    mk('pileOld', { placeId: 'PILE', status: 'done', finishedAt: old, createdAt: old }),
+    // ชุดที่มีเล่มหนึ่งอยู่ในกอง: เล่มในกองอยู่ที่เดิม
+    mk('s1', { seriesId: 'S', seriesNo: 1, placeId: 'PILE' }),
+    mk('s2', { seriesId: 'S', seriesNo: 2, placeId: null }),
+  ]
+  expect(ruleAdvice(books, places, [], now).toBox).toEqual([])
+  const categoryOf = new Map(books.map((b: any) => [b.id, 'นิยาย']))
+  const input = buildLayoutPrompt(books, places, [], categoryOf)
+  expect(input.prompt).not.toContain('PILE')
+  expect(input.prompt).toContain('"นิยาย" | 2 books') // นับเฉพาะเล่มที่ไม่อยู่ในกอง
+  const codes = [...input.placeIds].map(([code, id]) => `${id}:${code}`)
+  expect(codes).toEqual(['A:p1', 'BOX:p2'])
+  // AI ตอบชี้ไปที่กองไม่ได้ (ไม่มีรหัสของกอง) และรหัสแปลกถูกทิ้ง
+  const moves = planMoves({ summary: '', tips: [], box: 'p2', layout: [{ category: 'นิยาย', places: ['p9', 'p1'] }] }, input, books, places, [], categoryOf, { mode: 'full', now }).moves
+  expect(moves.map((m) => [m.bookId, m.toPlaceId]).sort()).toEqual([['onShelf', 'A'], ['s2', 'A']])
+})

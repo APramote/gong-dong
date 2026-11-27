@@ -2313,3 +2313,13 @@ details.more[open] {
 .mode-pick p {
   margin: 0;
 }
+
+/* หัวข้อปลายทางในแผนย้าย: ติ๊กเพื่อเลือกทั้งที่เก็บ */
+.dest-head {
+  margin: 14px 0 4px;
+  font-weight: 600;
+}
+.dest-head .muted {
+  font-weight: 400;
+  font-size: 0.85rem;
+}

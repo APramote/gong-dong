@@ -429,9 +429,32 @@ export function OrganizePage() {
                     </button>
                   </span>
                 </div>
-                {[...movesByDest].map(([dest, moves]) => (
+                <p className="muted">{t.organize.pickHint}</p>
+                {[...movesByDest].map(([dest, moves]) => {
+                  const ids = moves.map((m) => m.bookId)
+                  const chosen = ids.filter((id) => pickedMoves.has(id)).length
+                  return (
                   <div key={dest} className="dest-group">
-                    <h4>→ {label(dest)}</h4>
+                    {/* ติ๊กที่หัวข้อ = เลือกหรือไม่เลือกทั้งที่เก็บนี้ ติ๊กรายเล่มได้ด้านล่าง */}
+                    <label className="check dest-head">
+                      <input
+                        type="checkbox"
+                        checked={chosen === ids.length}
+                        ref={(el) => {
+                          if (el) el.indeterminate = chosen > 0 && chosen < ids.length
+                        }}
+                        onChange={() =>
+                          setPickedMoves((cur) => {
+                            const next = new Set(cur)
+                            for (const id of ids) chosen === ids.length ? next.delete(id) : next.add(id)
+                            return next
+                          })
+                        }
+                      />
+                      <span>
+                        → {label(dest)} <span className="muted">{t.organize.pickedOf(chosen, ids.length)}</span>
+                      </span>
+                    </label>
                     <PickList
                       books={moves.map((m) => byId.get(m.bookId)!).filter(Boolean)}
                       picked={pickedMoves}
@@ -443,7 +466,8 @@ export function OrganizePage() {
                       }}
                     />
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
 
