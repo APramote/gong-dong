@@ -45,9 +45,10 @@ export function BookcaseViewPage() {
 
   async function changeShape(l: Look) {
     // ลดลิ้นชักที่มีหนังสืออยู่ ต้องถามก่อน
-    const lost = await repo.booksInRemovedDrawers(id, l)
-    if (lost && !confirm(t.shape.confirmFewerDrawers(lost))) return
+    const before = draft
     setDraft(l)
+    const lost = await repo.booksInRemovedDrawers(id, l)
+    if (lost && !confirm(t.shape.confirmFewerDrawers(lost))) return setDraft(before)
     await repo.updateBookcaseLook(id, l)
   }
 
