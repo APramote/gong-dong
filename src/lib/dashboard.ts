@@ -1,5 +1,5 @@
 import type { Book, Category, ReadingSession } from '../db/types'
-import { dayKey, daysAgo, formatMinutes } from './stats'
+import { dayKey, daysAgo, formatMinutes, pagesOf } from './stats'
 
 export { dayKey }
 
@@ -12,14 +12,17 @@ const monthKey = (t: number) => {
 
 export interface Goals {
   dailyMinutes: number
+  dailyPages: number
   yearBooks: number
 }
 
 export interface Dashboard {
   /** นาทีอ่านรายวัน ย้อนหลัง 30 วัน (เก่าสุดก่อน) */
-  daily: { day: string; minutes: number }[]
+  daily: { day: string; minutes: number; pages: number }[]
   todayMinutes: number
+  todayPages: number
   weekMinutes: number
+  weekPages: number
   streak: number
   bestStreak: number
   /** นาทีอ่านแยกตามชั่วโมงที่เริ่มอ่าน 0–23 */
@@ -55,18 +58,25 @@ export function dashboard(
   const catName = new Map(categoryList.map((c) => [c.id, c.name]))
   const done = sessions.filter((s) => s.endedAt !== null && s.deletedAt === null)
   const perDay = new Map<string, number>()
-  for (const s of done) perDay.set(dayKey(s.endedAt!), (perDay.get(dayKey(s.endedAt!)) ?? 0) + minutesOf(s))
+  const perDayPages = new Map<string, number>()
+  for (const s of done) {
+    const key = dayKey(s.endedAt!)
+    perDay.set(key, (perDay.get(key) ?? 0) + minutesOf(s))
+    perDayPages.set(key, (perDayPages.get(key) ?? 0) + pagesOf(s))
+  }
 
   const daily = Array.from({ length: 30 }, (_, i) => {
     const day = dayKey(daysAgo(now, 29 - i))
-    return { day, minutes: perDay.get(day) ?? 0 }
+    return { day, minutes: perDay.get(day) ?? 0, pages: perDayPages.get(day) ?? 0 }
   })
 
+  // วันที่ได้อ่าน = มีเวลาอ่านหรือมีหน้าที่อ่านเพิ่ม
+  const readDay = (key: string) => (perDay.get(key) ?? 0) > 0 || (perDayPages.get(key) ?? 0) > 0
   // วันที่อ่านต่อเนื่อง: ถ้าวันนี้ยังไม่ได้อ่าน นับจากเมื่อวาน (ยังไม่ถือว่าขาด)
-  const readOn = (t: number) => (perDay.get(dayKey(t)) ?? 0) > 0
+  const readOn = (t: number) => readDay(dayKey(t))
   let streak = 0
   for (let k = readOn(now) ? 0 : 1; readOn(daysAgo(now, k)); k++) streak++
-  const days = [...perDay.entries()].filter(([, m]) => m > 0).map(([d]) => d).sort()
+  const days = [...new Set([...perDay.keys(), ...perDayPages.keys()])].filter(readDay).sort()
   let bestStreak = 0
   let run = 0
   let prev = ''
@@ -85,7 +95,7 @@ export function dashboard(
     byWeekday[d.getDay()] += minutesOf(s)
   }
   const timed = done.filter((s) => s.minutes)
-  const paged = done.filter((s) => s.endPage !== null)
+  const paged = done.filter((s) => s.endPage !== null && s.kind !== 'carry')
 
   const thisMonth = new Date(now)
   const monthly = Array.from({ length: 12 }, (_, i) => {
@@ -113,15 +123,17 @@ export function dashboard(
   return {
     daily,
     todayMinutes: perDay.get(dayKey(now)) ?? 0,
+    todayPages: perDayPages.get(dayKey(now)) ?? 0,
     weekMinutes: daily.slice(-7).reduce((n, d) => n + d.minutes, 0),
+    weekPages: daily.slice(-7).reduce((n, d) => n + d.pages, 0),
     streak,
     bestStreak: Math.max(bestStreak, streak),
     byHour,
     byWeekday,
-    sessions: done.length,
+    sessions: done.filter((s) => s.kind !== 'carry').length,
     avgMinutes: timed.length ? Math.round(timed.reduce((n, s) => n + minutesOf(s), 0) / timed.length) : 0,
     avgPages: paged.length
-      ? Math.round(paged.reduce((n, s) => n + Math.max(0, s.endPage! - (s.startPage ?? 0)), 0) / paged.length)
+      ? Math.round(paged.reduce((n, s) => n + pagesOf(s), 0) / paged.length)
       : 0,
     monthly,
     status: {
@@ -151,10 +163,16 @@ export const WEEKDAYS_SHORT = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', '�
 /** ข้อความให้กำลังใจจากสถิติจริง เรียงจากสำคัญที่สุด */
 export function motivation(d: Dashboard, goals: Goals): string[] {
   const out: string[] = []
-  if (d.todayMinutes >= goals.dailyMinutes) out.push(`วันนี้อ่านครบเป้า ${formatMinutes(goals.dailyMinutes)}แล้ว เยี่ยม`)
+  const minutesDone = d.todayMinutes >= goals.dailyMinutes
+  const pagesDone = d.todayPages >= goals.dailyPages
+  if (minutesDone && pagesDone) out.push(`วันนี้ครบทั้งสองเป้า ${goals.dailyPages} หน้า และ ${formatMinutes(goals.dailyMinutes)} เยี่ยม`)
+  else if (pagesDone) out.push(`วันนี้อ่านครบเป้า ${goals.dailyPages} หน้าแล้ว เยี่ยม`)
+  else if (minutesDone) out.push(`วันนี้อ่านครบเป้า ${formatMinutes(goals.dailyMinutes)}แล้ว เยี่ยม`)
+  else if (d.todayPages > 0)
+    out.push(`วันนี้อ่านไปแล้ว ${d.todayPages} หน้า อีกแค่ ${goals.dailyPages - d.todayPages} หน้าถึงเป้า`)
   else if (d.todayMinutes > 0)
     out.push(`วันนี้อ่านไปแล้ว ${formatMinutes(d.todayMinutes)} อีกแค่ ${formatMinutes(goals.dailyMinutes - d.todayMinutes)} ถึงเป้า`)
-  else out.push(`วันนี้ยังไม่ได้อ่าน อ่านแค่ ${formatMinutes(goals.dailyMinutes)} ก็ถึงเป้า`)
+  else out.push(`วันนี้ยังไม่ได้อ่าน อ่านแค่ ${goals.dailyPages} หน้า หรือ ${formatMinutes(goals.dailyMinutes)} ก็ถึงเป้า`)
 
   if (d.streak >= 2) out.push(`อ่านต่อเนื่อง ${d.streak} วันแล้ว${d.streak >= d.bestStreak ? ' สถิติใหม่ของคุณ' : ` ใกล้สถิติเดิม ${d.bestStreak} วันแล้ว`}`)
   else if (d.bestStreak >= 3) out.push(`เคยอ่านต่อเนื่องได้ ${d.bestStreak} วัน เริ่มนับใหม่วันนี้เลย`)

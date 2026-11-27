@@ -1,4 +1,5 @@
 import { db as defaultDb, type GongDongDB } from './db'
+import { pace, timerTotal } from '../lib/stats'
 import type { Book, Bookcase, Category, Look, Place, PlaceKind, Quote, ReadingSession, Series, SyncFields, Wish } from './types'
 
 const newId = () => crypto.randomUUID()
@@ -7,6 +8,10 @@ function stamp(): SyncFields {
   const now = Date.now()
   return { id: newId(), createdAt: now, updatedAt: now, deletedAt: null }
 }
+
+/** เรียงตามเวลาที่จบ (รายการที่ยังไม่จบใช้เวลาเริ่ม) ใหม่สุดก่อน */
+const latestFirst = (a: ReadingSession, b: ReadingSession) =>
+  (b.endedAt ?? b.startedAt) - (a.endedAt ?? a.startedAt) || b.createdAt - a.createdAt
 
 const alive = <T extends SyncFields>(rows: T[]) => rows.filter((r) => r.deletedAt === null)
 
@@ -19,6 +24,11 @@ export interface ReturnInput {
   page: number | null
   minutes: number | null
   finished: boolean
+}
+export interface CheckInInput {
+  page: number | null
+  /** null = ใช้เวลาที่จับไว้ หรือประมาณจากจำนวนหน้า */
+  minutes: number | null
 }
 export type BookcaseInput = Pick<Bookcase, 'name' | 'room'>
 export type PlaceInput = Pick<Place, 'name' | 'location' | 'label'>
@@ -108,6 +118,52 @@ export function createRepo(db: GongDongDB = defaultDb) {
   async function drawers(bookcaseId: string): Promise<Place[]> {
     const rows = alive(await db.places.where('bookcaseId').equals(bookcaseId).toArray())
     return rows.filter((p) => p.kind === 'drawer').sort((a, b) => a.order - b.order)
+  }
+
+  /**
+   * บันทึกการอ่านหนึ่งครั้งของเล่มนี้ (ต้องเรียกในธุรกรรมที่มี books และ sessions)
+   * onlyIfRead = บันทึกเฉพาะเมื่อมีอะไรให้บันทึกจริง (หน้าเปลี่ยน ใส่เวลา หรือจับเวลาไว้) ใช้ตอนวางคืน
+   */
+  async function logReading(id: string, input: CheckInInput, onlyIfRead: boolean): Promise<void> {
+    const book = await db.books.get(id)
+    if (!book || book.deletedAt !== null) return
+    const now = Date.now()
+    const carry = await openSession(id)
+    const timer = carry ? timerTotal(carry, now) : 0
+    const page = input.page
+    const pages = page !== null ? Math.max(0, page - (book.currentPage ?? 0)) : 0
+    if (onlyIfRead && pages === 0 && !input.minutes && timer === 0) return
+    let minutes = input.minutes
+    let estimated = false
+    if (minutes === null && timer > 0) minutes = Math.max(1, Math.round(timer / 60000))
+    else if (minutes === null && pages > 0) {
+      const all = await db.sessions.toArray()
+      minutes = Math.max(1, Math.round(pages * pace(all)))
+      estimated = true
+    }
+    await db.sessions.add({
+      ...stamp(),
+      kind: 'read',
+      ...(estimated && { estimated }),
+      bookId: id,
+      fromPlaceId: null,
+      toPlaceId: null,
+      startedAt: now - (minutes ?? 0) * 60000,
+      endedAt: now,
+      startPage: book.currentPage,
+      endPage: page,
+      minutes,
+      timerMs: 0,
+      timerStartedAt: null,
+    })
+    // เวลาที่จับไว้ถูกใช้ไปแล้ว เริ่มนับใหม่สำหรับการอ่านครั้งถัดไป
+    if (carry && timer > 0) await db.sessions.update(carry.id, { timerMs: 0, timerStartedAt: null, updatedAt: now })
+    if (page !== null && page !== book.currentPage)
+      await db.books.update(id, {
+        currentPage: page,
+        status: book.status === 'dong' ? 'reading' : book.status,
+        updatedAt: now,
+      })
   }
 
   /** ตำแหน่งถัดไปต่อท้ายที่เก็บ */
@@ -400,6 +456,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
         const now = Date.now()
         await db.sessions.add({
           ...stamp(),
+          kind: 'carry',
           bookId: id,
           fromPlaceId: book.placeId,
           toPlaceId: null,
@@ -421,7 +478,15 @@ export function createRepo(db: GongDongDB = defaultDb) {
       })
     },
 
-    /** วางคืนที่เดิมหรือที่ใหม่ บันทึกหน้าที่คั่นและเวลาอ่าน */
+    /**
+     * คั่นหน้า: บันทึกว่าอ่านถึงหน้าไหน (หนังสือยังอยู่กับตัว ไม่ต้องวางคืน)
+     * เวลาอ่าน: ที่ผู้ใช้ใส่ > เวลาที่จับไว้ > ประมาณจากจำนวนหน้ากับความเร็วอ่านของผู้ใช้
+     */
+    async checkIn(id: string, input: CheckInInput): Promise<void> {
+      await db.transaction('rw', db.books, db.sessions, () => logReading(id, input, false))
+    },
+
+    /** วางคืนที่เดิมหรือที่ใหม่ ถ้าหน้าที่คั่นเปลี่ยนหรือมีเวลาที่จับไว้ บันทึกเป็นการอ่านอีกหนึ่งครั้ง */
     async returnBook(id: string, input: ReturnInput): Promise<void> {
       await db.transaction('rw', db.books, db.sessions, db.places, async () => {
         // ที่วางคืนถูกลบไประหว่างนั้น วางเป็น "ยังไม่ระบุที่เก็บ" แทน
@@ -429,27 +494,26 @@ export function createRepo(db: GongDongDB = defaultDb) {
         const position = await nextPosition(placeId)
         const book = await db.books.get(id)
         if (!book || !book.takenAt) return
+        const finished = input.finished
+        const page = finished && book.pages ? book.pages : input.page
+        await logReading(id, { page, minutes: input.minutes }, true)
         const now = Date.now()
         const session = await openSession(id)
         if (session) {
-          const running = session.timerStartedAt ? now - session.timerStartedAt : 0
           await db.sessions.update(session.id, {
+            kind: 'carry',
             endedAt: now,
             toPlaceId: placeId,
-            endPage: input.page,
-            minutes: input.minutes,
-            timerMs: session.timerMs + running,
             timerStartedAt: null,
             updatedAt: now,
           })
         }
-        const finished = input.finished
         await db.books.update(id, {
           placeId,
           position,
           takenAt: null,
           takenFrom: null,
-          currentPage: finished && book.pages ? book.pages : input.page,
+          currentPage: page ?? book.currentPage,
           status: finished ? 'done' : book.status === 'done' ? 'reading' : book.status,
           // กฎเดียวกับฟอร์ม: อ่านจบ = วันที่วางคืน (อ่านซ้ำจบก็นับใหม่) ไม่จบ = ไม่มีวันที่อ่านจบ
           finishedAt: finished ? now : null,
@@ -474,12 +538,12 @@ export function createRepo(db: GongDongDB = defaultDb) {
     openSession,
 
     async listSessions(): Promise<ReadingSession[]> {
-      return alive(await db.sessions.toArray()).sort((a, b) => b.startedAt - a.startedAt)
+      return alive(await db.sessions.toArray()).sort(latestFirst)
     },
 
     async sessionsFor(bookId: string): Promise<ReadingSession[]> {
       const rows = alive(await db.sessions.where('bookId').equals(bookId).toArray())
-      return rows.sort((a, b) => b.startedAt - a.startedAt)
+      return rows.sort(latestFirst)
     },
 
     /** เพิ่มหลายเล่มต่อท้ายที่เก็บตามลำดับที่ส่งมา ในธุรกรรมเดียว คืน id ตามลำดับ */

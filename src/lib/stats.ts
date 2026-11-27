@@ -44,11 +44,33 @@ export function readingStats(books: Book[], sessions: ReadingSession[], now = ne
     minutesWeek: sum(done.filter((s) => week.has(dayKey(s.endedAt!))), (s) => s.minutes ?? 0),
     minutesMonth: sum(inMonth, (s) => s.minutes ?? 0),
     // ไม่มีที่คั่นตอนหยิบ ถือว่าเริ่มจากหน้าแรก
-    pagesMonth: sum(inMonth, (s) => (s.endPage !== null ? Math.max(0, s.endPage - (s.startPage ?? 0)) : 0)),
+    pagesMonth: sum(inMonth, pagesOf),
     finishedMonth: books.filter((b) => b.finishedAt && b.finishedAt >= month).length,
     finishedYear: books.filter((b) => b.finishedAt && b.finishedAt >= year).length,
     addedMonth: books.filter((b) => b.createdAt >= month).length,
   }
+}
+
+/** จำนวนหน้าที่อ่านในรายการนี้ (ไม่มีที่คั่นตอนเริ่ม ถือว่าเริ่มจากหน้าแรก) */
+export const pagesOf = (s: ReadingSession) =>
+  s.endPage !== null && s.kind !== 'carry' ? Math.max(0, s.endPage - (s.startPage ?? 0)) : 0
+
+/** ความเร็วอ่านเริ่มต้น (นาทีต่อหน้า) ใช้เมื่อยังไม่มีประวัติที่ใส่เวลาจริง */
+export const DEFAULT_PACE = 1.5
+
+/** ความเร็วอ่านของผู้ใช้ (นาทีต่อหน้า) จากรายการที่ใส่เวลาจริง ไม่รวมค่าประมาณ */
+export function pace(sessions: ReadingSession[]): number {
+  let minutes = 0
+  let pages = 0
+  for (const s of sessions) {
+    if (s.deletedAt !== null || s.endedAt === null || s.estimated || !s.minutes) continue
+    const p = pagesOf(s)
+    if (p <= 0) continue
+    minutes += s.minutes
+    pages += p
+  }
+  // ช่วงที่สมเหตุสมผล กันข้อมูลแปลก ๆ (เช่น ใส่หน้าผิด) ทำให้ค่าประมาณเพี้ยน
+  return pages >= 20 ? Math.min(6, Math.max(0.3, minutes / pages)) : DEFAULT_PACE
 }
 
 /** เวลาที่จับไว้ทั้งหมดรวมรอบที่กำลังจับ (มิลลิวินาที) */

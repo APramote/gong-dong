@@ -18,6 +18,8 @@ export interface Settings {
   claudeModel: string
   /** เป้าเวลาอ่านต่อวัน (นาที) */
   dailyGoalMinutes: number
+  /** เป้าจำนวนหน้าที่อ่านต่อวัน */
+  dailyGoalPages: number
   /** เป้าจำนวนเล่มที่อ่านจบต่อปี */
   yearGoalBooks: number
   /** เตือนเวลาอ่าน: วันในสัปดาห์ (0 = อาทิตย์) และเวลา HH:MM */
@@ -33,6 +35,7 @@ const defaults: Settings = {
   claudeKey: '',
   claudeModel: DEFAULT_CLAUDE_MODEL,
   dailyGoalMinutes: 20,
+  dailyGoalPages: 20,
   yearGoalBooks: 12,
   reminderDays: [0, 1, 2, 3, 4, 5, 6],
   reminderTime: '21:00',

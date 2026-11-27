@@ -1,5 +1,5 @@
 import type { Book, Category, Quote, ReadingSession } from '../db/types'
-import { dayKey } from './stats'
+import { dayKey, pagesOf } from './stats'
 
 const DAY = 86400000
 
@@ -40,9 +40,9 @@ export function yearReview(
 
   const finished = books.filter((b) => inYear(b.finishedAt)).sort((a, b) => a.finishedAt! - b.finishedAt!)
   const minutes = done.reduce((n, s) => n + (s.minutes ?? 0), 0)
-  const pages = done.reduce((n, s) => n + (s.endPage !== null ? Math.max(0, s.endPage - (s.startPage ?? 0)) : 0), 0)
+  const pages = done.reduce((n, s) => n + pagesOf(s), 0)
 
-  const perDay = new Set(done.filter((s) => (s.minutes ?? 0) > 0 || s.endPage !== null).map((s) => dayKey(s.endedAt!)))
+  const perDay = new Set(done.filter((s) => (s.minutes ?? 0) > 0 || pagesOf(s) > 0).map((s) => dayKey(s.endedAt!)))
   let bestStreak = 0
   let run = 0
   for (let t = start + DAY / 2; t < end; t += DAY) {
@@ -81,7 +81,7 @@ export function yearReview(
     finished,
     minutes,
     pages,
-    sessions: done.length,
+    sessions: done.filter((s) => s.kind !== 'carry').length,
     daysRead: perDay.size,
     bestStreak,
     added: books.filter((b) => inYear(b.createdAt)).length,

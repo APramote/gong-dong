@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest'
 import { GeminiError, parseBooks, pickDefaultModel } from './gemini'
 import { normalizeIsbn } from './isbn'
+import { pace } from './stats'
 import { dongFor, dongPool, findMatches, nearMatcher, pickOne } from './picks'
 import { ranges, summarize } from './series'
 import { dashboard } from './dashboard'
@@ -282,8 +283,8 @@ test('สถิติ dashboard: วันต่อเนื่อง ช่ว�
   expect(d.oldestDong?.id).toBe('b')
   expect(d.shortestDong?.id).toBe('c')
 
-  const msgs = motivation(d, { dailyMinutes: 20, yearBooks: 12 })
-  expect(msgs[0]).toContain('ครบเป้า')
+  const msgs = motivation(d, { dailyMinutes: 20, dailyPages: 20, yearBooks: 12 })
+  expect(msgs[0]).toMatch(/ครบ.*เป้า/)
   expect(msgs[1]).toContain('ต่อเนื่อง 3 วัน')
   expect(msgs.some((m) => m.includes('21:00–22:00'))).toBe(true)
 })
@@ -390,4 +391,21 @@ test('ไฟล์ปฏิทิน: บรรทัดยาวถูกพั
   expect(lines.slice(1).every((l) => l.startsWith(' '))).toBe(true)
   expect(lines.map((l, i) => (i ? l.slice(1) : l)).join('')).toBe('DESCRIPTION:' + 'หนังสือ'.repeat(30))
   expect(buildIcs({ days: [1], time: '08:00', minutes: 20, title: 'a\\b', description: '' })).toContain('SUMMARY:a\\\\b')
+})
+
+test('สถิติจากการคั่นหน้า: นับหน้ารายวัน วันที่มีแต่หน้าก็นับต่อเนื่อง การหยิบติดตัวไม่นับ', () => {
+  const now = new Date(2026, 5, 10, 22).getTime()
+  const at = (daysBack: number) => new Date(2026, 5, 10 - daysBack, 20).getTime()
+  const row = (id: string, t: number, o: object) => ({
+    id, bookId: 'a', createdAt: t, updatedAt: t, deletedAt: null, fromPlaceId: null, toPlaceId: null,
+    startedAt: t, endedAt: t, startPage: null, endPage: null, minutes: null, timerMs: 0, timerStartedAt: null, ...o,
+  })
+  const sessions = [
+    row('1', at(0), { kind: 'read', startPage: 10, endPage: 35, minutes: 30 }),
+    row('2', at(1), { kind: 'read', startPage: 0, endPage: 10, minutes: null }),
+    row('3', at(2), { kind: 'carry', startPage: 0 }),
+  ]
+  const d = dashboard([pbook({ id: 'a' })], sessions as never, now)
+  expect(d).toMatchObject({ todayPages: 25, todayMinutes: 30, weekPages: 35, streak: 2, sessions: 2 })
+  expect(pace(sessions as never)).toBe(1.2)
 })

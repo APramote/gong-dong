@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { beforeEach, expect, test } from 'vitest'
+import { beforeEach, expect, test, vi } from 'vitest'
 import { GongDongDB } from './db'
 import { createRepo, emptyBook } from './repo'
 
@@ -87,9 +87,15 @@ test('หยิบไปอ่านแล้ววางคืนที่อ�
   book = (await repo.getBook(id))!
   expect(book).toMatchObject({ takenAt: null, placeId: box, currentPage: 85, status: 'reading' })
   expect(await titles(box)).toEqual(['อยู่ในกล่องก่อน', 'เล่มอ่าน'])
-  const [s] = await repo.sessionsFor(id)
-  expect(s).toMatchObject({ fromPlaceId: shelf, toPlaceId: box, startPage: 20, endPage: 85, minutes: 40, timerStartedAt: null })
-  expect(s.endedAt).not.toBeNull()
+  const rows = await repo.sessionsFor(id)
+  // การหยิบติดตัว (ย้ายที่) กับการอ่าน (หน้าและเวลา) เป็นคนละรายการ
+  const carry = rows.find((r) => r.kind === 'carry')!
+  const read = rows.find((r) => r.kind === 'read')!
+  expect(rows).toHaveLength(2)
+  expect(carry).toMatchObject({ fromPlaceId: shelf, toPlaceId: box, endPage: null, minutes: null, timerStartedAt: null })
+  expect(carry.endedAt).not.toBeNull()
+  expect(read).toMatchObject({ startPage: 20, endPage: 85, minutes: 40 })
+  expect(read.estimated).toBeUndefined()
   expect(await repo.openSession(id)).toBeUndefined()
 })
 
@@ -345,4 +351,44 @@ test('ชุดหนังสือ: เปลี่ยนชื่อซ้ำ
   expect(await repo.addWishes([{ ...w, title: 'ค เล่ม 1' }, { ...w, title: 'ค เล่ม 2' }])).toBe(2)
   expect(await repo.addWishes([{ ...w, title: 'ค เล่ม 2' }, { ...w, title: 'ค เล่ม 3' }])).toBe(1)
   expect((await repo.listWishes()).length).toBe(3)
+})
+
+test('คั่นหน้า: บันทึกการอ่านหลายครั้งโดยไม่ต้องวางคืน เวลาประมาณจากจำนวนหน้า', async () => {
+  const id = await repo.addBook({ ...emptyBook, title: 'พกติดตัว', pages: 300 })
+  await repo.takeBook(id)
+  await repo.checkIn(id, { page: 20, minutes: null }) // ไม่ใส่เวลา = ประมาณ 1.5 นาที/หน้า
+  await repo.checkIn(id, { page: 60, minutes: 40 }) // ใส่เวลาเอง = ได้ความเร็วจริง 1 นาที/หน้า
+  await repo.checkIn(id, { page: 90, minutes: null }) // ประมาณจากความเร็วจริง
+  const reads = (await repo.sessionsFor(id)).filter((r) => r.kind === 'read').sort((a, b) => a.endPage! - b.endPage!)
+  expect(reads.map((r) => [r.startPage, r.endPage, r.minutes, r.estimated ?? false])).toEqual([
+    [null, 20, 30, true],
+    [20, 60, 40, false],
+    [60, 90, 30, true],
+  ])
+  const book = (await repo.getBook(id))!
+  expect(book).toMatchObject({ currentPage: 90, status: 'reading' })
+  expect(book.takenAt).not.toBeNull() // ยังอยู่กับตัว
+  // วางคืนโดยหน้าไม่เปลี่ยน ไม่สร้างการอ่านซ้ำ
+  await repo.returnBook(id, { placeId: null, page: 90, minutes: null, finished: false })
+  expect((await repo.sessionsFor(id)).filter((r) => r.kind === 'read')).toHaveLength(3)
+  expect((await repo.sessionsFor(id)).filter((r) => r.kind === 'carry')[0].endedAt).not.toBeNull()
+})
+
+test('คั่นหน้า: ใช้เวลาที่จับไว้ แล้วเริ่มนับใหม่', async () => {
+  const id = await repo.addBook({ ...emptyBook, title: 'จับเวลา', pages: 200 })
+  await repo.takeBook(id)
+  const start = Date.now()
+  const clock = vi.spyOn(Date, 'now')
+  try {
+    clock.mockReturnValue(start)
+    await repo.toggleTimer(id)
+    clock.mockReturnValue(start + 12 * 60000) // อ่านไป 12 นาที นาฬิกายังเดินอยู่
+    await repo.checkIn(id, { page: 10, minutes: null })
+  } finally {
+    clock.mockRestore()
+  }
+  const read = (await repo.sessionsFor(id)).find((r) => r.kind === 'read')!
+  expect(read.minutes).toBe(12)
+  expect(read.estimated).toBeUndefined() // เวลาจริง ไม่ใช่ค่าประมาณ
+  expect((await repo.openSession(id))!).toMatchObject({ timerMs: 0, timerStartedAt: null })
 })

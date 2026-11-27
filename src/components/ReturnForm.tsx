@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { repo } from '../db/repo'
 import type { Book, ReadingSession } from '../db/types'
-import { defaultMinutes } from '../lib/stats'
 import { t } from '../th'
 import { PlaceSelect } from './PlaceSelect'
 
@@ -10,16 +9,16 @@ const toNumber = (v: string) => {
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
-/** ฟอร์มวางคืน: หน้าที่คั่น ที่วางคืน เวลาอ่าน และอ่านจบหรือยัง */
+/** ฟอร์มวางคืน: วางที่ไหน คั่นไว้หน้าไหน และอ่านจบหรือยัง (เวลาอ่านบันทึกตอนคั่นหน้า) */
 export function ReturnForm({
   book,
-  session,
   placeExists,
   onDone,
   onCancel,
 }: {
   book: Book
-  session: ReadingSession | undefined
+  /** ไม่ใช้แล้ว คงไว้ให้ผู้เรียกเดิมส่งมาได้ */
+  session?: ReadingSession
   placeExists: (id: string) => boolean
   onDone: () => void
   onCancel: () => void
@@ -29,10 +28,6 @@ export function ReturnForm({
   const [placeId, setPlaceId] = useState<string | null>(
     book.takenFrom && placeExists(book.takenFrom) ? book.takenFrom : null,
   )
-  const [minutes, setMinutes] = useState(() => {
-    const m = session ? defaultMinutes(session) : null
-    return m === null ? '' : String(m)
-  })
   const [finished, setFinished] = useState(false)
 
   function onPage(v: string) {
@@ -46,7 +41,7 @@ export function ReturnForm({
     await repo.returnBook(book.id, {
       placeId,
       page: toNumber(page),
-      minutes: toNumber(minutes),
+      minutes: null,
       finished,
     })
     onDone()
@@ -54,19 +49,12 @@ export function ReturnForm({
 
   return (
     <form className="form inline-form" onSubmit={submit}>
-      <div className="cols">
-        <label>
-          {t.reading.page}
-          <input inputMode="numeric" autoFocus value={page} onChange={(e) => onPage(e.target.value)} />
-          {book.pages && <span className="muted">{t.reading.ofPages(book.pages)}</span>}
-        </label>
-        <label>
-          {t.reading.minutes}
-          <input inputMode="numeric" value={minutes} onChange={(e) => setMinutes(e.target.value)} />
-        </label>
-      </div>
-      <p className="muted">{t.reading.minutesHint}</p>
       <PlaceSelect label={t.reading.returnTo} value={placeId} onChange={setPlaceId} />
+      <label className="narrow">
+        {t.reading.page}
+        <input inputMode="numeric" value={page} onChange={(e) => onPage(e.target.value)} />
+        {book.pages && <span className="muted">{t.reading.ofPages(book.pages)}</span>}
+      </label>
       <label className="check">
         <input type="checkbox" checked={finished} onChange={(e) => setFinished(e.target.checked)} />
         {t.reading.finished}

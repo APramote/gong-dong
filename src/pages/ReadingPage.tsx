@@ -4,23 +4,28 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
 import type { Book, ReadingSession } from '../db/types'
 import { CoverThumb } from '../components/Cover'
+import { CheckInForm } from '../components/CheckInForm'
 import { ReturnForm } from '../components/ReturnForm'
 import { SessionList } from '../components/SessionList'
 import { WEEKDAYS_SHORT } from '../lib/dashboard'
-import { clock, dayKey, daysAgo, formatMinutes, readingStats, timeAgo, timerTotal } from '../lib/stats'
+import { clock, dayKey, daysAgo, formatMinutes, pagesOf, readingStats, timeAgo, timerTotal } from '../lib/stats'
 import { placeLabel } from '../placeLabel'
 import { t } from '../th'
 
 /** แถบเวลาอ่าน 7 วันล่าสุด วันนี้อยู่ขวาสุด */
 function WeekStrip({ sessions, now }: { sessions: ReadingSession[]; now: number }) {
   const days = useMemo(() => {
-    const per = new Map<string, number>()
-    for (const s of sessions)
-      if (s.endedAt !== null && s.deletedAt === null)
-        per.set(dayKey(s.endedAt), (per.get(dayKey(s.endedAt)) ?? 0) + (s.minutes ?? 0))
+    const per = new Map<string, { minutes: number; pages: number }>()
+    for (const s of sessions) {
+      if (s.endedAt === null || s.deletedAt !== null) continue
+      const d = per.get(dayKey(s.endedAt)) ?? { minutes: 0, pages: 0 }
+      d.minutes += s.minutes ?? 0
+      d.pages += pagesOf(s)
+      per.set(dayKey(s.endedAt), d)
+    }
     return Array.from({ length: 7 }, (_, i) => {
       const at = daysAgo(now, 6 - i)
-      return { key: dayKey(at), day: new Date(at).getDay(), minutes: per.get(dayKey(at)) ?? 0 }
+      return { key: dayKey(at), day: new Date(at).getDay(), ...(per.get(dayKey(at)) ?? { minutes: 0, pages: 0 }) }
     })
   }, [sessions, now])
   const max = Math.max(30, ...days.map((d) => d.minutes))
@@ -41,24 +46,34 @@ function WeekStrip({ sessions, now }: { sessions: ReadingSession[]; now: number 
           </div>
         ))}
       </div>
-      <span className="muted">{t.reading.week(formatMinutes(total))}</span>
+      <span className="muted">
+        {t.reading.week(
+          days.reduce((n, d) => n + d.pages, 0),
+          formatMinutes(total),
+        )}
+      </span>
     </div>
   )
 }
 
-/** หนังสือในมือหนึ่งเล่ม: ปกใหญ่ ความคืบหน้า และนาฬิกาจับเวลา */
+const DAY = 86400000
+
+/** หนังสือที่พกอยู่หนึ่งเล่ม: ปก ความคืบหน้า ปุ่มคั่นหน้า และนาฬิกา (ถ้าอยากจับเวลา) */
 function Desk({
   book,
   session,
+  reads,
   from,
   placeExists,
 }: {
   book: Book
   session: ReadingSession | undefined
+  /** การคั่นหน้าของเล่มนี้ (ใหม่สุดก่อน) */
+  reads: ReadingSession[]
   from: string
   placeExists: (id: string) => boolean
 }) {
-  const [returning, setReturning] = useState(false)
+  const [mode, setMode] = useState<'idle' | 'checkin' | 'return'>('idle')
   const running = Boolean(session?.timerStartedAt)
   // นาฬิกาเดินเฉพาะในการ์ดนี้ ทุกวินาทีตอนจับเวลา ส่วนอื่นของหน้าไม่ต้องวาดใหม่ตาม
   const [now, setNow] = useState(Date.now())
@@ -69,6 +84,15 @@ function Desk({
   }, [running, session?.timerMs])
   const timer = session ? timerTotal(session, now) : 0
   const pct = book.pages && book.currentPage ? Math.min(100, (book.currentPage / book.pages) * 100) : 0
+
+  const todayPages = reads.filter((r) => dayKey(r.endedAt!) === dayKey(now)).reduce((n, r) => n + pagesOf(r), 0)
+  // ความเร็วช่วง 7 วันล่าสุดของเล่มนี้ ใช้บอกว่าอีกกี่วันจบ
+  const weekPages = reads.filter((r) => now - r.endedAt! < 7 * DAY).reduce((n, r) => n + pagesOf(r), 0)
+  const left = book.pages && book.currentPage ? book.pages - book.currentPage : 0
+  const daysLeft = weekPages > 0 && left > 0 ? Math.ceil(left / (weekPages / 7)) : 0
+  // พกมานานแต่ไม่ได้คั่นหน้าเลย ถามเบา ๆ
+  const lastTouch = Math.max(book.takenAt ?? 0, reads[0]?.endedAt ?? 0)
+  const staleDays = Math.floor((now - lastTouch) / DAY)
 
   return (
     <article className={`desk${running ? ' is-running' : ''}`}>
@@ -89,9 +113,18 @@ function Desk({
               <span style={{ width: `${pct}%` }} />
             </span>
           )}
-          <span className="row-sub">{t.reading.inHandSince(from, timeAgo(book.takenAt!, now))}</span>
+          {(todayPages > 0 || daysLeft > 0) && (
+            <span className="desk-note">
+              {[todayPages > 0 ? t.reading.readToday(todayPages) : '', daysLeft > 0 ? t.reading.forecast(daysLeft) : '']
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
+          )}
+          <span className="row-sub">{t.reading.carrying(from, timeAgo(book.takenAt!, now))}</span>
         </div>
       </div>
+
+      {staleDays >= 7 && mode === 'idle' && <p className="muted stale">{t.reading.stale(staleDays)}</p>}
 
       {(timer > 0 || running) && (
         <div className="desk-clock" aria-live="off">
@@ -103,22 +136,26 @@ function Desk({
         </div>
       )}
 
-      {returning ? (
-        <ReturnForm
+      {mode === 'checkin' ? (
+        <CheckInForm
           book={book}
-          session={session}
-          placeExists={placeExists}
-          onDone={() => setReturning(false)}
-          onCancel={() => setReturning(false)}
+          timerMinutes={timer > 0 ? Math.max(1, Math.round(timer / 60000)) : 0}
+          onDone={() => setMode('idle')}
+          onCancel={() => setMode('idle')}
         />
+      ) : mode === 'return' ? (
+        <ReturnForm book={book} placeExists={placeExists} onDone={() => setMode('idle')} onCancel={() => setMode('idle')} />
       ) : (
         <div className="actions">
-          <button className={`btn ${running ? '' : 'primary'}`} onClick={() => repo.toggleTimer(book.id)}>
+          <button className="btn primary" onClick={() => setMode('checkin')}>
+            {t.reading.checkIn}
+          </button>
+          <button className="btn" onClick={() => setMode('return')}>
+            {t.reading.return}
+          </button>
+          <button className="link-btn push" onClick={() => repo.toggleTimer(book.id)}>
             <span aria-hidden>{running ? '❚❚ ' : '▶ '}</span>
             {running ? t.reading.pause : t.reading.go}
-          </button>
-          <button className="btn" onClick={() => setReturning(true)}>
-            {t.reading.return}
           </button>
         </div>
       )}
@@ -200,16 +237,19 @@ export function ReadingPage() {
   }
   const inHand = books.filter((b) => b.takenAt).sort((a, b) => b.takenAt! - a.takenAt!)
   const s = readingStats(books, sessions, new Date(now))
-  const today = sessions
-    .filter((x) => x.endedAt !== null && dayKey(x.endedAt) === dayKey(now))
-    .reduce((n, x) => n + (x.minutes ?? 0), 0)
+  const todayRows = sessions.filter((x) => x.endedAt !== null && dayKey(x.endedAt) === dayKey(now))
+  const today = todayRows.reduce((n, x) => n + (x.minutes ?? 0), 0)
+  const todayPages = todayRows.reduce((n, x) => n + pagesOf(x), 0)
+  const readsOf = (id: string) => sessions.filter((x) => x.bookId === id && x.endedAt !== null && x.kind !== 'carry')
 
   return (
     <div className="reading">
       <div className="page-head">
         <div>
           <h1>{t.reading.title}</h1>
-          <p className="muted">{today ? t.reading.todayRead(formatMinutes(today)) : t.reading.todayNone}</p>
+          <p className="muted">
+            {today || todayPages ? t.reading.todayRead(todayPages, today ? formatMinutes(today) : '') : t.reading.todayNone}
+          </p>
         </div>
       </div>
 
@@ -221,6 +261,7 @@ export function ReadingPage() {
             key={b.id}
             book={b}
             session={open.get(b.id)}
+            reads={readsOf(b.id)}
             from={placeName(b.takenFrom)}
             placeExists={(id) => places.some((p) => p.id === id)}
           />

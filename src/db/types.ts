@@ -97,8 +97,16 @@ export interface Look {
   legs?: boolean
 }
 
-/** การหยิบไปอ่านหนึ่งครั้ง ตั้งแต่หยิบจนวางคืน */
+/**
+ * บันทึกการอ่าน มีสองแบบ
+ * - carry: การหยิบติดตัว ตั้งแต่หยิบจนวางคืน (อาจหลายวัน) ไม่นับเป็นเวลาอ่าน
+ * - read:  การคั่นหน้าหนึ่งครั้ง = อ่านจากหน้า startPage ถึง endPage ใช้ทำสถิติ
+ * รายการเก่าที่ไม่มี kind คือแบบเดิม (หยิบ-อ่าน-วางคืนในรายการเดียว)
+ */
 export interface ReadingSession extends SyncFields {
+  kind?: 'carry' | 'read'
+  /** minutes เป็นค่าประมาณจากจำนวนหน้า (ผู้ใช้ไม่ได้ใส่เวลาเอง) */
+  estimated?: boolean
   bookId: string
   fromPlaceId: string | null
   toPlaceId: string | null

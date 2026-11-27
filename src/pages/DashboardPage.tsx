@@ -77,7 +77,7 @@ export function DashboardPage() {
 
   const d = useMemo(() => dashboard(books ?? [], sessions, Date.now(), categories), [books, sessions, categories])
   if (!books) return <p className="empty">{t.common.loading}</p>
-  const goals = { dailyMinutes: settings.dailyGoalMinutes, yearBooks: settings.yearGoalBooks }
+  const goals = { dailyMinutes: settings.dailyGoalMinutes, dailyPages: settings.dailyGoalPages, yearBooks: settings.yearGoalBooks }
   const setGoal = (patch: Partial<typeof settings>) => {
     const next = { ...settings, ...patch }
     setSettings(next)
@@ -113,6 +113,14 @@ export function DashboardPage() {
         <div className="inline-form form">
           <div className="cols">
             <label>
+              {t.dash.dailyPagesGoal}
+              <input
+                inputMode="numeric"
+                value={settings.dailyGoalPages}
+                onChange={(e) => setGoal({ dailyGoalPages: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+              />
+            </label>
+            <label>
               {t.dash.dailyGoal}
               <input
                 inputMode="numeric"
@@ -135,7 +143,7 @@ export function DashboardPage() {
       <div className="stats">
         <StatTile label={t.dash.dong} value={t.dash.books(d.status.dong)} />
         <StatTile label={t.dash.streak} value={t.dash.days(d.streak)} sub={d.bestStreak > 0 ? t.dash.best(d.bestStreak) : undefined} />
-        <StatTile label={t.dash.week} value={formatMinutes(d.weekMinutes)} />
+        <StatTile label={t.dash.week} value={t.dash.pagesN(d.weekPages)} sub={formatMinutes(d.weekMinutes)} />
         {d.collection.priced > 0 && (
           <StatTile
             label={t.dash.value}
@@ -148,7 +156,13 @@ export function DashboardPage() {
       <section className="goals">
         <h2>{t.dash.goals}</h2>
         <Meter
-          label={t.dash.today}
+          label={t.dash.todayPages}
+          value={d.todayPages}
+          max={goals.dailyPages}
+          text={t.dash.of(String(d.todayPages), t.dash.pagesN(goals.dailyPages))}
+        />
+        <Meter
+          label={t.dash.todayMinutes}
           value={d.todayMinutes}
           max={goals.dailyMinutes}
           text={t.dash.of(formatMinutes(d.todayMinutes), formatMinutes(goals.dailyMinutes))}
@@ -185,6 +199,18 @@ export function DashboardPage() {
               tickLabel={(i) => (i % 7 === 1 || i === 29 ? shortDate(d.daily[i].day) : '')}
             />
             <TableView head={[t.dash.date, t.dash.minutes]} rows={d.daily.map((x) => [shortDate(x.day), x.minutes])} />
+          </ChartCard>
+
+          <ChartCard title={t.dash.dailyPages}>
+            <ColumnChart
+              label={t.dash.dailyPages}
+              labels={d.daily.map((x) => shortDate(x.day))}
+              series={[{ name: t.dash.pages, color: S1, values: d.daily.map((x) => x.pages) }]}
+              format={(v) => t.dash.pagesN(Math.round(v))}
+              tickLabel={(i) => (i % 7 === 1 || i === 29 ? shortDate(d.daily[i].day) : '')}
+              height={130}
+            />
+            <TableView head={[t.dash.date, t.dash.pages]} rows={d.daily.map((x) => [shortDate(x.day), x.pages])} />
           </ChartCard>
 
           <ChartCard title={t.dash.hours}>
