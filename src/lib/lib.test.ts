@@ -1,6 +1,9 @@
 import { expect, test } from 'vitest'
 import { GeminiError, parseBooks, pickDefaultModel } from './gemini'
 import { normalizeIsbn } from './isbn'
+import { dongFor, dongPool, findMatches, pickOne } from './picks'
+import { emptyBook } from '../db/repo'
+import type { Book } from '../db/types'
 
 test('เลือกรุ่น Flash ตัวเสถียรที่เลขรุ่นสูงสุด', () => {
   const ids = ['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.6-flash-lite', 'gemini-3.10-pro', 'gemini-3-flash-preview']
@@ -285,4 +288,33 @@ test('ซ่อนข้อความที่หน้าตาเหมื�
   const { redactKeys } = await import('./aiError')
   expect(redactKeys('bad key AIzaSyA1234567890abcdefXYZ and sk-ant-api03-secretvalue')).toBe('bad key AIza••• and sk-ant-•••')
   expect(redactKeys('quota exceeded')).toBe('quota exceeded')
+})
+
+
+const pbook = (over: Partial<Book>): Book => ({ ...(emptyBook as Book), id: Math.random().toString(), createdAt: 0, updatedAt: 0, deletedAt: null, position: 0, takenAt: null, takenFrom: null, finishedAt: null, ...over })
+
+test('เช็กก่อนซื้อ: เจอจาก ISBN-10/13 และชื่อที่เขียนต่างกันเล็กน้อย', () => {
+  const books = [pbook({ title: 'แฮร์รี่ พอตเตอร์ กับศิลาอาถรรพ์', isbn: '974-7551-04-3' })]
+  expect(findMatches({ isbn: '9789747551044' }, books, []).owned).toHaveLength(1)
+  expect(findMatches({ title: 'แฮร์รี่พอตเตอร์กับศิลาอาถรรพ์ (ปกแข็ง)' }, books, []).owned).toHaveLength(1)
+  expect(findMatches({ title: 'แฮร์รี่ พอตเตอร์ กับห้องแห่งความลับ' }, books, []).owned).toHaveLength(0)
+  expect(findMatches({ title: 'กับ' }, books, []).owned).toHaveLength(0)
+})
+
+test('สุ่มจากกองดอง: กรองเล่มบาง ดองนาน และไม่สุ่มเล่มเดิมซ้ำ', () => {
+  const now = 400 * 86400000
+  const books = [
+    pbook({ id: 'a', pages: 150, createdAt: now - 10 * 86400000 }),
+    pbook({ id: 'b', pages: 500, createdAt: 0 }),
+    pbook({ id: 'c', status: 'done', pages: 100 }),
+    pbook({ id: 'd', takenAt: 1 }),
+  ]
+  expect(dongPool(books, 'any', '', now).map((b) => b.id)).toEqual(['a', 'b'])
+  expect(dongPool(books, 'thin', '', now).map((b) => b.id)).toEqual(['a'])
+  expect(dongPool(books, 'old', '', now).map((b) => b.id)).toEqual(['b'])
+  const pool = dongPool(books, 'any', '', now)
+  expect(pickOne(pool, 'a', () => 0)!.id).toBe('b')
+  expect(pickOne([pool[0]], 'a')!.id).toBe('a')
+  expect(pickOne([])).toBeNull()
+  expect(dongFor(0, 400 * 86400000)).toBe('ดองมา 1 ปี 1 เดือน')
 })

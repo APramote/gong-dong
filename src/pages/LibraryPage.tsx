@@ -88,6 +88,12 @@ export function LibraryPage() {
         </div>
       </div>
 
+      <nav className="tools" aria-label={t.tools.label}>
+        {dong > 0 && <Link to="/random">{t.tools.random}</Link>}
+        <Link to="/check">{t.tools.check}</Link>
+        <Link to="/wishlist">{t.tools.wishlist}</Link>
+      </nav>
+
       {/* หนังสือที่อยู่ในมือ: ทางลัดกลับไปอ่านต่อ */}
       {books.some((b) => b.takenAt) && (
         <div className="now-reading">

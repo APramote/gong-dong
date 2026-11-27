@@ -46,6 +46,39 @@ export interface Book extends SyncFields {
   finishedAt: number | null
   /** สีสัน (#rrggbb) จากรูป ใช้วาด 3D — ว่างคือให้แอปเลือกสีเอง */
   spineColor: string
+  /** ชุดหนังสือ (ตาราง series) และเล่มที่ในชุด */
+  seriesId: string | null
+  seriesNo: number | null
+  /** ข้อมูลนักสะสม */
+  edition: string
+  condition: string
+  price: number | null
+  /** วันที่ซื้อ YYYY-MM-DD */
+  boughtAt: string
+  boughtFrom: string
+  signed: boolean
+}
+
+/** หนังสือที่อยากได้ (ยังไม่มีในคลัง) */
+export interface Wish extends SyncFields {
+  title: string
+  authors: string
+  isbn: string
+  note: string
+}
+
+/** ชุดหนังสือ เช่น นิยายหลายเล่มจบ — total = จำนวนเล่มทั้งชุด (null คือยังไม่ทราบ) */
+export interface Series extends SyncFields {
+  name: string
+  total: number | null
+}
+
+/** ประโยคที่ชอบจากหนังสือ */
+export interface Quote extends SyncFields {
+  bookId: string
+  text: string
+  page: number | null
+  note: string
 }
 
 /** หน้าตาของที่เก็บสำหรับวาด 3D ได้จากรูปที่ถ่าย */

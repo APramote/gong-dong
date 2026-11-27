@@ -295,3 +295,23 @@ test('ผลจากการตรวจ: อัปเกรดตาราง
   expect(await fresh.covers.get('c1')).toMatchObject({ createdAt: 42, updatedAt: 42, deletedAt: null })
   expect(await createRepo(fresh).getCover('c1')).toBeInstanceOf(Blob)
 })
+
+test('รายการอยากได้: ซื้อแล้วกลายเป็นเล่มดองในคลัง', async () => {
+  const pile = await repo.addPlace('pile', { name: 'กองใหม่', location: '', label: '' })
+  const wid = await repo.addWish({ title: '  ปีศาจ ', authors: 'เสนีย์ เสาวพงศ์', isbn: '9789740000000', note: 'ร้านเล็ก' })
+  expect((await repo.listWishes()).map((w) => w.title)).toEqual(['ปีศาจ'])
+  const id = await repo.wishToBook(wid, pile)
+  const book = await repo.getBook(id!)
+  expect(book).toMatchObject({ title: 'ปีศาจ', authors: 'เสนีย์ เสาวพงศ์', status: 'dong', placeId: pile, note: 'ร้านเล็ก' })
+  expect(book!.boughtAt).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  expect(await repo.listWishes()).toEqual([])
+  // กดซ้ำไม่สร้างเล่มซ้ำ
+  expect(await repo.wishToBook(wid)).toBeUndefined()
+  expect((await repo.listBooks()).length).toBe(1)
+})
+
+test('หนังสือเก่าที่ไม่มีฟิลด์ใหม่ได้ค่าเริ่มต้น', async () => {
+  const id = await repo.addBook({ ...emptyBook, title: 'เก่า' })
+  const b = await repo.getBook(id)
+  expect(b).toMatchObject({ seriesId: null, seriesNo: null, price: null, signed: false, edition: '' })
+})

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { Book, Bookcase, Category, Cover, Place, ReadingSession } from './types'
+import type { Book, Bookcase, Category, Cover, Place, Quote, ReadingSession, Series, Wish } from './types'
 import { categoriesFromText, flipShelfOrder } from './migrations'
 
 export class GongDongDB extends Dexie {
@@ -9,6 +9,9 @@ export class GongDongDB extends Dexie {
   covers!: Table<Cover, string>
   sessions!: Table<ReadingSession, string>
   categories!: Table<Category, string>
+  wishes!: Table<Wish, string>
+  series!: Table<Series, string>
+  quotes!: Table<Quote, string>
 
   constructor(name = 'gong-dong') {
     super(name)
@@ -54,6 +57,13 @@ export class GongDongDB extends Dexie {
             c.deletedAt ??= null
           })
       })
+    // รายการอยากได้ ชุดหนังสือ และประโยคที่ชอบ
+    this.version(7).stores({
+      wishes: 'id, updatedAt',
+      series: 'id, updatedAt',
+      quotes: 'id, bookId, updatedAt',
+      books: 'id, placeId, status, categoryId, seriesId, updatedAt',
+    })
   }
 }
 

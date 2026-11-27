@@ -21,6 +21,9 @@ const BookcaseViewPage = page(() => import('./pages/BookcaseViewPage'), 'Bookcas
 const OrganizePage = page(() => import('./pages/OrganizePage'), 'OrganizePage')
 const DashboardPage = page(() => import('./pages/DashboardPage'), 'DashboardPage')
 const CategoriesPage = page(() => import('./pages/CategoriesPage'), 'CategoriesPage')
+const RandomPage = page(() => import('./pages/RandomPage'), 'RandomPage')
+const CheckPage = page(() => import('./pages/CheckPage'), 'CheckPage')
+const WishlistPage = page(() => import('./pages/WishlistPage'), 'WishlistPage')
 
 /** ไฟล์ของเวอร์ชันเก่าถูกลบไปแล้ว (แอปอัปเดตระหว่างเปิดอยู่) — โหลดหน้าใหม่ครั้งเดียว */
 const RELOADED = 'gong-dong.reloaded-for-update'
@@ -135,6 +138,9 @@ const router = createHashRouter([
       { path: 'organize', element: <OrganizePage /> },
       { path: 'stats', element: <DashboardPage /> },
       { path: 'categories', element: <CategoriesPage /> },
+      { path: 'random', element: <RandomPage /> },
+      { path: 'check', element: <CheckPage /> },
+      { path: 'wishlist', element: <WishlistPage /> },
       { path: 'view/bookcase/:id', element: <BookcaseViewPage /> },
       { path: 'book/new', element: <BookFormPage /> },
       { path: 'book/:id', element: <BookFormPage /> },

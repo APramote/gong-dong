@@ -1,5 +1,5 @@
 import { db as defaultDb, type GongDongDB } from './db'
-import type { Book, Bookcase, Category, Look, Place, PlaceKind, ReadingSession, SyncFields } from './types'
+import type { Book, Bookcase, Category, Look, Place, PlaceKind, ReadingSession, SyncFields, Wish } from './types'
 
 const newId = () => crypto.randomUUID()
 
@@ -22,6 +22,7 @@ export interface ReturnInput {
 }
 export type BookcaseInput = Pick<Bookcase, 'name' | 'room'>
 export type PlaceInput = Pick<Place, 'name' | 'location' | 'label'>
+export type WishInput = Pick<Wish, 'title' | 'authors' | 'isbn' | 'note'>
 
 export const emptyBook: BookInput = {
   title: '',
@@ -41,6 +42,14 @@ export const emptyBook: BookInput = {
   status: 'dong',
   currentPage: null,
   placeId: null,
+  seriesId: null,
+  seriesNo: null,
+  edition: '',
+  condition: '',
+  price: null,
+  boughtAt: '',
+  boughtFrom: '',
+  signed: false,
 }
 
 /** ชื่อหมวดแบบเรียบร้อย: ตัดช่องว่างหัวท้ายและช่องว่างซ้ำ */
@@ -58,6 +67,10 @@ const withDefaults = (b: Book): Book => ({
   takenAt: b.takenAt ?? null,
   takenFrom: b.takenFrom ?? null,
   finishedAt: b.finishedAt ?? null,
+  seriesId: b.seriesId ?? null,
+  seriesNo: b.seriesNo ?? null,
+  price: b.price ?? null,
+  signed: b.signed ?? false,
 })
 
 /** คำสั่งอ่าน/เขียนข้อมูลทั้งหมดของแอป รับ db เข้ามาเพื่อให้ทดสอบได้ */
@@ -103,6 +116,53 @@ export function createRepo(db: GongDongDB = defaultDb) {
   }
 
   return {
+    // ---------- รายการอยากได้ ----------
+    async listWishes(): Promise<Wish[]> {
+      return alive(await db.wishes.toArray()).sort((a, b) => b.createdAt - a.createdAt)
+    },
+
+    async addWish(input: WishInput): Promise<string> {
+      const wish: Wish = { ...stamp(), ...input, title: input.title.trim() }
+      await db.wishes.add(wish)
+      return wish.id
+    },
+
+    async updateWish(id: string, input: Partial<WishInput>): Promise<void> {
+      await db.wishes.update(id, { ...input, updatedAt: Date.now() })
+    },
+
+    async deleteWish(id: string): Promise<void> {
+      const now = Date.now()
+      await db.wishes.update(id, { deletedAt: now, updatedAt: now })
+    },
+
+    /** ซื้อแล้ว: ย้ายจากรายการอยากได้เข้าคลังเป็นเล่มดอง คืน id ของหนังสือ */
+    async wishToBook(id: string, placeId: string | null = null): Promise<string | undefined> {
+      return db.transaction('rw', db.wishes, db.books, db.places, async () => {
+        const w = await db.wishes.get(id)
+        if (!w || w.deletedAt !== null) return undefined
+        const target = (await placeAlive(placeId)) ? placeId : null
+        const now = Date.now()
+        const book: Book = {
+          ...emptyBook,
+          ...stamp(),
+          title: w.title,
+          authors: w.authors,
+          isbn: w.isbn,
+          note: w.note,
+          placeId: target,
+          boughtAt: new Date(now).toLocaleDateString('sv'),
+          position: await nextPosition(target),
+          takenAt: null,
+          takenFrom: null,
+          finishedAt: null,
+        }
+        await db.books.add(book)
+        await db.wishes.update(id, { deletedAt: now, updatedAt: now })
+        return book.id
+      })
+    },
+
     // ---------- หนังสือ ----------
     async listBooks(): Promise<Book[]> {
       return alive(await db.books.toArray()).map(withDefaults)
