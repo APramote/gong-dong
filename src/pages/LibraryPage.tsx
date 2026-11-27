@@ -6,12 +6,14 @@ import type { ReadingStatus } from '../db/types'
 import { BookRow } from '../components/BookRow'
 import { CoverThumb } from '../components/Cover'
 import { placeGroups, placeLabel } from '../placeLabel'
+import { loadSettings } from '../lib/settings'
 import { t } from '../th'
 
 const NO_PLACE = '__none__'
 const IN_HAND = '__hand__'
 const NO_CATEGORY = '__none__'
 const PAGE = 100
+const HINT_KEY = 'gong-dong.backupHintHidden'
 
 export function LibraryPage() {
   const books = useLiveQuery(() => repo.listBooks(), [])
@@ -30,6 +32,13 @@ export function LibraryPage() {
   const [limit, setLimit] = useState(PAGE)
   const [status, setStatus] = useState<ReadingStatus | ''>('')
   const [placeId, setPlaceId] = useState('')
+  const [hintHidden, setHintHidden] = useState(() => {
+    try {
+      return localStorage.getItem(HINT_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
 
   const labels = useMemo(
     () => new Map(places.map((p) => [p.id, placeLabel(p, bookcases)])),
@@ -69,6 +78,8 @@ export function LibraryPage() {
   useEffect(() => setLimit(PAGE), [deferredQuery, status, placeId, categoryId])
 
   if (!books) return <p className="empty">{t.common.loading}</p>
+  // มีหนังสือแล้วแต่ยังไม่ได้เชื่อม Google: ข้อมูลอยู่ในเครื่องนี้ที่เดียว ชวนให้เข้าสู่ระบบ
+  const showBackupHint = !hintHidden && books.length > 0 && !loadSettings().googleAccount
   const dong = books.filter((b) => b.status === 'dong').length
 
   return (
@@ -87,6 +98,28 @@ export function LibraryPage() {
           </Link>
         </div>
       </div>
+
+      {showBackupHint && (
+        <p className="notice backup-hint">
+          <span>{t.sync.libraryHint}</span>
+          <Link to="/settings" className="link">
+            {t.sync.signIn}
+          </Link>
+          <button
+            className="link-btn"
+            onClick={() => {
+              try {
+                localStorage.setItem(HINT_KEY, '1')
+              } catch {
+                // เก็บไม่ได้ก็แค่ซ่อนรอบนี้
+              }
+              setHintHidden(true)
+            }}
+          >
+            {t.common.later}
+          </button>
+        </p>
+      )}
 
       <nav className="tools" aria-label={t.tools.label}>
         {dong > 0 && <Link to="/random">{t.tools.random}</Link>}

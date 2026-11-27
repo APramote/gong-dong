@@ -82,6 +82,8 @@ export function SettingsPage() {
   return (
     <div className="form">
       <h1>{t.settings.title}</h1>
+      {/* บัญชีและการซิงก์อยู่บนสุด หาเจอทันทีที่เปิดหน้าตั้งค่า */}
+      <SyncCard />
       <label className="switch-row">
         <input
           type="checkbox"
@@ -180,7 +182,6 @@ export function SettingsPage() {
       </div>
       </>
       )}
-      <SyncCard />
       <WipeCard />
     </div>
   )

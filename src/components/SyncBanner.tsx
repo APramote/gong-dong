@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { getState, subscribe, syncNow } from '../lib/autosync'
 import { syncErrorText } from '../lib/syncError'
 import { t } from '../th'
@@ -15,7 +15,12 @@ export function SyncBanner() {
   const [hidden, setHidden] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  if (!state.needsTap || hidden) return null
+  const show = state.needsTap && !hidden
+  // เตรียมหน้าต่างเข้าสู่ระบบไว้ก่อน กดปุ่มแล้วเปิดได้ทันที
+  useEffect(() => {
+    if (show) void import('../lib/drive').then((m) => m.preload())
+  }, [show])
+  if (!show) return null
   return (
     <div className="update-banner" role="status">
       <span>{error || t.sync.pendingBanner}</span>

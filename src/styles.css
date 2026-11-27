@@ -2203,3 +2203,14 @@ details.more[open] {
   height: 28px;
   border-radius: 7px;
 }
+
+.backup-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0 0 14px;
+}
+.backup-hint span {
+  flex: 1 1 200px;
+}

@@ -22,7 +22,7 @@ export function SyncCard() {
   const [advanced] = useState(() => Boolean(loadSettings().googleClientId))
   // โหลดโค้ดซิงก์ไว้ล่วงหน้า ตอนกดปุ่มจะได้เปิดหน้าต่างของ Google ทันที (ช้าไปเบราว์เซอร์จะบล็อก)
   useEffect(() => {
-    void import('../lib/drive')
+    void import('../lib/drive').then((m) => m.preload())
     void import('../lib/sync')
   }, [])
   const [withCovers, setWithCovers] = useState(true)

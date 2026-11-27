@@ -66,6 +66,13 @@ function loadGis(): Promise<void> {
   return gis
 }
 
+/** โหลดสคริปต์ของ Google ไว้ก่อน ตอนกดปุ่มจะเปิดหน้าต่างเข้าสู่ระบบได้ทันที (รอโหลดตอนกด เบราว์เซอร์มือถือจะบล็อกหน้าต่าง) */
+export function preload(): void {
+  loadGis().catch(() => {
+    // โหลดไม่ได้ตอนนี้ (ออฟไลน์) จะลองใหม่ตอนกดปุ่ม
+  })
+}
+
 let token: { value: string; clientId: string; expires: number } | null = null
 
 /** โทเคนที่ยังใช้ได้อยู่ในหน่วยความจำ (ไม่เปิดหน้าต่าง) — null ถ้าไม่มีหรือใกล้หมดอายุ */
