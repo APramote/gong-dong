@@ -3,7 +3,7 @@ import type { PlaceKind, ReadingStatus } from './db/types'
 /** ข้อความทั้งหมดในแอป รวมไว้ที่เดียวเพื่อให้เพิ่มภาษาอื่นได้ภายหลัง */
 export const t = {
   appName: 'กองดอง',
-  nav: { library: 'คลังหนังสือ', places: 'ที่เก็บ' },
+  nav: { library: 'คลังหนังสือ', places: 'ที่เก็บ', settings: 'ตั้งค่า' },
 
   common: {
     save: 'บันทึก',
@@ -58,6 +58,65 @@ export const t = {
     place: 'ที่เก็บ',
     titleRequired: 'กรุณากรอกชื่อเรื่อง',
     confirmDelete: (title: string) => `ลบ "${title}" ออกจากคลัง?`,
+    cover: 'รูปปก',
+    takeCover: 'ถ่ายรูปปก',
+    changeCover: 'เปลี่ยนรูปปก',
+    removeCover: 'ลบรูปปก',
+    lookupIsbn: 'ค้นจาก ISBN',
+    isbnInvalid: 'ISBN ต้องมี 10 หรือ 13 หลัก',
+    isbnNotFound: 'ไม่พบข้อมูลของ ISBN นี้ กรอกเองได้เลย',
+    isbnFilled: 'เติมข้อมูลจาก ISBN แล้ว ตรวจสอบก่อนบันทึก',
+    searching: 'กำลังค้นหา…',
+  },
+
+  add: {
+    title: 'เพิ่มหนังสือ',
+    dest: 'เก็บไว้ที่',
+    photoCover: 'ถ่ายรูปปก',
+    photoCoverHint: 'ทีละเล่ม ให้ AI อ่านชื่อเรื่องและผู้แต่ง',
+    photoSpine: 'ถ่ายสันปกหลายเล่ม',
+    photoSpineHint: 'ถ่ายทั้งชั้นหรือทั้งกอง ให้ AI อ่านทีละเล่มตามลำดับ',
+    scanIsbn: 'สแกน ISBN',
+    scanIsbnHint: 'สแกนบาร์โค้ดหลังปก ไม่ใช้ AI',
+    manual: 'กรอกเอง',
+    manualHint: 'พิมพ์ข้อมูลหนังสือด้วยตัวเอง',
+    needKey: 'ต้องใส่ Gemini API key ในหน้าตั้งค่าก่อน จึงจะใช้การถ่ายรูปได้',
+    goSettings: 'ไปหน้าตั้งค่า',
+    reading: 'กำลังให้ AI อ่านรูป…',
+    none: 'AI อ่านชื่อหนังสือจากรูปนี้ไม่ได้ ลองถ่ายใหม่ให้ชัดและสว่างขึ้น หรือกรอกเอง',
+    reviewTitle: 'ตรวจสอบก่อนบันทึก',
+    reviewHint: (n: number) => `AI อ่านได้ ${n} เล่ม แก้ไขหรือเอาติ๊กออกจากเล่มที่ไม่ต้องการได้`,
+    duplicate: 'มีในคลังแล้ว',
+    addRow: 'เพิ่มเล่มที่ AI อ่านไม่เจอ',
+    saveN: (n: number) => `บันทึก ${n} เล่ม`,
+    retake: 'ถ่ายใหม่',
+    include: 'บันทึกเล่มนี้',
+    scanHint: 'เล็งกล้องไปที่บาร์โค้ด ISBN หลังปก',
+    cameraError: 'เปิดกล้องไม่ได้ ตรวจสอบสิทธิ์การใช้กล้องของเบราว์เซอร์ หรือพิมพ์ ISBN ในฟอร์มกรอกเองแทน',
+    stopScan: 'หยุดสแกน',
+  },
+
+  ai: {
+    'no-key': 'ยังไม่ได้ใส่ Gemini API key',
+    'bad-key': 'API key ไม่ถูกต้องหรือถูกปิดใช้งาน ตรวจสอบในหน้าตั้งค่า',
+    quota: 'โควตาฟรีของ Gemini หมดชั่วคราว รอสักครู่แล้วลองใหม่ (โควตารายวันจะรีเซ็ตวันถัดไป)',
+    network: 'เชื่อมต่อ Gemini ไม่ได้ ตรวจสอบอินเทอร์เน็ต',
+    other: 'Gemini ตอบกลับผิดพลาด ลองใหม่อีกครั้ง',
+  },
+
+  settings: {
+    title: 'ตั้งค่า',
+    gemini: 'Gemini API',
+    keyLabel: 'API key',
+    keyHint:
+      'สร้างได้ที่ aistudio.google.com → Get API key — key เก็บไว้ในเครื่องนี้เท่านั้น และส่งให้ Google โดยตรงตอนอ่านรูป',
+    model: 'รุ่นที่ใช้',
+    modelNone: 'กดตรวจสอบ key เพื่อโหลดรายการรุ่น',
+    check: 'บันทึกและตรวจสอบ key',
+    checking: 'กำลังตรวจสอบ…',
+    ok: (n: number) => `ใช้งานได้ พบ ${n} รุ่น`,
+    saved: 'บันทึกแล้ว',
+    clear: 'ลบ key ออกจากเครื่องนี้',
   },
 
   places: {

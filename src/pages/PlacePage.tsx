@@ -73,7 +73,7 @@ export function PlacePage() {
             ` · ${place.kind === 'pile' ? t.place.orderPile : t.place.orderShelf}`}
         </p>
         {place && (
-          <Link to={`/book/new?place=${place.id}`} className="btn primary">
+          <Link to={`/add?place=${place.id}`} className="btn primary">
             {t.place.addHere}
           </Link>
         )}

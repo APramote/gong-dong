@@ -49,7 +49,7 @@ export function LibraryPage() {
           <h1>{t.nav.library}</h1>
           <p className="muted">{t.library.summary(books.length, dong)}</p>
         </div>
-        <Link to="/book/new" className="btn primary">
+        <Link to="/add" className="btn primary">
           {t.library.addBook}
         </Link>
       </div>

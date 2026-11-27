@@ -55,3 +55,11 @@ test('ลบหนังสือเป็นการทำเครื่อ�
   expect(await repo.listBooks()).toEqual([])
   expect(await repo.getBook(id)).toBeUndefined()
 })
+
+test('เพิ่มหลายเล่มพร้อมกันเรียงตามลำดับที่ส่งมา', async () => {
+  const [shelf] = await repo
+    .addBookcase({ name: 'ตู้ B', room: '' }, 1)
+    .then(() => repo.listPlaces())
+  await repo.addBooks(['หนึ่ง', 'สอง', 'สาม'].map((title) => ({ ...emptyBook, title, placeId: shelf.id })))
+  expect(await titles(shelf.id)).toEqual(['หนึ่ง', 'สอง', 'สาม'])
+})

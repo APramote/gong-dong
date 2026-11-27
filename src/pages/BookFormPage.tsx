@@ -1,9 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { emptyBook, repo, type BookInput } from '../db/repo'
 import type { ReadingStatus } from '../db/types'
-import { placeGroups } from '../placeLabel'
+import { useBlobUrl } from '../components/Cover'
+import { PlaceSelect } from '../components/PlaceSelect'
+import { resizeImage } from '../lib/image'
+import { lookupIsbn, normalizeIsbn } from '../lib/isbn'
 import { t } from '../th'
 
 const toNumber = (v: string) => {
@@ -11,27 +13,45 @@ const toNumber = (v: string) => {
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
+interface Prefill {
+  prefill?: Partial<BookInput>
+  isbnFound?: boolean
+}
+
 export function BookFormPage() {
   const { id } = useParams()
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const places = useLiveQuery(() => repo.listPlaces(), []) ?? []
-  const bookcases = useLiveQuery(() => repo.listBookcases(), []) ?? []
+  const { prefill, isbnFound } = (useLocation().state ?? {}) as Prefill
 
-  const [form, setForm] = useState<BookInput>({ ...emptyBook, placeId: params.get('place') })
+  const [form, setForm] = useState<BookInput>({
+    ...emptyBook,
+    placeId: params.get('place'),
+    ...prefill,
+  })
   const [tagsText, setTagsText] = useState('')
   const [state, setState] = useState<'loading' | 'ready' | 'missing'>(id ? 'loading' : 'ready')
   const [error, setError] = useState('')
+  const [isbnMsg, setIsbnMsg] = useState(
+    isbnFound === undefined ? '' : isbnFound ? t.book.isbnFilled : t.book.isbnNotFound,
+  )
+  const [looking, setLooking] = useState(false)
+  // undefined = ยังไม่แตะรูปปก, null = ลบรูป, Blob = รูปใหม่
+  const [newCover, setNewCover] = useState<Blob | null | undefined>(undefined)
+  const [savedCover, setSavedCover] = useState<Blob | null>(null)
+  const coverInput = useRef<HTMLInputElement>(null)
+  const coverUrl = useBlobUrl(newCover === undefined ? savedCover : newCover)
 
   useEffect(() => {
     if (!id) return
     let stale = false
-    repo.getBook(id).then((b) => {
+    Promise.all([repo.getBook(id), repo.getCover(id)]).then(([b, cover]) => {
       if (stale) return
       if (!b) return setState('missing')
       const { id: _i, createdAt: _c, updatedAt: _u, deletedAt: _d, position: _p, ...input } = b
       setForm(input)
       setTagsText(b.tags.join(', '))
+      setSavedCover(cover ?? null)
       setState('ready')
     })
     return () => {
@@ -57,8 +77,9 @@ export function BookFormPage() {
         .map((s) => s.trim())
         .filter(Boolean),
     }
+    const bookId = id ?? (await repo.addBook(input))
     if (id) await repo.updateBook(id, input)
-    else await repo.addBook(input)
+    if (newCover !== undefined) await repo.setCover(bookId, newCover)
     navigate(-1)
   }
 
@@ -68,7 +89,26 @@ export function BookFormPage() {
     navigate(-1)
   }
 
-  const text = (key: 'title' | 'authors' | 'publisher' | 'year' | 'isbn' | 'category') => (
+  async function fillFromIsbn() {
+    const isbn = normalizeIsbn(form.isbn)
+    if (!isbn) return setIsbnMsg(t.book.isbnInvalid)
+    setLooking(true)
+    setIsbnMsg('')
+    const hit = await lookupIsbn(isbn)
+    setLooking(false)
+    if (!hit) return setIsbnMsg(t.book.isbnNotFound)
+    // เติมเฉพาะช่องที่ยังว่าง ไม่ทับสิ่งที่ผู้ใช้พิมพ์ไว้
+    setForm((f) => {
+      const next = { ...f, isbn }
+      for (const [k, v] of Object.entries(hit) as [keyof BookInput, never][]) {
+        if (v !== null && v !== '' && (f[k] === '' || f[k] === null)) next[k] = v
+      }
+      return next
+    })
+    setIsbnMsg(t.book.isbnFilled)
+  }
+
+  const text = (key: 'title' | 'authors' | 'publisher' | 'year' | 'category') => (
     <label>
       {t.book[key]}
       <input value={form[key]} onChange={(e) => set(key, e.target.value)} />
@@ -78,6 +118,33 @@ export function BookFormPage() {
   return (
     <form className="form" onSubmit={submit}>
       <h1>{id ? t.book.editTitle : t.book.newTitle}</h1>
+
+      <div className="cover-edit">
+        {coverUrl ? <img className="cover" src={coverUrl} alt={t.book.cover} /> : <span className="cover" />}
+        <div className="actions">
+          <input
+            ref={coverInput}
+            type="file"
+            accept="image/*"
+            hidden
+            data-cover
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (file) setNewCover(await resizeImage(file, 480))
+            }}
+          />
+          <button type="button" className="btn small" onClick={() => coverInput.current?.click()}>
+            {coverUrl ? t.book.changeCover : t.book.takeCover}
+          </button>
+          {coverUrl && (
+            <button type="button" className="btn small danger" onClick={() => setNewCover(null)}>
+              {t.book.removeCover}
+            </button>
+          )}
+        </div>
+      </div>
+
       {text('title')}
       {error && <p className="error">{error}</p>}
       {text('authors')}
@@ -94,7 +161,16 @@ export function BookFormPage() {
             onChange={(e) => set('pages', toNumber(e.target.value))}
           />
         </label>
-        {text('isbn')}
+        <label>
+          {t.book.isbn}
+          <input inputMode="numeric" value={form.isbn} onChange={(e) => set('isbn', e.target.value)} />
+        </label>
+      </div>
+      <div className="actions">
+        <button type="button" className="btn small" disabled={looking || !form.isbn} onClick={fillFromIsbn}>
+          {looking ? t.book.searching : t.book.lookupIsbn}
+        </button>
+        {isbnMsg && <span className="muted">{isbnMsg}</span>}
       </div>
       <div className="cols">
         {text('category')}
@@ -104,21 +180,7 @@ export function BookFormPage() {
         </label>
       </div>
 
-      <label>
-        {t.book.place}
-        <select value={form.placeId ?? ''} onChange={(e) => set('placeId', e.target.value || null)}>
-          <option value="">{t.library.noPlace}</option>
-          {placeGroups(places, bookcases).map((g) => (
-            <optgroup key={g.title} label={g.title}>
-              {g.options.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </label>
+      <PlaceSelect label={t.book.place} value={form.placeId} onChange={(v) => set('placeId', v)} />
 
       <div className="cols">
         <label>

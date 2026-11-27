@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Book } from '../db/types'
 import { t } from '../th'
+import { CoverThumb } from './Cover'
 
 export function BookRow({
   book,
@@ -14,6 +15,7 @@ export function BookRow({
 }) {
   return (
     <li className="row">
+      <CoverThumb bookId={book.id} />
       <Link to={`/book/${book.id}`} className="row-main">
         <span className="row-title">{book.title}</span>
         <span className="row-sub">{[book.authors, sub].filter(Boolean).join(' · ')}</span>

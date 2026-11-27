@@ -50,3 +50,10 @@ export interface Place extends SyncFields {
   location: string
   label: string
 }
+
+/** รูปปก เก็บแยกจากข้อมูลหนังสือเพื่อให้รายการหนังสือเบา — id คือ id ของหนังสือ */
+export interface Cover {
+  id: string
+  blob: Blob
+  updatedAt: number
+}

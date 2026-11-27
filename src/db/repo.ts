@@ -98,6 +98,24 @@ export function createRepo(db: GongDongDB = defaultDb) {
     async deleteBook(id: string): Promise<void> {
       const now = Date.now()
       await db.books.update(id, { deletedAt: now, updatedAt: now })
+      await db.covers.delete(id)
+    },
+
+    /** เพิ่มหลายเล่มต่อท้ายที่เก็บเดียวกันตามลำดับที่ส่งมา คืน id ตามลำดับ */
+    async addBooks(inputs: BookInput[]): Promise<string[]> {
+      const ids: string[] = []
+      for (const input of inputs) ids.push(await this.addBook(input))
+      return ids
+    },
+
+    // ---------- รูปปก ----------
+    async getCover(bookId: string): Promise<Blob | undefined> {
+      return (await db.covers.get(bookId))?.blob
+    },
+
+    async setCover(bookId: string, blob: Blob | null): Promise<void> {
+      if (blob) await db.covers.put({ id: bookId, blob, updatedAt: Date.now() })
+      else await db.covers.delete(bookId)
     },
 
     // ---------- ตู้หนังสือ ----------
