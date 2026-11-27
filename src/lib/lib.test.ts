@@ -240,7 +240,7 @@ test('คำแนะนำการจัดเก็บจากกฎ แล�
 })
 
 test('สถิติ dashboard: วันต่อเนื่อง ช่วงเวลา รายเดือน และข้อความให้กำลังใจ', async () => {
-  const { dashboard, motivation, readCoach } = await import('./dashboard')
+  const { dashboard, motivation } = await import('./dashboard')
   const now = new Date(2026, 10, 27, 22, 0).getTime()
   const at = (daysAgo: number, hour: number) => {
     const d = new Date(now - daysAgo * 86400000)
@@ -279,12 +279,6 @@ test('สถิติ dashboard: วันต่อเนื่อง ช่ว�
   expect(msgs[0]).toContain('ครบเป้า')
   expect(msgs[1]).toContain('ต่อเนื่อง 3 วัน')
   expect(msgs.some((m) => m.includes('21:00–22:00'))).toBe(true)
-
-  const coach = readCoach(
-    { headline: ' ดีมาก ', insights: ['a', 1, 'b'], tips: [], picks: [{ book: 'b1', reason: 'สั้น' }, { book: 'b9', reason: 'x' }] },
-    new Map([['b1', 'c']]),
-  )
-  expect(coach).toEqual({ headline: 'ดีมาก', insights: ['a', 'b'], tips: [], picks: [{ bookId: 'c', reason: 'สั้น' }] })
 })
 
 test('ซ่อนข้อความที่หน้าตาเหมือน API key ในข้อความผิดพลาด', async () => {

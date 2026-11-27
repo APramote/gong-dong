@@ -784,9 +784,6 @@ textarea {
   flex-direction: column;
   gap: 4px;
 }
-.coach-headline {
-  font-weight: 600;
-}
 .dash .stats {
   margin-top: 4px;
 }
@@ -1330,11 +1327,6 @@ input[type='color'] {
 .motivation li {
   padding-left: 14px;
   border-left: 2px solid var(--accent);
-}
-.coach-headline {
-  font-family: var(--serif);
-  font-size: 1.15rem;
-  line-height: 1.5;
 }
 .chart-card,
 .charts .card {

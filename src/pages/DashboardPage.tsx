@@ -14,17 +14,11 @@ import {
   StatTile,
   TableView,
 } from '../components/charts'
-import { aiOn, aiReady, askJson } from '../lib/ai'
-import { aiErrorText } from '../lib/aiError'
 import {
-  coachPrompt,
-  coachSchema,
   dashboard,
   motivation,
-  readCoach,
   WEEKDAYS,
   WEEKDAYS_SHORT,
-  type Coach,
 } from '../lib/dashboard'
 import { loadSettings, saveSettings } from '../lib/settings'
 import { formatMinutes } from '../lib/stats'
@@ -80,32 +74,14 @@ export function DashboardPage() {
   const categories = useLiveQuery(() => repo.listCategories(), []) ?? []
   const [settings, setSettings] = useState(loadSettings)
   const [editing, setEditing] = useState(false)
-  const [coach, setCoach] = useState<Coach | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
 
   const d = useMemo(() => dashboard(books ?? [], sessions, Date.now(), categories), [books, sessions, categories])
   if (!books) return <p className="empty">{t.common.loading}</p>
   const goals = { dailyMinutes: settings.dailyGoalMinutes, yearBooks: settings.yearGoalBooks }
-  const byId = new Map(books.map((b) => [b.id, b]))
   const setGoal = (patch: Partial<typeof settings>) => {
     const next = { ...settings, ...patch }
     setSettings(next)
     saveSettings(next)
-  }
-
-  async function askCoach() {
-    setBusy(true)
-    setError('')
-    try {
-      const dong = books!.filter((b) => b.status === 'dong' && !b.takenAt)
-      const { prompt, codes } = coachPrompt(d, goals, dong, categories)
-      setCoach(readCoach(await askJson(prompt, coachSchema), codes))
-    } catch (e) {
-      setError(aiErrorText(e))
-    } finally {
-      setBusy(false)
-    }
   }
 
   const hasHistory = d.sessions > 0
@@ -285,66 +261,6 @@ export function DashboardPage() {
         </section>
       )}
 
-      {aiOn() && (
-      <section>
-        <h2>{t.dash.coach}</h2>
-        <p className="muted">{t.dash.coachHint}</p>
-        {error && <p className="error">{error}</p>}
-        {!coach && (
-          <button className="btn primary" disabled={busy || !aiReady()} onClick={askCoach}>
-            {busy ? t.dash.coachBusy : t.dash.coachRun}
-          </button>
-        )}
-        {!aiReady() && (
-          <p className="muted">
-            {t.add.needKey}{' '}
-            <Link to="/settings" className="link">
-              {t.add.goSettings}
-            </Link>
-          </p>
-        )}
-        {coach && (
-          <div className="plan">
-            {coach.headline && <p className="coach-headline">{coach.headline}</p>}
-            {coach.insights.length > 0 && (
-              <div className="card">
-                <h3>{t.dash.insights}</h3>
-                <ul className="tips">
-                  {coach.insights.map((x) => (
-                    <li key={x}>{x}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {coach.tips.length > 0 && (
-              <div className="card">
-                <h3>{t.dash.tips}</h3>
-                <ul className="tips">
-                  {coach.tips.map((x) => (
-                    <li key={x}>{x}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {coach.picks.length > 0 && (
-              <div className="card">
-                <h3>{t.dash.picks}</h3>
-                <ul className="list">
-                  {coach.picks
-                    .filter((p) => byId.get(p.bookId))
-                    .map((p) => (
-                      <NextBook key={p.bookId} book={byId.get(p.bookId)!} note={p.reason} />
-                    ))}
-                </ul>
-              </div>
-            )}
-            <button className="btn" onClick={() => setCoach(null)}>
-              {t.common.cancel}
-            </button>
-          </div>
-        )}
-      </section>
-      )}
     </div>
   )
 }
