@@ -67,7 +67,7 @@ export function ReadingPage() {
             return (
               <div className="card hand" key={b.id}>
                 <div className="row">
-                  <CoverThumb bookId={b.id} />
+                  <CoverThumb bookId={b.id} title={b.title} color={b.spineColor} />
                   <Link to={`/book/${b.id}`} className="row-main">
                     <span className="row-title">{b.title}</span>
                     <span className="row-sub">

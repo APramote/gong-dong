@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
 import type { ReadingStatus } from '../db/types'
 import { BookRow } from '../components/BookRow'
+import { CoverThumb } from '../components/Cover'
 import { placeGroups, placeLabel } from '../placeLabel'
 import { t } from '../th'
 
@@ -86,6 +87,36 @@ export function LibraryPage() {
           </Link>
         </div>
       </div>
+
+      {/* หนังสือที่อยู่ในมือ: ทางลัดกลับไปอ่านต่อ */}
+      {books.some((b) => b.takenAt) && (
+        <div className="now-reading">
+          {books
+            .filter((b) => b.takenAt)
+            .sort((a, b) => b.takenAt! - a.takenAt!)
+            .slice(0, 3)
+            .map((b) => {
+              const pct = b.pages && b.currentPage ? Math.min(100, (b.currentPage / b.pages) * 100) : 0
+              return (
+                <Link to="/reading" className="now-card" key={b.id}>
+                  <CoverThumb bookId={b.id} title={b.title} color={b.spineColor} />
+                  <span className="now-text">
+                    <span className="eyebrow">{t.library.continueReading}</span>
+                    <span className="now-title">{b.title}</span>
+                    {b.currentPage ? (
+                      <span className="row-sub">{t.library.page(b.currentPage, b.pages)}</span>
+                    ) : null}
+                    {pct > 0 && (
+                      <span className="progress" aria-hidden>
+                        <span style={{ width: `${pct}%` }} />
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              )
+            })}
+        </div>
+      )}
 
       <div className="filters">
         <input

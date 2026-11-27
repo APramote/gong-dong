@@ -101,7 +101,7 @@ export function BookcaseViewPage() {
       {pick && (
         <div className="card picked">
           <div className="row">
-            <CoverThumb bookId={pick.id} />
+            <CoverThumb bookId={pick.id} title={pick.title} color={pick.spineColor} />
             <div className="row-main">
               <span className="row-title">{pick.title}</span>
               <span className="row-sub">

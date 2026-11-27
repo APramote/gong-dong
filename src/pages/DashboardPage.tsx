@@ -55,7 +55,7 @@ function NextBook({ book, note }: { book: Book; note: string }) {
   const navigate = useNavigate()
   return (
     <li className="row">
-      <CoverThumb bookId={book.id} />
+      <CoverThumb bookId={book.id} title={book.title} color={book.spineColor} />
       <Link to={`/book/${book.id}`} className="row-main">
         <span className="row-title">{book.title}</span>
         <span className="row-sub">{note}</span>

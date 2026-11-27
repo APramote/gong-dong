@@ -16,12 +16,12 @@ export const BookRow = memo(function BookRow({
 }) {
   return (
     <li className="row">
-      <CoverThumb bookId={book.id} />
+      <CoverThumb bookId={book.id} title={book.title} color={book.spineColor} />
       <Link to={`/book/${book.id}`} className="row-main">
         <span className="row-title">{book.title}</span>
         <span className="row-sub">{[book.authors, sub].filter(Boolean).join(' · ')}</span>
       </Link>
-      <span className={`badge badge-${book.status}`}>{t.status[book.status]}</span>
+      <span className={`status status-${book.status}`}>{t.status[book.status]}</span>
       {actions}
     </li>
   )

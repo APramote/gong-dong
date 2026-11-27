@@ -3,7 +3,7 @@ import type { PlaceKind, ReadingStatus } from './db/types'
 /** ข้อความทั้งหมดในแอป รวมไว้ที่เดียวเพื่อให้เพิ่มภาษาอื่นได้ภายหลัง */
 export const t = {
   appName: 'กองดอง',
-  nav: { library: 'คลัง', reading: 'อ่าน', stats: 'สถิติ', places: 'ที่เก็บ', settings: 'ตั้งค่า' },
+  nav: { library: 'คลัง', reading: 'อ่าน', stats: 'สถิติ', places: 'ที่เก็บ', settings: 'ตั้งค่า', menu: 'เมนูหลัก' },
 
   common: {
     save: 'บันทึก',
@@ -44,6 +44,8 @@ export const t = {
     allPlaces: 'ทุกที่เก็บ',
     noPlace: 'ยังไม่ระบุที่เก็บ',
     inHand: 'อยู่ในมือ',
+    continueReading: 'อ่านต่อ',
+    page: (n: number, total: number | null) => (total ? `หน้า ${n} จาก ${total}` : `หน้า ${n}`),
     empty: 'ยังไม่มีหนังสือ กด "เพิ่มหนังสือ" เพื่อเริ่มต้น',
     noMatch: 'ไม่พบหนังสือที่ตรงกับเงื่อนไข',
     showMore: (n: number, left: number) => `แสดงเพิ่มอีก ${n} เล่ม (เหลือ ${left} เล่ม)`,
