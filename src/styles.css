@@ -2233,3 +2233,46 @@ details.more[open] {
     display: none;
   }
 }
+
+/* ---------- วงแหวนความคืบหน้า ---------- */
+.ring {
+  flex: none;
+  vertical-align: middle;
+}
+.ring circle {
+  fill: none;
+  stroke-width: 3;
+}
+.ring-track {
+  stroke: var(--line);
+}
+.ring-fill {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.4s ease;
+}
+.ring.spin {
+  animation: ring-spin 0.9s linear infinite;
+}
+@keyframes ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ring.spin {
+    animation-duration: 2.4s;
+  }
+  .ring-fill {
+    transition: none;
+  }
+}
+.working {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+.empty.working {
+  justify-content: center;
+}

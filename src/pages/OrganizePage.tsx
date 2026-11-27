@@ -19,6 +19,7 @@ import {
 } from '../lib/organize'
 import { placeGroups, placeLabel } from '../placeLabel'
 import { useLeaveGuard } from '../components/useLeaveGuard'
+import { Ring } from '../components/Ring'
 import { t } from '../th'
 
 /** รายการหนังสือแบบติ๊กเลือกได้ */
@@ -133,6 +134,8 @@ export function OrganizePage() {
   const [plan, setPlan] = useState<OrganizePlan | null>(null)
   /** ความคืบหน้าระหว่าง AI ทำงาน และหมายเหตุเมื่อทำได้ไม่ครบ */
   const [progress, setProgress] = useState('')
+  /** สัดส่วนงานของ AI ที่เสร็จแล้ว 0–1 (นับตามจำนวนครั้งที่ต้องเรียก AI) */
+  const [ratio, setRatio] = useState(0)
   const [partial, setPartial] = useState('')
   // แผนจาก AI ยังไม่ได้ใช้ ออกจากหน้าแล้วต้องเรียก AI (และเสียค่าใช้จ่าย) ใหม่
   useLeaveGuard(Boolean(plan), t.organize.unsavedLeave)
@@ -169,7 +172,11 @@ export function OrganizePage() {
       const known = categories.map((c) => c.name)
       const suggestions: OrganizePlan['categories'] = []
       let attempted = 0
-      for (const group of batches(todo)) {
+      const groups = batches(todo)
+      const steps = groups.length + (places.length > 0 ? 1 : 0)
+      let step = 0
+      setRatio(0)
+      for (const group of groups) {
         setProgress(t.organize.progressCats(attempted, todo.length))
         attempted += group.length
         try {
@@ -182,12 +189,14 @@ export function OrganizePage() {
           firstError ??= e
           if (fatal(e)) break
         }
+        setRatio(++step / steps)
       }
 
       // ขั้นที่ 2: ให้ AI วางผังระดับหมวด แล้วแอปคิดการย้ายรายเล่มเอง
       let layout: Pick<OrganizePlan, 'summary' | 'tips' | 'moves'> = { summary: '', tips: [], moves: [] }
       if (places.length > 0 && !(firstError && fatal(firstError))) {
         setProgress(t.organize.progressLayout)
+        setRatio(Math.max(step, groups.length) / steps)
         const categoryOf = new Map<string, string>()
         for (const b of all) if (b.categoryId) categoryOf.set(b.id, catName(b))
         for (const c of suggestions) categoryOf.set(c.bookId, c.category)
@@ -283,7 +292,8 @@ export function OrganizePage() {
           </p>
         )}
         {busy && progress && (
-          <p className="muted" role="status">
+          <p className="muted working" role="status">
+            <Ring value={ratio} />
             {progress}
           </p>
         )}

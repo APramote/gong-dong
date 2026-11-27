@@ -10,6 +10,7 @@ import { aiOn, aiReady, covers, recognize } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { blobToBase64, cropImage, resizeImage } from '../lib/image'
 import { lookupIsbnStatus } from '../lib/isbn'
+import { Ring } from '../components/Ring'
 import { t } from '../th'
 
 type Mode = 'cover' | 'spine'
@@ -137,7 +138,13 @@ export function AddPage() {
     )),
   )
 
-  if (step === 'busy') return <p className="empty">{busyText}</p>
+  if (step === 'busy')
+    return (
+      <p className="empty working" role="status">
+        <Ring />
+        {busyText}
+      </p>
+    )
 
   if (step === 'scan')
     return <Scanner onDetect={onIsbn} onClose={() => setStep('menu')} />

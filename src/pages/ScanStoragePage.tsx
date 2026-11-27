@@ -9,6 +9,7 @@ import { aiOn, aiReady, scanShape } from '../lib/ai'
 import type { StorageKind } from '../lib/aiCommon'
 import { aiErrorText } from '../lib/aiError'
 import { blobToBase64, resizeImage } from '../lib/image'
+import { Ring } from '../components/Ring'
 import { t } from '../th'
 
 const Storage3D = lazy(() => import('../three/Storage3D'))
@@ -98,7 +99,13 @@ export function ScanStoragePage() {
     navigate(to, { replace: true })
   }
 
-  if (step === 'busy') return <p className="empty">{t.scan.reading}</p>
+  if (step === 'busy')
+    return (
+      <p className="empty working" role="status">
+        <Ring />
+        {t.scan.reading}
+      </p>
+    )
 
   if (step === 'review')
     return (
