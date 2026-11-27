@@ -1,25 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { db } from '../db/db'
 import { download } from '../lib/download'
-import { DEFAULT_GOOGLE_CLIENT_ID, loadSettings, saveSettings } from '../lib/settings'
+import { loadSettings, saveSettings } from '../lib/settings'
 import { dayKey, timeAgo } from '../lib/stats'
+import { reset, syncNow } from '../lib/autosync'
+import { syncErrorText } from '../lib/syncError'
 import { t } from '../th'
+import { useAutoSync } from './SyncBanner'
 
 type Msg = { ok: boolean; text: string } | null
-
-/** ข้อความภาษาไทยของข้อผิดพลาดตอน sync */
-function errorText(e: unknown): string {
-  const message = (e as Error)?.message ?? ''
-  const kind = (e as { kind?: string })?.kind ?? (message === 'bad-file' ? 'bad-file' : 'other')
-  if (kind === 'wrong-account') return t.sync.wrongAccount(message)
-  const text = t.sync.errors[kind as keyof typeof t.sync.errors] ?? t.sync.errors.other
-  // สาเหตุที่ไม่รู้จัก: แนบรายละเอียดจาก Google ไว้ให้ส่งมาถามได้ (ไม่มีโทเคนหรือข้อมูลส่วนตัวในข้อความนี้)
-  return kind === 'other' && message && message !== 'other' ? `${text} (${message})` : text
-}
 
 /** ซิงก์กับ Google Drive และสำรอง/กู้คืนเป็นไฟล์ */
 export function SyncCard() {
   const [s, setS] = useState(loadSettings)
+  const auto = useAutoSync()
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState<Msg>(null)
   /** งานที่กำลังทำเป็นของส่วนไหน ข้อความจะแสดงใต้ปุ่มของส่วนนั้น */
@@ -45,16 +39,11 @@ export function SyncCard() {
     setMsg(null)
     setBusy(s.googleAccount ? t.sync.syncing : t.sync.signingIn)
     try {
-      // โหลดโค้ด sync เฉพาะเมื่อใช้ และขอสิทธิ์จาก Google ในจังหวะกดปุ่ม (ไม่งั้นหน้าต่างถูกบล็อก)
-      const [{ connect, driveStore }, { syncAll }] = await Promise.all([import('../lib/drive'), import('../lib/sync')])
-      const { token, email } = await connect(s.googleClientId || DEFAULT_GOOGLE_CLIENT_ID, s.googleAccount)
-      update({ googleAccount: email })
-      setBusy(t.sync.syncing)
-      const r = await syncAll(db, driveStore(token), (done, total) => setBusy(t.sync.covers(done, total)))
-      update({ lastSyncAt: Date.now() })
-      setMsg({ ok: true, text: t.sync.done(r.pushed, r.pulled) })
+      const r = await syncNow(true, (done, total) => setBusy(t.sync.covers(done, total)))
+      update({}) // อ่านบัญชีและเวลาซิงก์ล่าสุดที่เพิ่งบันทึก
+      if (r) setMsg({ ok: true, text: t.sync.done(r.pushed, r.pulled) })
     } catch (e) {
-      setMsg({ ok: false, text: errorText(e) })
+      setMsg({ ok: false, text: syncErrorText(e) })
     }
     setBusy('')
   }
@@ -63,6 +52,7 @@ export function SyncCard() {
     const { signOut } = await import('../lib/drive')
     setArea('drive')
     const revoked = signOut()
+    reset()
     update({ googleAccount: '' })
     setMsg({ ok: true, text: revoked ? t.sync.signedOut : t.sync.signedOutLocal })
   }
@@ -75,7 +65,7 @@ export function SyncCard() {
       const { exportBackup } = await import('../lib/sync')
       download(t.sync.file(dayKey(Date.now())), await exportBackup(db, withCovers))
     } catch (e) {
-      setMsg({ ok: false, text: errorText(e) })
+      setMsg({ ok: false, text: syncErrorText(e) })
     }
     setBusy('')
   }
@@ -122,7 +112,11 @@ export function SyncCard() {
               {t.sync.signOut}
             </button>
           </div>
-          <p className="muted">{s.lastSyncAt ? t.sync.last(timeAgo(s.lastSyncAt)) : t.sync.never}</p>
+          <p className="muted">
+            {auto.lastSyncAt ? t.sync.last(timeAgo(auto.lastSyncAt)) : t.sync.never}
+            {auto.pending && ` · ${t.sync.pending}`}
+          </p>
+          <p className="muted">{t.sync.autoHint}</p>
         </>
       ) : (
         <div className="actions">

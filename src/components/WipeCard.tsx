@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { db } from '../db/db'
 import { repo } from '../db/repo'
 import { DEFAULT_GOOGLE_CLIENT_ID, loadSettings, saveSettings } from '../lib/settings'
+import { reset } from '../lib/autosync'
 import { t } from '../th'
 
 type Msg = { ok: boolean; text: string } | null
@@ -36,8 +37,15 @@ export function WipeCard() {
         files = await wipeRemote(driveStore(token))
       }
       await wipeLocal(db)
-      saveSettings({ ...loadSettings(), lastSyncAt: 0 })
-      setMsg({ ok: true, text: drive ? t.wipe.allDoneDrive(files) : t.wipe.allDone })
+      if (drive) saveSettings({ ...loadSettings(), lastSyncAt: 0 })
+      else {
+        // ล้างเฉพาะเครื่องนี้: ออกจากระบบด้วย ไม่อย่างนั้นการซิงก์อัตโนมัติจะดึงข้อมูลกลับมาเอง
+        const { signOut } = await import('../lib/drive')
+        signOut()
+        saveSettings({ ...loadSettings(), lastSyncAt: 0, googleAccount: '' })
+      }
+      reset()
+      setMsg({ ok: true, text: drive ? t.wipe.allDoneDrive(files) : signedIn ? t.wipe.allDone : t.wipe.allDoneLocal })
       setOpen(false)
       setWord('')
     } catch (e) {

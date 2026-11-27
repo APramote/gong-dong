@@ -68,6 +68,11 @@ function loadGis(): Promise<void> {
 
 let token: { value: string; clientId: string; expires: number } | null = null
 
+/** โทเคนที่ยังใช้ได้อยู่ในหน่วยความจำ (ไม่เปิดหน้าต่าง) — null ถ้าไม่มีหรือใกล้หมดอายุ */
+export function cachedToken(clientId: string): string | null {
+  return token && token.clientId === clientId.trim() && token.expires > Date.now() + 60_000 ? token.value : null
+}
+
 /** ขอโทเคน (เปิดหน้าต่างของ Google ให้ผู้ใช้อนุญาต) ต้องเรียกจากการกดปุ่ม ไม่อย่างนั้นเบราว์เซอร์จะบล็อกหน้าต่าง */
 export async function signIn(clientId: string, hint = ''): Promise<string> {
   const id = clientId.trim()

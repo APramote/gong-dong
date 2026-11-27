@@ -2176,3 +2176,30 @@ details.more[open] {
   border-radius: 50%;
   background: var(--series-3);
 }
+
+/* ---------- จุดบอกว่ามีการแก้ไขที่ยังไม่ได้ซิงก์ ---------- */
+.icon-link {
+  position: relative;
+}
+.icon-link .dot {
+  position: absolute;
+  top: 8px;
+  right: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+}
+
+/* ---------- ไอคอนแอปหน้าชื่อ ---------- */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}

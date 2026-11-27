@@ -5,6 +5,8 @@ import '@fontsource-variable/noto-serif-thai/wght.css'
 import './styles.css'
 import { t } from './th'
 import { UpdateBanner } from './components/UpdateBanner'
+import { SyncBanner, useAutoSync } from './components/SyncBanner'
+import { start as startAutoSync } from './lib/autosync'
 import { LibraryPage } from './pages/LibraryPage'
 import { BookFormPage } from './pages/BookFormPage'
 import { PlacesPage } from './pages/PlacesPage'
@@ -56,6 +58,9 @@ window.addEventListener('load', () => {
   }, 5000)
 })
 
+// เฝ้าการเปลี่ยนแปลงของข้อมูล เพื่อซิงก์อัตโนมัติหลังแก้ไข 1 นาที
+startAutoSync()
+
 // ขอให้เบราว์เซอร์เก็บข้อมูลแบบถาวร ไม่ลบทิ้งเองเมื่อพื้นที่เหลือน้อย (สำคัญบน iOS)
 navigator.storage?.persist?.().catch(() => {
   // ไม่อนุญาตก็ใช้งานได้ตามปกติ
@@ -77,6 +82,7 @@ const ICONS = {
 }
 
 function Layout() {
+  const sync = useAutoSync()
   const tab = (to: string, label: string, icon: string, end = false) => (
     <NavLink to={to} end={end}>
       <Icon d={icon} />
@@ -87,13 +93,21 @@ function Layout() {
     <>
       <header className="topbar">
         <NavLink to="/" className="brand" end>
+          <img className="brand-icon" src="./icon.svg" alt="" width="28" height="28" />
           {t.appName}
         </NavLink>
-        <NavLink to="/settings" className="icon-link" aria-label={t.nav.settings} title={t.nav.settings}>
+        <NavLink
+          to="/settings"
+          className="icon-link"
+          aria-label={sync.pending ? t.sync.pendingDot : t.nav.settings}
+          title={sync.pending ? t.sync.pending : t.nav.settings}
+        >
           <Icon d={ICONS.settings} />
+          {sync.pending && <span className="dot" aria-hidden />}
         </NavLink>
       </header>
       <UpdateBanner />
+      <SyncBanner />
       <main>
         <Suspense fallback={<p className="empty">{t.common.loading}</p>}>
           <Outlet />
