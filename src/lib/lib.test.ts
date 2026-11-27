@@ -243,7 +243,7 @@ test('คำแนะนำการจัดเก็บจากกฎ แล�
     places2,
     sessions,
     categoryOf,
-    now,
+    { mode: 'minimal', now },
   )
   expect(plan.summary).toBe('สรุป')
   expect(plan.tips).toEqual(['a', 'b'])
@@ -428,4 +428,62 @@ test('คุมจำนวนหมวด: คำขอบอกเพดาน
   expect(capped.filter((x) => x === 'อื่น ๆ')).toHaveLength(5)
   // ไม่เกินเพดาน ไม่แตะ
   expect(capCategories(sug, ['เดิม'], 10)).toBe(sug)
+})
+
+test('จัดระเบียบ: ชุดอยู่ด้วยกัน สองโหมด และการเรียงบนชั้น', async () => {
+  const { buildLayoutPrompt, planMoves, arrange } = await import('./organize')
+  const now = new Date(2026, 10, 27).getTime()
+  const old = now - 500 * 86400000
+  const mk = (id: string, o: object) =>
+    ({ id, title: id, authors: '', categoryId: null, status: 'dong', placeId: 'A', takenAt: null, finishedAt: null, createdAt: now, seriesId: null, seriesNo: null, ...o }) as any
+  const shelf = (id: string) => ({ id, kind: 'shelf', name: id, bookcaseId: null, label: '', location: '' })
+  const places = [shelf('A'), shelf('B'), shelf('C'), { ...shelf('BOX'), kind: 'box' }] as any
+  const books = [
+    // ชุดมังกร: 3 เล่ม กระจายอยู่ A, A, B → ควรมารวมที่ A (ที่เล่มส่วนใหญ่อยู่)
+    mk('m1', { seriesId: 'S', seriesNo: 1, placeId: 'A' }),
+    mk('m3', { seriesId: 'S', seriesNo: 3, placeId: 'A' }),
+    mk('m2', { seriesId: 'S', seriesNo: 2, placeId: 'B' }),
+    // ชุดเก่า: จบนานแล้วทุกเล่ม → ลงกล่องด้วยกัน
+    mk('o1', { seriesId: 'O', seriesNo: 1, status: 'done', finishedAt: old, createdAt: old }),
+    mk('o2', { seriesId: 'O', seriesNo: 2, status: 'done', finishedAt: old, createdAt: old, placeId: 'B' }),
+    // ชุดอ่านค้าง: เล่ม 1 จบนานแล้ว แต่เล่ม 2 ยังดอง → ไม่แยกลงกล่อง
+    mk('h1', { seriesId: 'H', seriesNo: 1, status: 'done', finishedAt: old, createdAt: old, placeId: 'B' }),
+    mk('h2', { seriesId: 'H', seriesNo: 2, placeId: 'B' }),
+    // เล่มเดี่ยว
+    mk('n1', { placeId: 'A' }),
+    mk('n2', { placeId: 'A' }),
+    mk('n3', { placeId: 'A' }),
+    mk('p1', { placeId: 'A' }), // ปรัชญา หลงอยู่ชั้นนิยาย
+    mk('p2', { placeId: 'B' }),
+  ]
+  const cat = (id: string) => (id.startsWith('p') || id.startsWith('h') ? 'ปรัชญา' : 'นิยาย')
+  const categoryOf = new Map(books.map((b: any) => [b.id, cat(b.id)]))
+  const seriesName = new Map([['S', 'มังกร'], ['O', 'ชุดเก่า'], ['H', 'ชุดค้าง']])
+  const raw = { summary: '', tips: [], box: 'p4', layout: [{ category: 'นิยาย', places: ['p1'] }, { category: 'ปรัชญา', places: ['p2', 'p3'] }] }
+
+  const minimal = buildLayoutPrompt(books, places, [], categoryOf, 'minimal')
+  expect(minimal.prompt).toContain('as few moves as possible')
+  const moves = planMoves(raw, minimal, books, places, [], categoryOf, { mode: 'minimal', seriesName, now }).moves
+  const where = Object.fromEntries(moves.map((m) => [m.bookId, m.toPlaceId]))
+  expect(where).toEqual({ m2: 'A', o1: 'BOX', o2: 'BOX', p1: 'B' })
+  expect(moves.find((m) => m.bookId === 'm2')!.reason).toBe('ชุด มังกร อยู่ด้วยกัน')
+  expect(moves.find((m) => m.bookId === 'o1')!.reason).toContain('ชุด ชุดเก่า')
+
+  // จัดใหม่ให้ลงตัว: ทุกเล่มของหมวดไปอยู่ที่เก็บของหมวดตามผัง
+  const full = buildLayoutPrompt(books, places, [], categoryOf, 'full')
+  expect(full.prompt).toContain('clean rearrangement')
+  const fullMoves = planMoves(raw, full, books, places, [], categoryOf, { mode: 'full', seriesName, now }).moves
+  const after = new Map(books.map((b: any) => [b.id, b.placeId]))
+  for (const m of fullMoves) after.set(m.bookId, m.toPlaceId)
+  expect(['m1', 'm2', 'm3', 'n1', 'n2', 'n3'].every((id) => after.get(id) === 'A')).toBe(true)
+  expect(['h1', 'h2', 'p1', 'p2'].every((id) => after.get(id) === 'B')).toBe(true)
+  expect([after.get('o1'), after.get('o2')]).toEqual(['BOX', 'BOX'])
+
+  // เรียงบนชั้น: minimal ดึงชุดมาติดกันตามเลขเล่ม ตรงตำแหน่งเล่มแรก ที่เหลือคงลำดับ
+  const onShelf = [mk('n1', {}), mk('m3', { seriesId: 'S', seriesNo: 3 }), mk('n2', {}), mk('m1', { seriesId: 'S', seriesNo: 1 }), mk('m2', { seriesId: 'S', seriesNo: 2 })]
+  expect(arrange(onShelf, 'minimal', categoryOf, seriesName)).toEqual(['n1', 'm1', 'm2', 'm3', 'n2'])
+  // full: เรียงตามหมวด แล้วชุดตามเลขเล่ม แล้วชื่อ
+  const mixed = [mk('p1', {}), ...onShelf]
+  // (ชื่อชุดภาษาไทยมาก่อนชื่ออังกฤษตามการเรียงของภาษาไทย)
+  expect(arrange(mixed, 'full', categoryOf, seriesName)).toEqual(['m1', 'm2', 'm3', 'n1', 'n2', 'p1'])
 })

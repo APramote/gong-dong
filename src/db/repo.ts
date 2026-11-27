@@ -464,6 +464,25 @@ export function createRepo(db: GongDongDB = defaultDb) {
     },
 
     /** สลับลำดับกับเล่มข้างเคียงในที่เก็บเดียวกัน (dir -1 = เลื่อนไปก่อน, 1 = เลื่อนไปหลัง) */
+    /** จัดลำดับหนังสือในที่เก็บตามรายการ id ที่ส่งมา (เล่มที่ไม่อยู่ในรายการต่อท้ายตามลำดับเดิม) คืนจำนวนเล่มที่เปลี่ยนตำแหน่ง */
+    async setOrder(placeId: string, ids: string[]): Promise<number> {
+      return db.transaction('rw', db.books, async () => {
+        const rows = await booksIn(placeId)
+        const rank = new Map(ids.map((id, i) => [id, i]))
+        const ordered = [...rows].sort(
+          (a, b) => (rank.get(a.id) ?? ids.length + a.position) - (rank.get(b.id) ?? ids.length + b.position),
+        )
+        const now = Date.now()
+        let changed = 0
+        for (let k = 0; k < ordered.length; k++)
+          if (ordered[k].position !== k) {
+            await db.books.update(ordered[k].id, { position: k, updatedAt: now })
+            changed++
+          }
+        return changed
+      })
+    },
+
     async shiftBook(id: string, dir: -1 | 1): Promise<void> {
       const book = await db.books.get(id)
       if (!book) return

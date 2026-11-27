@@ -27,6 +27,8 @@ export interface Settings {
   yearGoalBooks: number
   /** จำนวนหมวดสูงสุดที่อยากมี AI จะไม่ตั้งหมวดเกินนี้ */
   maxCategories: number
+  /** วิธีจัดระเบียบที่เลือกครั้งล่าสุด */
+  organizeMode: 'minimal' | 'full'
   /** OAuth Client ID ที่ผู้ใช้ใส่เอง (ว่าง = ใช้ค่าของแอป) */
   googleClientId: string
   /** เวลาที่ sync สำเร็จล่าสุด (0 = ยังไม่เคย) */
@@ -46,6 +48,7 @@ const defaults: Settings = {
   dailyGoalPages: 20,
   yearGoalBooks: 12,
   maxCategories: 12,
+  organizeMode: 'minimal',
   googleClientId: '',
   lastSyncAt: 0,
   googleAccount: '',

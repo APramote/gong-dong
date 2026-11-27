@@ -445,3 +445,12 @@ test('รวมหมวด: หนังสือย้ายไปหมวด
   expect((await repo.getBook(id))!.categoryId).toBe(b)
   expect((await repo.listCategories()).length).toBe(1)
 })
+
+test('จัดลำดับในที่เก็บตามรายการ: เล่มที่ไม่อยู่ในรายการต่อท้ายตามลำดับเดิม', async () => {
+  const pile = await repo.addPlace('pile', { name: 'กอง', location: '', label: '' })
+  const ids: Record<string, string> = {}
+  for (const title of ['ก', 'ข', 'ค', 'ง']) ids[title] = await repo.addBook({ ...emptyBook, title, placeId: pile })
+  expect(await repo.setOrder(pile, [ids['ค'], ids['ก']])).toBeGreaterThan(0)
+  expect(await titles(pile)).toEqual(['ค', 'ก', 'ข', 'ง'])
+  expect(await repo.setOrder(pile, [ids['ค'], ids['ก']])).toBe(0) // ลำดับเดิมแล้ว ไม่แตะอะไร
+})

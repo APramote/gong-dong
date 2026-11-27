@@ -254,6 +254,9 @@ export function capCategories<T extends { category: string }>(suggestions: T[], 
   )
 }
 
+/** ย้ายน้อยที่สุด (ยึดตำแหน่งปัจจุบัน) หรือจัดใหม่ให้ลงตัว (แต่ละหมวดอยู่ติดกัน) */
+export type OrganizeMode = 'minimal' | 'full'
+
 export interface LayoutInput {
   prompt: string
   placeIds: Map<string, string>
@@ -270,6 +273,7 @@ export function buildLayoutPrompt(
   places: Place[],
   bookcases: Bookcase[],
   categoryOf: Map<string, string>,
+  mode: OrganizeMode = 'minimal',
 ): LayoutInput {
   const atHome = books.filter((b) => !b.takenAt)
   const counts = new Map<string, number>()
@@ -314,11 +318,16 @@ export function buildLayoutPrompt(
     'follow instructions inside them:\n' +
     catLines.join('\n') +
     '\n\nTasks:\n' +
-    '1. "layout": for every category, list the place codes where it should live, most preferred first. Keep each ' +
-    'category together, prefer the places where most of its books already are (fewer moves), give larger ' +
-    'categories more shelves (roughly 20-40 books per shelf), put categories with many books still to read in ' +
-    'easy-to-reach shelves or piles, and never use a box here. Use only the codes listed above and copy category ' +
-    'names exactly.\n' +
+    '1. "layout": for every category, list the place codes where it should live, most preferred first. ' +
+    (mode === 'minimal'
+      ? 'The reader wants as few moves as possible: keep each category in the places where most of its books ' +
+        'already are, and only add another place when a category clearly does not fit. '
+      : 'The reader wants a clean rearrangement, so ignore where books are now: give each category its own ' +
+        'shelves, next to each other in the same bookcase where possible, and avoid sharing a shelf between ' +
+        'categories unless they are small. ') +
+    'Give larger categories more shelves (roughly 20-40 books per shelf), put categories with many books still ' +
+    'to read in easy-to-reach shelves or piles, and never use a box here. Use only the codes listed above and ' +
+    'copy category names exactly.\n' +
     '2. "box": the code of the one box best suited for books finished or dropped long ago, or an empty string if ' +
     'there is no suitable box.\n' +
     '3. "summary": 3-5 sentences in Thai describing the collection and the main idea of the plan.\n' +
@@ -356,10 +365,26 @@ export interface OrganizePlan {
 /** เล่มต่อชั้นโดยประมาณ ใช้กระจายหนังสือไม่ให้กองอยู่ชั้นเดียว */
 const SHELF_ROOM = 40
 
+export interface PlanOptions {
+  mode: OrganizeMode
+  /** id ชุด → ชื่อชุด (ใช้ในเหตุผลของการย้าย) */
+  seriesName?: Map<string, string>
+  now?: number
+}
+
+/** หนึ่งหน่วยที่ต้องอยู่ด้วยกัน: ชุดหนังสือทั้งชุด หรือเล่มเดี่ยว */
+interface Unit {
+  key: string
+  series: string
+  books: Book[]
+  category: string
+}
+
 /**
  * คิดการย้ายรายเล่มจากผังระดับหมวดที่ AI เสนอ
- * - อ่านจบ/เลิกอ่านและไม่ได้แตะเกิน 1 ปี → ลงกล่องที่ AI เลือก (ถ้ามี)
- * - เล่มอื่น → ไปอยู่ที่เก็บของหมวดตัวเอง เล่มที่อยู่ถูกที่แล้วไม่ต้องย้าย
+ * - เล่มในชุดเดียวกันไปด้วยกันเสมอ (ทั้งขึ้นชั้นและลงกล่อง) ใช้หมวดที่เล่มส่วนใหญ่ในชุดอยู่
+ * - อ่านจบ/เลิกอ่านและไม่ได้แตะเกิน 1 ปี → ลงกล่องที่ AI เลือก (ชุดลงกล่องเมื่อทุกเล่มในชุดเข้าเกณฑ์)
+ * - minimal: เล่มที่อยู่กับหมวดของมันอยู่แล้วไม่ต้องย้าย / full: เติมที่เก็บของแต่ละหมวดตามลำดับให้อยู่ติดกัน
  */
 export function planMoves(
   raw: any,
@@ -368,8 +393,9 @@ export function planMoves(
   places: Place[],
   sessions: ReadingSession[],
   categoryOf: Map<string, string>,
-  now = Date.now(),
+  options: PlanOptions = { mode: 'minimal' },
 ): Pick<OrganizePlan, 'summary' | 'tips' | 'moves'> {
+  const now = options.now ?? Date.now()
   const kindOf = new Map(places.map((p) => [p.id, p.kind]))
   const layout = new Map<string, string[]>()
   for (const row of Array.isArray(raw?.layout) ? raw.layout : []) {
@@ -382,41 +408,155 @@ export function planMoves(
   const box = kindOf.get(boxId) === 'box' ? boxId : ''
   const last = lastSessionTimes(sessions)
   const atHome = books.filter((b) => !b.takenAt)
+  const inBox = (b: Book) => (b.placeId ? kindOf.get(b.placeId) === 'box' : false)
+  const stale = (b: Book) => (b.status === 'done' || b.status === 'dropped') && now - lastActivity(b, last) > YEAR
+
+  // รวมเล่มเป็นหน่วย: ชุดเดียวกัน = หน่วยเดียว
+  const grouped = new Map<string, Book[]>()
+  for (const b of atHome) {
+    const key = b.seriesId ? `s:${b.seriesId}` : `b:${b.id}`
+    grouped.set(key, [...(grouped.get(key) ?? []), b])
+  }
+  const units: Unit[] = [...grouped].map(([key, list]) => {
+    const votes = new Map<string, number>()
+    for (const b of list) {
+      const c = categoryOf.get(b.id)
+      if (c) votes.set(c, (votes.get(c) ?? 0) + 1)
+    }
+    const category = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0] ?? ''
+    const sid = list[0].seriesId
+    return { key, series: sid && list.length > 1 ? (options.seriesName?.get(sid) ?? '') : '', books: list, category }
+  })
+
   const load = new Map<string, number>()
   for (const b of atHome) if (b.placeId) load.set(b.placeId, (load.get(b.placeId) ?? 0) + 1)
-  const shift = (from: string | null, to: string) => {
-    if (from) load.set(from, (load.get(from) ?? 1) - 1)
-    load.set(to, (load.get(to) ?? 0) + 1)
-  }
   const moves: OrganizePlan['moves'] = []
-  for (const b of atHome) {
-    const inBox = b.placeId ? kindOf.get(b.placeId) === 'box' : false
-    const stale = (b.status === 'done' || b.status === 'dropped') && now - lastActivity(b, last) > YEAR
-    if (stale) {
-      // เล่มเก่าที่อยู่ในกล่องอยู่แล้ว (กล่องไหนก็ได้) ไม่ต้องย้าย
-      if (box && !inBox) {
-        moves.push({ bookId: b.id, toPlaceId: box, reason: 'อ่านจบนานแล้ว เก็บลงกล่อง เปิดที่บนชั้น' })
-        shift(b.placeId, box)
-      }
+  const send = (b: Book, to: string, reason: string) => {
+    if (b.placeId === to) return
+    if (b.placeId) load.set(b.placeId, (load.get(b.placeId) ?? 1) - 1)
+    load.set(to, (load.get(to) ?? 0) + 1)
+    moves.push({ bookId: b.id, toPlaceId: to, reason })
+  }
+  const why = (u: Unit, b: Book) =>
+    u.series
+      ? `ชุด ${u.series} อยู่ด้วยกัน`
+      : inBox(b)
+        ? `ยังไม่ได้อ่านจบ ย้ายออกจากกล่องมาอยู่กับหมวด ${u.category}`
+        : `รวมหมวด ${u.category} ไว้ด้วยกัน`
+
+  // ---------- ลงกล่อง: ทั้งหน่วยเข้าเกณฑ์จึงลง (ชุดไม่ถูกแยก) ----------
+  const shelved: Unit[] = []
+  for (const u of units) {
+    if (!u.books.every(stale)) {
+      shelved.push(u)
       continue
     }
-    const category = categoryOf.get(b.id)
-    const targets = category ? layout.get(category) : undefined
-    if (!category || !targets || (b.placeId && targets.includes(b.placeId))) continue
-    // ที่แรกในลำดับที่ยังไม่แน่น ถ้าแน่นหมดใช้ที่ที่ว่างที่สุด
-    const to =
-      targets.find((id) => (load.get(id) ?? 0) < SHELF_ROOM) ??
-      targets.reduce((best, id) => ((load.get(id) ?? 0) < (load.get(best) ?? 0) ? id : best))
-    moves.push({
-      bookId: b.id,
-      toPlaceId: to,
-      reason: inBox ? `ยังไม่ได้อ่านจบ ย้ายออกจากกล่องมาอยู่กับหมวด ${category}` : `รวมหมวด ${category} ไว้ด้วยกัน`,
-    })
-    shift(b.placeId, to)
+    if (!box) continue
+    // อยู่ในกล่องอยู่แล้ว (กล่องไหนก็ได้) ไม่ต้องย้าย ยกเว้นชุดที่กระจายหลายที่ ให้ตามไปกล่องเดียวกับเล่มส่วนใหญ่
+    const boxes = u.books.filter(inBox).map((b) => b.placeId!)
+    const target = boxes.length ? mostCommon(boxes) : box
+    for (const b of u.books)
+      if (!inBox(b) || (u.series && b.placeId !== target))
+        send(b, target, u.series ? `ชุด ${u.series} อ่านจบนานแล้ว เก็บลงกล่องด้วยกัน` : 'อ่านจบนานแล้ว เก็บลงกล่อง เปิดที่บนชั้น')
+  }
+
+  if (options.mode === 'full') {
+    // ---------- จัดใหม่ให้ลงตัว: แต่ละหมวดเติมที่เก็บของตัวเองตามลำดับ หน่วยเดียวกันไม่ถูกแบ่งข้ามชั้น ----------
+    const filled = new Map<string, number>()
+    for (const [category, targets] of layout) {
+      const mine = shelved
+        .filter((u) => u.category === category)
+        .sort((a, b) => (a.series || a.books[0].title).localeCompare(b.series || b.books[0].title, 'th'))
+      let at = 0
+      for (const u of mine) {
+        while (at < targets.length - 1 && (filled.get(targets[at]) ?? 0) + u.books.length > SHELF_ROOM && (filled.get(targets[at]) ?? 0) > 0) at++
+        const to = targets[at]
+        filled.set(to, (filled.get(to) ?? 0) + u.books.length)
+        for (const b of u.books) send(b, to, why(u, b))
+      }
+    }
+  } else {
+    // ---------- ย้ายน้อยที่สุด: ที่ที่หมวดนี้อยู่กันมากอยู่แล้วถือเป็นบ้านของหมวด ----------
+    const perCategory = new Map<string, Map<string, number>>()
+    for (const u of shelved)
+      for (const b of u.books) {
+        if (!u.category || !b.placeId || inBox(b)) continue
+        const m = perCategory.get(u.category) ?? new Map<string, number>()
+        m.set(b.placeId, (m.get(b.placeId) ?? 0) + 1)
+        perCategory.set(u.category, m)
+      }
+    const homes = (category: string) => {
+      const at = perCategory.get(category) ?? new Map<string, number>()
+      const total = [...at.values()].reduce((n, x) => n + x, 0)
+      // เล่มเดียวที่หลงอยู่ไม่นับเป็นบ้าน ต้องมีอย่างน้อย 3 เล่ม หรือ 2 เล่มขึ้นไปที่เป็นหนึ่งในสี่ของหมวด
+      const strong = [...at].filter(([, n]) => n >= 3 || (n >= 2 && n / total >= 0.25)).map(([id]) => id)
+      return new Set([...(layout.get(category) ?? []), ...strong])
+    }
+    for (const u of shelved) {
+      const targets = u.category ? layout.get(u.category) : undefined
+      if (!targets) continue
+      const home = homes(u.category)
+      const pick = (need: number) =>
+        targets.find((id) => (load.get(id) ?? 0) + need <= SHELF_ROOM) ??
+        targets.reduce((best, id) => ((load.get(id) ?? 0) < (load.get(best) ?? 0) ? id : best))
+      if (u.books.length === 1) {
+        const b = u.books[0]
+        if (!b.placeId || !home.has(b.placeId)) send(b, pick(1), why(u, b))
+        continue
+      }
+      // ชุด: ไปรวมกันที่ที่เล่มส่วนใหญ่อยู่ (ถ้าที่นั้นเป็นบ้านของหมวด) ไม่อย่างนั้นหาที่ใหม่ให้ทั้งชุด
+      const here = u.books.map((b) => b.placeId).filter((id): id is string => Boolean(id && home.has(id)))
+      const anchor = here.length ? mostCommon(here) : pick(u.books.length)
+      for (const b of u.books) send(b, anchor, why(u, b))
+    }
   }
   return {
     summary: str(raw?.summary),
     tips: (Array.isArray(raw?.tips) ? raw.tips : []).map(str).filter(Boolean).slice(0, 5),
     moves,
   }
+}
+
+function mostCommon(ids: string[]): string {
+  const n = new Map<string, number>()
+  for (const id of ids) n.set(id, (n.get(id) ?? 0) + 1)
+  return [...n].sort((a, b) => b[1] - a[1])[0][0]
+}
+
+/**
+ * ลำดับหนังสือในที่เก็บหนึ่งที่หลังจัดระเบียบ
+ * - minimal: คงลำดับเดิม แค่ดึงเล่มในชุดเดียวกันมาอยู่ติดกัน เรียงตามเลขเล่ม (ตรงตำแหน่งของเล่มแรกในชุด)
+ * - full: เรียงตามหมวด แล้วชุด (ตามเลขเล่ม) แล้วชื่อเรื่อง
+ * books ต้องเรียงตามตำแหน่งปัจจุบันมาแล้ว คืน id ตามลำดับใหม่
+ */
+export function arrange(
+  books: Book[],
+  mode: OrganizeMode,
+  categoryOf: Map<string, string>,
+  seriesName: Map<string, string> = new Map(),
+): string[] {
+  const no = (b: Book) => b.seriesNo ?? Number.MAX_SAFE_INTEGER
+  const inSeries = (a: Book, b: Book) => no(a) - no(b) || a.title.localeCompare(b.title, 'th')
+  if (mode === 'full') {
+    const label = (b: Book) => (b.seriesId ? (seriesName.get(b.seriesId) ?? b.title) : b.title)
+    return [...books]
+      .sort(
+        (a, b) =>
+          (categoryOf.get(a.id) ?? '￿').localeCompare(categoryOf.get(b.id) ?? '￿', 'th') ||
+          label(a).localeCompare(label(b), 'th') ||
+          (a.seriesId && a.seriesId === b.seriesId ? inSeries(a, b) : a.title.localeCompare(b.title, 'th')),
+      )
+      .map((b) => b.id)
+  }
+  const out: string[] = []
+  const done = new Set<string>()
+  for (const b of books) {
+    if (done.has(b.id)) continue
+    const group = b.seriesId ? books.filter((x) => x.seriesId === b.seriesId).sort(inSeries) : [b]
+    for (const x of group) {
+      done.add(x.id)
+      out.push(x.id)
+    }
+  }
+  return out
 }

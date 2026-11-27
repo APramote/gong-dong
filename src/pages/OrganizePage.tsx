@@ -7,6 +7,7 @@ import { aiOn, aiReady, askJson } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { AiError } from '../lib/aiCommon'
 import {
+  arrange,
   BATCH,
   batches,
   buildCategoryPrompt,
@@ -20,12 +21,13 @@ import {
   planMoves,
   readCategories,
   ruleAdvice,
+  type OrganizeMode,
   type OrganizePlan,
 } from '../lib/organize'
 import { placeGroups, placeLabel } from '../placeLabel'
 import { useLeaveGuard } from '../components/useLeaveGuard'
 import { Ring } from '../components/Ring'
-import { loadSettings } from '../lib/settings'
+import { loadSettings, saveSettings } from '../lib/settings'
 import { t } from '../th'
 
 /** รายการหนังสือแบบติ๊กเลือกได้ */
@@ -142,6 +144,15 @@ export function OrganizePage() {
   const [progress, setProgress] = useState('')
   /** สัดส่วนงานของ AI ที่เสร็จแล้ว 0–1 (นับตามจำนวนครั้งที่ต้องเรียก AI) */
   const [ratio, setRatio] = useState(0)
+  const [mode, setModeState] = useState<OrganizeMode>(() => loadSettings().organizeMode)
+  const setMode = (m: OrganizeMode) => {
+    setModeState(m)
+    saveSettings({ ...loadSettings(), organizeMode: m })
+  }
+  /** หมวดของแต่ละเล่มตามแผนล่าสุด ใช้เรียงหนังสือบนชั้นตอนกดใช้แผน */
+  const [plannedCats, setPlannedCats] = useState<Map<string, string>>(new Map())
+  const series = useLiveQuery(() => repo.listSeries(), []) ?? []
+  const seriesName = useMemo(() => new Map(series.map((x) => [x.id, x.name])), [series])
   const [partial, setPartial] = useState('')
   // แผนจาก AI ยังไม่ได้ใช้ ออกจากหน้าแล้วต้องเรียก AI (และเสียค่าใช้จ่าย) ใหม่
   useLeaveGuard(Boolean(plan), t.organize.unsavedLeave)
@@ -228,8 +239,9 @@ export function OrganizePage() {
         for (const b of all) if (b.categoryId) categoryOf.set(b.id, catName(b))
         for (const c of suggestions) categoryOf.set(c.bookId, c.category)
         try {
-          const input = buildLayoutPrompt(all, places, bookcases, categoryOf)
-          layout = planMoves(await askJson(input.prompt, layoutSchema), input, all, places, sessions, categoryOf)
+          const input = buildLayoutPrompt(all, places, bookcases, categoryOf, mode)
+          layout = planMoves(await askJson(input.prompt, layoutSchema), input, all, places, sessions, categoryOf, { mode, seriesName })
+          setPlannedCats(categoryOf)
         } catch (e) {
           firstError ??= e
         }
@@ -256,7 +268,13 @@ export function OrganizePage() {
     const moves = plan.moves.filter((m) => pickedMoves.has(m.bookId) && !byId.get(m.bookId)?.takenAt)
     for (const c of cats) await repo.setCategoryByName(c.bookId, c.category)
     for (const m of moves) await repo.moveBook(m.bookId, m.toPlaceId)
-    setDone(t.organize.applied(cats.length, moves.length))
+    // เรียงหนังสือในที่เก็บที่มีการย้ายเข้า: ชุดเดียวกันอยู่ติดกันตามเลขเล่ม (จัดใหม่ให้ลงตัว = เรียงตามหมวดด้วย)
+    let sorted = 0
+    for (const placeId of new Set(moves.map((m) => m.toPlaceId))) {
+      const inPlace = await repo.booksIn(placeId)
+      sorted += await repo.setOrder(placeId, arrange(inPlace, mode, plannedCats, seriesName))
+    }
+    setDone(t.organize.applied(cats.length, moves.length) + (sorted ? ` ${t.organize.sorted}` : ''))
     setPlan(null)
   }
 
@@ -325,6 +343,18 @@ export function OrganizePage() {
           </p>
         )}
         {done && <p className="ok">{done}</p>}
+        {!plan && (
+          <div className="mode-pick">
+            <div className="chips" role="group" aria-label={t.organize.modeLabel}>
+              {(['minimal', 'full'] as const).map((m) => (
+                <button key={m} className={mode === m ? 'on' : ''} aria-pressed={mode === m} disabled={busy} onClick={() => setMode(m)}>
+                  {t.organize.mode[m]}
+                </button>
+              ))}
+            </div>
+            <p className="muted">{t.organize.modeHint[mode]}</p>
+          </div>
+        )}
         {!plan && (
           <button className="btn primary" disabled={busy || !aiReady() || books.length === 0} onClick={analyse}>
             {busy ? t.organize.aiBusy : t.organize.aiRun}
