@@ -4,6 +4,11 @@ import { emptyBook, repo, type BookInput } from '../db/repo'
 import type { ReadingStatus } from '../db/types'
 import { useBlobUrl } from '../components/Cover'
 import { PlaceSelect } from '../components/PlaceSelect'
+import { ReturnForm } from '../components/ReturnForm'
+import { SessionList } from '../components/SessionList'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { timeAgo } from '../lib/stats'
+import { placeLabel } from '../placeLabel'
 import { resizeImage } from '../lib/image'
 import { lookupIsbn, normalizeIsbn } from '../lib/isbn'
 import { aiReady, enrich } from '../lib/ai'
@@ -44,6 +49,12 @@ export function BookFormPage() {
   const [newCover, setNewCover] = useState<Blob | null | undefined>(undefined)
   const [savedCover, setSavedCover] = useState<Blob | null>(null)
   const coverInput = useRef<HTMLInputElement>(null)
+  // สถานะสดจากฐานข้อมูล (อยู่ในมือหรือไม่ ประวัติการอ่าน) แยกจากค่าในฟอร์ม
+  const live = useLiveQuery(async () => (id ? ((await repo.getBook(id)) ?? null) : null), [id])
+  const sessions = useLiveQuery(() => (id ? repo.sessionsFor(id) : []), [id]) ?? []
+  const places = useLiveQuery(() => repo.listPlaces(), []) ?? []
+  const bookcases = useLiveQuery(() => repo.listBookcases(), []) ?? []
+  const [returning, setReturning] = useState(false)
   const coverUrl = useBlobUrl(newCover === undefined ? savedCover : newCover)
 
   useEffect(() => {
@@ -52,7 +63,17 @@ export function BookFormPage() {
     Promise.all([repo.getBook(id), repo.getCover(id)]).then(([b, cover]) => {
       if (stale) return
       if (!b) return setState('missing')
-      const { id: _i, createdAt: _c, updatedAt: _u, deletedAt: _d, position: _p, ...input } = b
+      const {
+        id: _i,
+        createdAt: _c,
+        updatedAt: _u,
+        deletedAt: _d,
+        position: _p,
+        takenAt: _ta,
+        takenFrom: _tf,
+        finishedAt: _f,
+        ...input
+      } = b
       setForm(input)
       setTagsText(b.tags.join(', '))
       setSavedCover(cover ?? null)
@@ -84,7 +105,9 @@ export function BookFormPage() {
     const bookId = id ?? (await repo.addBook(input))
     if (id) await repo.updateBook(id, input)
     if (newCover !== undefined) await repo.setCover(bookId, newCover)
-    navigate(-1)
+    // เล่มใหม่ไปที่ที่เก็บของเล่มนั้น ไม่ย้อนกลับไปหน้าเมนูเพิ่มหนังสือ
+    if (id) navigate(-1)
+    else navigate(input.placeId ? `/place/${input.placeId}` : '/', { replace: true })
   }
 
   async function remove() {
@@ -148,9 +171,55 @@ export function BookFormPage() {
   )
 
   return (
-    <form className="form" onSubmit={submit}>
+    <div className="form">
       <h1>{id ? t.book.editTitle : t.book.newTitle}</h1>
+      {live && (
+        <div className="hand-bar">
+          {live.takenAt ? (
+            returning ? (
+              <ReturnForm
+                book={live}
+                session={sessions.find((x) => x.endedAt === null)}
+                placeExists={(pid) => places.some((p) => p.id === pid)}
+                onDone={() => {
+                  setReturning(false)
+                  // ค่าในฟอร์มอาจเก่าแล้ว (หน้าที่อ่าน สถานะ ที่เก็บ)
+                  repo.getBook(live.id).then((b) => {
+                    if (!b) return
+                    setForm((f) => ({
+                      ...f,
+                      placeId: b.placeId,
+                      status: b.status,
+                      currentPage: b.currentPage,
+                    }))
+                  })
+                }}
+                onCancel={() => setReturning(false)}
+              />
+            ) : (
+              <>
+                <span className="muted">{t.reading.inHandBanner(timeAgo(live.takenAt))}</span>
+                <button type="button" className="btn primary" onClick={() => setReturning(true)}>
+                  {t.reading.return}
+                </button>
+              </>
+            )
+          ) : (
+            <button
+              type="button"
+              className="btn primary"
+              onClick={async () => {
+                await repo.takeBook(live.id)
+                navigate('/reading')
+              }}
+            >
+              {t.reading.take}
+            </button>
+          )}
+        </div>
+      )}
 
+    <form className="form" onSubmit={submit}>
       <div className="cover-edit">
         {coverUrl ? <img className="cover" src={coverUrl} alt={t.book.cover} /> : <span className="cover" />}
         <div className="actions">
@@ -227,7 +296,15 @@ export function BookFormPage() {
         </label>
       </div>
 
-      <PlaceSelect label={t.book.place} value={form.placeId} onChange={(v) => set('placeId', v)} />
+      {live?.takenAt ? (
+        <label>
+          {t.book.place}
+          <input value={t.library.inHand} disabled />
+          <span className="muted">{t.reading.placeLocked}</span>
+        </label>
+      ) : (
+        <PlaceSelect label={t.book.place} value={form.placeId} onChange={(v) => set('placeId', v)} />
+      )}
 
       <div className="cols">
         <label>
@@ -319,5 +396,18 @@ export function BookFormPage() {
         )}
       </div>
     </form>
+      {id && (
+        <section>
+          <h2>{t.reading.history}</h2>
+          <SessionList
+            sessions={sessions}
+            placeName={(pid) => {
+              const p = pid ? places.find((x) => x.id === pid) : undefined
+              return p ? placeLabel(p, bookcases) : t.library.noPlace
+            }}
+          />
+        </section>
+      )}
+    </div>
   )
 }

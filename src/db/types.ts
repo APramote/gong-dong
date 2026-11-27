@@ -37,6 +37,30 @@ export interface Book extends SyncFields {
   placeId: string | null
   /** ลำดับในที่เก็บ: ชั้นวาง = ซ้ายไปขวา, กอง = ล่างขึ้นบน */
   position: number
+  /** เวลาที่หยิบไปอ่าน — ไม่ใช่ null แปลว่าอยู่ในมือ (placeId จะเป็น null) */
+  takenAt: number | null
+  /** ที่เก็บที่หยิบมา ใช้เป็นค่าเริ่มต้นตอนวางคืน */
+  takenFrom: string | null
+  /** เวลาที่อ่านจบ ใช้ทำสถิติ */
+  finishedAt: number | null
+}
+
+/** การหยิบไปอ่านหนึ่งครั้ง ตั้งแต่หยิบจนวางคืน */
+export interface ReadingSession extends SyncFields {
+  bookId: string
+  fromPlaceId: string | null
+  toPlaceId: string | null
+  startedAt: number
+  /** null = ยังอยู่ในมือ */
+  endedAt: number | null
+  startPage: number | null
+  endPage: number | null
+  /** เวลาอ่านจริง (นาที) ที่ผู้ใช้ยืนยันตอนวางคืน */
+  minutes: number | null
+  /** เวลาที่จับไว้แล้ว (มิลลิวินาที) ไม่รวมช่วงที่กำลังจับอยู่ */
+  timerMs: number
+  /** เวลาที่เริ่มจับรอบปัจจุบัน — null = ไม่ได้จับเวลาอยู่ */
+  timerStartedAt: number | null
 }
 
 /** ตู้หนังสือ — หนึ่งตู้มีหลายชั้นวาง */

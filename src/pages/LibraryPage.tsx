@@ -8,6 +8,7 @@ import { placeGroups, placeLabel } from '../placeLabel'
 import { t } from '../th'
 
 const NO_PLACE = '__none__'
+const IN_HAND = '__hand__'
 
 export function LibraryPage() {
   const books = useLiveQuery(() => repo.listBooks(), [])
@@ -27,7 +28,15 @@ export function LibraryPage() {
     const q = query.trim().toLowerCase()
     return (books ?? [])
       .filter((b) => !status || b.status === status)
-      .filter((b) => !placeId || (placeId === NO_PLACE ? !b.placeId : b.placeId === placeId))
+      .filter((b) =>
+        !placeId
+          ? true
+          : placeId === IN_HAND
+            ? Boolean(b.takenAt)
+            : placeId === NO_PLACE
+              ? !b.placeId && !b.takenAt
+              : b.placeId === placeId,
+      )
       .filter(
         (b) =>
           !q ||
@@ -76,6 +85,7 @@ export function LibraryPage() {
         </select>
         <select aria-label={t.book.place} value={placeId} onChange={(e) => setPlaceId(e.target.value)}>
           <option value="">{t.library.allPlaces}</option>
+          <option value={IN_HAND}>{t.library.inHand}</option>
           <option value={NO_PLACE}>{t.library.noPlace}</option>
           {placeGroups(places, bookcases).map((g) => (
             <optgroup key={g.title} label={g.title}>
@@ -97,7 +107,7 @@ export function LibraryPage() {
             <BookRow
               key={b.id}
               book={b}
-              sub={b.placeId ? labels.get(b.placeId) : t.library.noPlace}
+              sub={b.takenAt ? t.library.inHand : b.placeId ? labels.get(b.placeId) : t.library.noPlace}
             />
           ))}
         </ul>

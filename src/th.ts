@@ -3,7 +3,7 @@ import type { PlaceKind, ReadingStatus } from './db/types'
 /** ข้อความทั้งหมดในแอป รวมไว้ที่เดียวเพื่อให้เพิ่มภาษาอื่นได้ภายหลัง */
 export const t = {
   appName: 'กองดอง',
-  nav: { library: 'คลังหนังสือ', places: 'ที่เก็บ', settings: 'ตั้งค่า' },
+  nav: { library: 'คลัง', reading: 'กำลังอ่าน', places: 'ที่เก็บ', settings: 'ตั้งค่า' },
 
   common: {
     save: 'บันทึก',
@@ -34,6 +34,7 @@ export const t = {
     allStatus: 'ทุกสถานะ',
     allPlaces: 'ทุกที่เก็บ',
     noPlace: 'ยังไม่ระบุที่เก็บ',
+    inHand: 'อยู่ในมือ',
     empty: 'ยังไม่มีหนังสือ กด "เพิ่มหนังสือ" เพื่อเริ่มต้น',
     noMatch: 'ไม่พบหนังสือที่ตรงกับเงื่อนไข',
     summary: (total: number, dong: number) => `ทั้งหมด ${total} เล่ม · ดองอยู่ ${dong} เล่ม`,
@@ -181,6 +182,45 @@ export const t = {
       `ลบตู้ "${name}" และชั้นวางทั้งหมด? หนังสือจะไม่ถูกลบ แต่จะกลับไปเป็น "ยังไม่ระบุที่เก็บ"`,
     confirmDeletePlace: (name: string) =>
       `ลบ "${name}"? หนังสือจะไม่ถูกลบ แต่จะกลับไปเป็น "ยังไม่ระบุที่เก็บ"`,
+  },
+
+  reading: {
+    title: 'กำลังอ่าน',
+    take: 'หยิบไปอ่าน',
+    takeShort: 'หยิบ',
+    return: 'วางคืน',
+    inHandSince: (from: string, ago: string) => `หยิบจาก ${from} · ${ago}`,
+    inHandBanner: (ago: string) => `อยู่ในมือ · หยิบไป ${ago}`,
+    placeLocked: 'หนังสืออยู่ในมือ เลือกที่เก็บตอนวางคืน',
+    empty: 'ยังไม่มีหนังสือในมือ หยิบได้จากหน้าหนังสือ หรือปุ่ม "หยิบ" ในหน้าที่เก็บ',
+    timerStart: 'เริ่มจับเวลา',
+    timerStop: 'หยุดจับเวลา',
+    timer: 'จับเวลาแล้ว',
+    page: 'คั่นไว้ที่หน้า',
+    ofPages: (n: number) => `จาก ${n} หน้า`,
+    returnTo: 'วางคืนที่',
+    minutes: 'เวลาอ่านจริง (นาที)',
+    minutesHint: 'ค่าเริ่มต้นมาจากเวลาที่จับไว้ หรือเวลาตั้งแต่หยิบ แก้ได้',
+    finished: 'อ่านจบเล่มแล้ว',
+    save: 'วางคืน',
+    history: 'ประวัติการอ่าน',
+    recent: 'อ่านล่าสุด',
+    noHistory: 'ยังไม่มีประวัติการอ่าน',
+    session: (date: string, dur: string, pages: string) => [date, dur, pages].filter(Boolean).join(' · '),
+    pagesRange: (a: number | null, b: number | null) =>
+      a !== null && b !== null ? `หน้า ${a}–${b}` : b !== null ? `ถึงหน้า ${b}` : '',
+    moved: (from: string, to: string) => `${from} → ${to}`,
+    stats: {
+      inHand: 'อยู่ในมือ',
+      dong: 'ดองอยู่',
+      week: 'อ่าน 7 วันนี้',
+      month: 'อ่านเดือนนี้',
+      pagesMonth: 'หน้าเดือนนี้',
+      finishedMonth: 'จบเดือนนี้',
+      finishedYear: 'จบปีนี้',
+      addedMonth: 'เข้าคลังเดือนนี้',
+    },
+    books: (n: number) => `${n} เล่ม`,
   },
 
   place: {

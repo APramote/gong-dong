@@ -88,27 +88,38 @@ export function PlacePage() {
               key={b.id}
               book={b}
               actions={
-                place &&
-                place.kind !== 'box' && (
-                  <span className="reorder">
-                    <button
-                      className="btn small"
-                      aria-label={t.place.moveEarlier}
-                      disabled={i === 0}
-                      onClick={() => repo.shiftBook(b.id, -1)}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      className="btn small"
-                      aria-label={t.place.moveLater}
-                      disabled={i === books.length - 1}
-                      onClick={() => repo.shiftBook(b.id, 1)}
-                    >
-                      ↓
-                    </button>
-                  </span>
-                )
+                <span className="reorder">
+                  {place && place.kind !== 'box' && (
+                    <>
+                      <button
+                        className="btn small"
+                        aria-label={t.place.moveEarlier}
+                        disabled={i === 0}
+                        onClick={() => repo.shiftBook(b.id, -1)}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        className="btn small"
+                        aria-label={t.place.moveLater}
+                        disabled={i === books.length - 1}
+                        onClick={() => repo.shiftBook(b.id, 1)}
+                      >
+                        ↓
+                      </button>
+                    </>
+                  )}
+                  <button
+                    className="btn small"
+                    aria-label={`${t.reading.take} ${b.title}`}
+                    onClick={async () => {
+                      await repo.takeBook(b.id)
+                      navigate('/reading')
+                    }}
+                  >
+                    {t.reading.takeShort}
+                  </button>
+                </span>
               }
             />
           ))}

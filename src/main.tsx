@@ -9,6 +9,7 @@ import { PlacesPage } from './pages/PlacesPage'
 import { PlacePage } from './pages/PlacePage'
 import { AddPage } from './pages/AddPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { ReadingPage } from './pages/ReadingPage'
 
 function App() {
   return (
@@ -19,8 +20,11 @@ function App() {
           <NavLink to="/" end>
             {t.nav.library}
           </NavLink>
+          <NavLink to="/reading">{t.nav.reading}</NavLink>
           <NavLink to="/places">{t.nav.places}</NavLink>
-          <NavLink to="/settings">{t.nav.settings}</NavLink>
+          <NavLink to="/settings" aria-label={t.nav.settings} title={t.nav.settings}>
+            ⚙
+          </NavLink>
         </nav>
       </header>
       <main>
@@ -28,6 +32,7 @@ function App() {
           <Route path="/" element={<LibraryPage />} />
           <Route path="/add" element={<AddPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/reading" element={<ReadingPage />} />
           <Route path="/book/new" element={<BookFormPage />} />
           <Route path="/book/:id" element={<BookFormPage />} />
           <Route path="/places" element={<PlacesPage />} />

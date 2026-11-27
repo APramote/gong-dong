@@ -107,3 +107,25 @@ test('อ่านรายละเอียดโควตาจากคำ�
   })
   expect(parseQuota('not json')).toMatchObject({ period: '', search: false, id: '' })
 })
+
+test('สถิติการอ่านและเวลาเริ่มต้นตอนวางคืน', async () => {
+  const { readingStats, defaultMinutes, formatMinutes, clock } = await import('./stats')
+  const now = new Date(2026, 10, 20, 12, 0)
+  const t = (d: number, h = 12) => new Date(2026, 10, d, h).getTime()
+  const book = (o: object) => ({ status: 'reading', takenAt: null, finishedAt: null, createdAt: t(1), ...o }) as any
+  const session = (o: object) =>
+    ({ startedAt: t(19), endedAt: t(19, 13), startPage: 10, endPage: 50, minutes: 30, timerMs: 0, timerStartedAt: null, ...o }) as any
+  const stats = readingStats(
+    [book({ status: 'dong' }), book({ takenAt: t(20) }), book({ status: 'done', finishedAt: t(5) }), book({ createdAt: t(1, 0) - 86400000 * 30 })],
+    [session({}), session({ endedAt: t(2), minutes: 60, startPage: null }), session({ endedAt: null, minutes: null })],
+    now,
+  )
+  expect(stats).toEqual({ inHand: 1, dong: 1, minutesWeek: 30, minutesMonth: 90, pagesMonth: 90, finishedMonth: 1, finishedYear: 1, addedMonth: 3 })
+
+  const start = t(20, 10)
+  expect(defaultMinutes(session({ startedAt: start }), t(20, 11))).toBe(60)
+  expect(defaultMinutes(session({ startedAt: t(18) }), now.getTime())).toBeNull() // นานเกินไป ให้กรอกเอง
+  expect(defaultMinutes(session({ startedAt: t(18), timerMs: 25 * 60000 }), now.getTime())).toBe(25)
+  expect(formatMinutes(80)).toBe('1 ชม. 20 นาที')
+  expect(clock(3909000)).toBe('1:05:09')
+})

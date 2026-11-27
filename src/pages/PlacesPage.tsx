@@ -15,7 +15,8 @@ export function PlacesPage() {
   const [open, setOpen] = useState<string | null>(null)
   const close = () => setOpen(null)
 
-  const count = (placeId: string | null) => books.filter((b) => b.placeId === placeId).length
+  const count = (placeId: string | null) =>
+    books.filter((b) => b.placeId === placeId && !b.takenAt).length
   const unplaced = count(null)
 
   const placeRow = (p: Place, detail: string) => (

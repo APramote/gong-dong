@@ -390,3 +390,71 @@ textarea {
   display: flex;
   flex-direction: column;
 }
+.hand-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.hand-bar .inline-form {
+  flex: 1;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  min-width: 0;
+}
+.stat-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.stat .muted {
+  font-size: 0.8rem;
+}
+.card.hand {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface);
+}
+.card.hand .row {
+  padding: 0;
+}
+.btn.running {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.form label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 1rem;
+}
+.check input {
+  width: 20px;
+  height: 20px;
+}
+.topbar {
+  gap: 10px;
+}
+.topbar nav a {
+  padding: 4px 10px;
+}

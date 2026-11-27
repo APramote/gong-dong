@@ -1,5 +1,5 @@
 import { db as defaultDb, type GongDongDB } from './db'
-import type { Book, Bookcase, Place, PlaceKind, SyncFields } from './types'
+import type { Book, Bookcase, Place, PlaceKind, ReadingSession, SyncFields } from './types'
 
 const newId = () => crypto.randomUUID()
 
@@ -10,7 +10,16 @@ function stamp(): SyncFields {
 
 const alive = <T extends SyncFields>(rows: T[]) => rows.filter((r) => r.deletedAt === null)
 
-export type BookInput = Omit<Book, keyof SyncFields | 'position'>
+/** ฟิลด์ที่ระบบจัดการเอง ฟอร์มแก้ไขไม่ได้ */
+type SystemFields = 'position' | 'takenAt' | 'takenFrom' | 'finishedAt'
+export type BookInput = Omit<Book, keyof SyncFields | SystemFields>
+
+export interface ReturnInput {
+  placeId: string | null
+  page: number | null
+  minutes: number | null
+  finished: boolean
+}
 export type BookcaseInput = Pick<Bookcase, 'name' | 'room'>
 export type PlaceInput = Pick<Place, 'name' | 'location' | 'label'>
 
@@ -33,11 +42,27 @@ export const emptyBook: BookInput = {
   placeId: null,
 }
 
+/** หนังสือที่บันทึกจากเวอร์ชันก่อนอาจขาดฟิลด์ใหม่ เติมค่าเริ่มต้นให้ */
+const withDefaults = (b: Book): Book => ({
+  ...emptyBook,
+  ...b,
+  takenAt: b.takenAt ?? null,
+  takenFrom: b.takenFrom ?? null,
+  finishedAt: b.finishedAt ?? null,
+})
+
 /** คำสั่งอ่าน/เขียนข้อมูลทั้งหมดของแอป รับ db เข้ามาเพื่อให้ทดสอบได้ */
 export function createRepo(db: GongDongDB = defaultDb) {
   async function booksIn(placeId: string | null): Promise<Book[]> {
-    const rows = alive(await db.books.toArray()).filter((b) => b.placeId === placeId)
+    // หนังสือที่อยู่ในมือไม่นับว่าอยู่ในที่เก็บใด
+    const rows = alive(await db.books.toArray()).filter((b) => b.placeId === placeId && !b.takenAt)
     return rows.sort((a, b) => a.position - b.position)
+  }
+
+  /** การหยิบที่ยังไม่วางคืนของหนังสือเล่มนี้ */
+  async function openSession(bookId: string): Promise<ReadingSession | undefined> {
+    const rows = await db.sessions.where('bookId').equals(bookId).toArray()
+    return rows.find((r) => r.deletedAt === null && r.endedAt === null)
   }
 
   /** ตำแหน่งถัดไปต่อท้ายที่เก็บ */
@@ -49,17 +74,24 @@ export function createRepo(db: GongDongDB = defaultDb) {
   return {
     // ---------- หนังสือ ----------
     async listBooks(): Promise<Book[]> {
-      return alive(await db.books.toArray())
+      return alive(await db.books.toArray()).map(withDefaults)
     },
     booksIn,
 
     async getBook(id: string): Promise<Book | undefined> {
       const b = await db.books.get(id)
-      return b && b.deletedAt === null ? { ...emptyBook, ...b } : undefined
+      return b && b.deletedAt === null ? withDefaults(b) : undefined
     },
 
     async addBook(input: BookInput): Promise<string> {
-      const book: Book = { ...stamp(), ...input, position: await nextPosition(input.placeId) }
+      const book: Book = {
+        ...stamp(),
+        ...input,
+        position: await nextPosition(input.placeId),
+        takenAt: null,
+        takenFrom: null,
+        finishedAt: input.status === 'done' ? Date.now() : null,
+      }
       await db.books.add(book)
       return book.id
     },
@@ -67,15 +99,28 @@ export function createRepo(db: GongDongDB = defaultDb) {
     async updateBook(id: string, input: BookInput): Promise<void> {
       const old = await db.books.get(id)
       if (!old) return
+      // หนังสือในมือย้ายที่ผ่านฟอร์มไม่ได้ ต้องวางคืน
+      const placeId = old.takenAt ? null : input.placeId
       // ย้ายที่เก็บ = ไปต่อท้ายที่ใหม่
-      const position =
-        old.placeId === input.placeId ? old.position : await nextPosition(input.placeId)
-      await db.books.put({ ...old, ...input, position, updatedAt: Date.now() })
+      const position = old.placeId === placeId ? old.position : await nextPosition(placeId)
+      const finishedAt =
+        input.status !== 'done' ? null : old.status === 'done' ? (old.finishedAt ?? null) : Date.now()
+      await db.books.put({
+        ...old,
+        ...input,
+        placeId,
+        position,
+        finishedAt,
+        // ฟอร์มอาจถือค่าเก่าอยู่ ใช้ค่าในฐานข้อมูลเสมอ
+        takenAt: old.takenAt ?? null,
+        takenFrom: old.takenFrom ?? null,
+        updatedAt: Date.now(),
+      })
     },
 
     async moveBook(id: string, placeId: string | null): Promise<void> {
       const old = await db.books.get(id)
-      if (!old || old.placeId === placeId) return
+      if (!old || old.takenAt || old.placeId === placeId) return
       await db.books.update(id, {
         placeId,
         position: await nextPosition(placeId),
@@ -102,6 +147,94 @@ export function createRepo(db: GongDongDB = defaultDb) {
       const now = Date.now()
       await db.books.update(id, { deletedAt: now, updatedAt: now })
       await db.covers.delete(id)
+    },
+
+    // ---------- หยิบไปอ่าน / วางคืน ----------
+    /** หยิบหนังสือออกจากที่เก็บ เริ่มบันทึกการอ่าน */
+    async takeBook(id: string): Promise<void> {
+      await db.transaction('rw', db.books, db.sessions, async () => {
+        const book = await db.books.get(id)
+        if (!book || book.deletedAt !== null || book.takenAt) return
+        const now = Date.now()
+        await db.sessions.add({
+          ...stamp(),
+          bookId: id,
+          fromPlaceId: book.placeId,
+          toPlaceId: null,
+          startedAt: now,
+          endedAt: null,
+          startPage: book.currentPage,
+          endPage: null,
+          minutes: null,
+          timerMs: 0,
+          timerStartedAt: null,
+        })
+        await db.books.update(id, {
+          placeId: null,
+          takenAt: now,
+          takenFrom: book.placeId,
+          status: book.status === 'dong' ? 'reading' : book.status,
+          updatedAt: now,
+        })
+      })
+    },
+
+    /** วางคืนที่เดิมหรือที่ใหม่ บันทึกหน้าที่คั่นและเวลาอ่าน */
+    async returnBook(id: string, input: ReturnInput): Promise<void> {
+      const position = await nextPosition(input.placeId)
+      await db.transaction('rw', db.books, db.sessions, async () => {
+        const book = await db.books.get(id)
+        if (!book || !book.takenAt) return
+        const now = Date.now()
+        const session = await openSession(id)
+        if (session) {
+          const running = session.timerStartedAt ? now - session.timerStartedAt : 0
+          await db.sessions.update(session.id, {
+            endedAt: now,
+            toPlaceId: input.placeId,
+            endPage: input.page,
+            minutes: input.minutes,
+            timerMs: session.timerMs + running,
+            timerStartedAt: null,
+            updatedAt: now,
+          })
+        }
+        const finished = input.finished
+        await db.books.update(id, {
+          placeId: input.placeId,
+          position,
+          takenAt: null,
+          takenFrom: null,
+          currentPage: finished && book.pages ? book.pages : input.page,
+          status: finished ? 'done' : book.status === 'done' ? 'reading' : book.status,
+          finishedAt: finished ? (book.status === 'done' ? book.finishedAt : now) : book.finishedAt,
+          updatedAt: now,
+        })
+      })
+    },
+
+    /** เริ่มหรือหยุดจับเวลาอ่านของหนังสือที่อยู่ในมือ */
+    async toggleTimer(bookId: string): Promise<void> {
+      const session = await openSession(bookId)
+      if (!session) return
+      const now = Date.now()
+      await db.sessions.update(
+        session.id,
+        session.timerStartedAt
+          ? { timerMs: session.timerMs + (now - session.timerStartedAt), timerStartedAt: null, updatedAt: now }
+          : { timerStartedAt: now, updatedAt: now },
+      )
+    },
+
+    openSession,
+
+    async listSessions(): Promise<ReadingSession[]> {
+      return alive(await db.sessions.toArray()).sort((a, b) => b.startedAt - a.startedAt)
+    },
+
+    async sessionsFor(bookId: string): Promise<ReadingSession[]> {
+      const rows = alive(await db.sessions.where('bookId').equals(bookId).toArray())
+      return rows.sort((a, b) => b.startedAt - a.startedAt)
     },
 
     /** เพิ่มหลายเล่มต่อท้ายที่เก็บเดียวกันตามลำดับที่ส่งมา คืน id ตามลำดับ */
