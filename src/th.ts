@@ -48,6 +48,8 @@ export const t = {
     page: (n: number, total: number | null) => (total ? `หน้า ${n} จาก ${total}` : `หน้า ${n}`),
     empty: 'ยังไม่มีหนังสือ กด "เพิ่มหนังสือ" เริ่มเล่มแรกกัน',
     noMatch: 'ไม่เจอเล่มที่ค้นหา ลองเปลี่ยนคำค้นหรือตัวกรอง',
+    found: (n: number, total: number) => `พบ ${n} เล่ม จาก ${total} เล่ม`,
+    clearFilters: 'ล้างตัวกรอง',
     showMore: (n: number, left: number) => `แสดงเพิ่มอีก ${n} เล่ม (เหลือ ${left} เล่ม)`,
     summary: (total: number, dong: number) =>
       total === 0

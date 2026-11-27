@@ -2323,3 +2323,16 @@ details.more[open] {
   font-weight: 400;
   font-size: 0.85rem;
 }
+
+/* จำนวนเล่มที่ตรงกับตัวกรอง */
+.result-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 0;
+}
+.result-count .link-btn {
+  min-height: 40px;
+  padding: 0;
+}

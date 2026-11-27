@@ -81,6 +81,7 @@ export function LibraryPage() {
   // มีหนังสือแล้วแต่ยังไม่ได้เชื่อม Google: ข้อมูลอยู่ในเครื่องนี้ที่เดียว ชวนให้เข้าสู่ระบบ
   const showBackupHint = !hintHidden && books.length > 0 && !loadSettings().googleAccount
   const dong = books.filter((b) => b.status === 'dong').length
+  const filtering = Boolean(deferredQuery.trim() || status || placeId || categoryId)
 
   return (
     <>
@@ -203,6 +204,24 @@ export function LibraryPage() {
           ))}
         </select>
       </div>
+
+      {/* กรองหรือค้นอยู่: บอกจำนวนเล่มที่ตรง และล้างตัวกรองได้ในปุ่มเดียว */}
+      {filtering && (
+        <p className="muted result-count" role="status">
+          <span>{t.library.found(shown.length, books.length)}</span>
+          <button
+            className="link-btn"
+            onClick={() => {
+              setQuery('')
+              setStatus('')
+              setPlaceId('')
+              setCategoryId('')
+            }}
+          >
+            {t.library.clearFilters}
+          </button>
+        </p>
+      )}
 
       {shown.length === 0 ? (
         <p className="empty">{books.length === 0 ? t.library.empty : t.library.noMatch}</p>
