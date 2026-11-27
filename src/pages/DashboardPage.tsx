@@ -85,7 +85,7 @@ export function DashboardPage() {
   const [error, setError] = useState('')
 
   const d = useMemo(() => dashboard(books ?? [], sessions, Date.now(), categories), [books, sessions, categories])
-  if (!books) return null
+  if (!books) return <p className="empty">{t.common.loading}</p>
   const goals = { dailyMinutes: settings.dailyGoalMinutes, yearBooks: settings.yearGoalBooks }
   const byId = new Map(books.map((b) => [b.id, b]))
   const setGoal = (patch: Partial<typeof settings>) => {
@@ -113,10 +113,10 @@ export function DashboardPage() {
   const hourAxis = timeAxis(d.byHour)
   const weekdayAxis = timeAxis(d.byWeekday)
   const status = [
-    { name: t.status.dong, value: d.status.dong, color: 'var(--series-1)', ink: '#ffffff' },
-    { name: t.status.reading, value: d.status.reading, color: 'var(--series-2)', ink: '#191919' },
-    { name: t.status.done, value: d.status.done, color: 'var(--series-3)', ink: '#191919' },
-    { name: t.status.dropped, value: d.status.dropped, color: 'var(--series-4)', ink: '#191919' },
+    { name: t.status.dong, value: d.status.dong, color: 'var(--series-1)' },
+    { name: t.status.reading, value: d.status.reading, color: 'var(--series-2)' },
+    { name: t.status.done, value: d.status.done, color: 'var(--series-3)' },
+    { name: t.status.dropped, value: d.status.dropped, color: 'var(--series-4)' },
   ]
 
   return (
@@ -153,7 +153,7 @@ export function DashboardPage() {
 
       <div className="stats">
         <StatTile label={t.dash.dong} value={t.dash.books(d.status.dong)} />
-        <StatTile label={t.dash.streak} value={t.dash.days(d.streak)} sub={t.dash.best(d.bestStreak)} />
+        <StatTile label={t.dash.streak} value={t.dash.days(d.streak)} sub={d.bestStreak > 0 ? t.dash.best(d.bestStreak) : undefined} />
         <StatTile label={t.dash.week} value={formatMinutes(d.weekMinutes)} />
       </div>
 

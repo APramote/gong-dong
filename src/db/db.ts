@@ -42,6 +42,18 @@ export class GongDongDB extends Dexie {
           delete b.category
         })
       })
+    // รูปปกมีฟิลด์ sync ครบ (ลบแบบทำเครื่องหมาย)
+    this.version(6)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx
+          .table('covers')
+          .toCollection()
+          .modify((c: Record<string, unknown>) => {
+            c.createdAt ??= c.updatedAt
+            c.deletedAt ??= null
+          })
+      })
   }
 }
 

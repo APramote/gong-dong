@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { aiErrorText } from '../lib/aiError'
-import { checkClaudeKey } from '../lib/ai'
+import { checkClaudeKey, listGeminiModels } from '../lib/ai'
 import { CLAUDE_MODELS } from '../lib/claudeModels'
-import { listModels, pickDefaultModel } from '../lib/gemini'
+import { pickDefaultModel } from '../lib/gemini'
 import { loadSettings, saveSettings, type Provider, type Settings } from '../lib/settings'
 import { t } from '../th'
 
@@ -27,7 +27,7 @@ export function SettingsPage() {
     setBusy(true)
     setStatus(null)
     try {
-      const ids = await listModels(key)
+      const ids = await listGeminiModels(key)
       setGeminiModels(ids)
       const model = ids.includes(settings.geminiModel) ? settings.geminiModel : pickDefaultModel(ids)
       update({ geminiKey: key, geminiModel: model })

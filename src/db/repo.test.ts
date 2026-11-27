@@ -225,3 +225,73 @@ test('เปิดฐานข้อมูลเวอร์ชันที่�
   expect(got).toEqual({ x: id('นิยาย'), y: id('นิยาย'), z: id('Fiction'), w: id('Fiction'), v: null })
   expect('category' in (await fresh.getBook('x'))!).toBe(false)
 })
+
+test('ผลจากการตรวจ: ลบที่เก็บแล้วหนังสือต่อท้ายรายการไม่มีที่เก็บ ไม่ชนตำแหน่ง', async () => {
+  await repo.addBook({ ...emptyBook, title: 'A' })
+  await repo.addBook({ ...emptyBook, title: 'B' })
+  const pile = await repo.addPlace('pile', { name: 'กอง', location: '', label: '' })
+  await repo.addBooks(['C', 'D'].map((title) => ({ ...emptyBook, title, placeId: pile })))
+  await repo.deletePlace(pile)
+  const rows = await repo.booksIn(null)
+  expect(rows.map((b) => b.title)).toEqual(['A', 'B', 'C', 'D'])
+  expect(new Set(rows.map((b) => b.position)).size).toBe(4)
+})
+
+test('ผลจากการตรวจ: ลบรูปปกเก็บเป็นเครื่องหมายลบ', async () => {
+  const id = await repo.addBook({ ...emptyBook, title: 'มีปก' })
+  await repo.setCover(id, new Blob(['x']))
+  expect(await repo.getCover(id)).toBeInstanceOf(Blob)
+  await repo.setCover(id, null)
+  expect(await repo.getCover(id)).toBeUndefined()
+})
+
+test('ผลจากการตรวจ: กดซ้ำเร็ว ๆ ไม่ได้ลิ้นชักหรือหมวดซ้ำ', async () => {
+  const bc = await repo.addBookcase({ name: 'ตู้', room: '' }, 1)
+  const look = { color: '', ratio: 0, drawerRows: 2, drawersPerRow: 2 }
+  await Promise.all([repo.updateBookcaseLook(bc, look), repo.updateBookcaseLook(bc, look)])
+  const drawers = await repo.drawersOf(bc)
+  expect(drawers.map((d) => d.order)).toEqual([0, 1, 2, 3])
+  const ids = await Promise.all([repo.ensureCategory('นิยาย'), repo.ensureCategory('นิยาย ')])
+  expect(ids[0]).toBe(ids[1])
+  expect(await repo.listCategories()).toHaveLength(1)
+})
+
+test('ผลจากการตรวจ: วางคืนโดยไม่จบ ล้างวันที่อ่านจบ และที่ถูกลบไปแล้วไม่รับหนังสือ', async () => {
+  const id = await repo.addBook({ ...emptyBook, title: 'อ่านซ้ำ', status: 'done' })
+  expect((await repo.getBook(id))!.finishedAt).not.toBeNull()
+  const box = await repo.addPlace('box', { name: 'กล่อง', location: '', label: '' })
+  await repo.takeBook(id)
+  await repo.deletePlace(box) // ที่วางคืนถูกลบระหว่างหยิบไปอ่าน
+  await repo.returnBook(id, { placeId: box, page: 10, minutes: 5, finished: false })
+  const b = (await repo.getBook(id))!
+  expect(b).toMatchObject({ status: 'reading', finishedAt: null, placeId: null })
+  await repo.moveBook(id, box)
+  expect((await repo.getBook(id))!.placeId).toBeNull()
+})
+
+test('ผลจากการตรวจ: ลบหนังสือที่อยู่ในมือ ไม่ทิ้งการหยิบค้างไว้', async () => {
+  const id = await repo.addBook({ ...emptyBook, title: 'หยิบแล้วลบ' })
+  await repo.takeBook(id)
+  await repo.deleteBook(id)
+  expect(await repo.openSession(id)).toBeUndefined()
+  expect(await repo.listSessions()).toEqual([])
+})
+
+test('ผลจากการตรวจ: อัปเกรดตารางรูปปกเดิมให้มีฟิลด์ sync', async () => {
+  const Dexie = (await import('dexie')).default
+  const name = 'cover-upgrade'
+  const old = new Dexie(name)
+  old.version(5).stores({
+    books: 'id, placeId, status, categoryId, updatedAt',
+    bookcases: 'id, updatedAt',
+    places: 'id, kind, bookcaseId, updatedAt',
+    covers: 'id, updatedAt',
+    sessions: 'id, bookId, updatedAt',
+    categories: 'id, name, updatedAt',
+  })
+  await old.table('covers').add({ id: 'c1', blob: new Blob(['x']), updatedAt: 42 })
+  old.close()
+  const fresh = new GongDongDB(name)
+  expect(await fresh.covers.get('c1')).toMatchObject({ createdAt: 42, updatedAt: 42, deletedAt: null })
+  expect(await createRepo(fresh).getCover('c1')).toBeInstanceOf(Blob)
+})

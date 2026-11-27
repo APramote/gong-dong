@@ -14,7 +14,7 @@ export function CategoriesPage() {
   const [draft, setDraft] = useState('')
   const [msg, setMsg] = useState('')
 
-  if (!categories) return null
+  if (!categories) return <p className="empty">{t.common.loading}</p>
   const count = (id: string | null) => books.filter((b) => b.categoryId === id).length
 
   async function add() {

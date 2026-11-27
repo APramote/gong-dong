@@ -1,5 +1,5 @@
 import { AiError, type BookcaseScan, type CoverBook, type Enrichment, type RecognizedBook } from './aiCommon'
-import { enrichBook, generateJson, recognizeBooks, recognizeCovers, scanBookcase } from './gemini'
+import { enrichBook, generateJson, listModels, recognizeBooks, recognizeCovers, scanBookcase } from './gemini'
 import { loadSettings, type Settings } from './settings'
 
 /** ใช้ผู้ให้บริการ AI ตามที่เลือกในหน้าตั้งค่า — โหลด Claude SDK เฉพาะตอนใช้ Claude */
@@ -40,6 +40,12 @@ export async function enrich(book: {
   return s.provider === 'claude'
     ? (await claude()).enrichBookClaude(s.claudeKey, s.claudeModel, book)
     : enrichBook(s.geminiKey, s.geminiModel, book)
+}
+
+/** รายชื่อรุ่น Gemini (ใช้ตรวจ key) — ผ่านด่านปิด AI เหมือนการเรียกอื่น */
+export async function listGeminiModels(key: string): Promise<string[]> {
+  active()
+  return listModels(key)
 }
 
 export async function checkClaudeKey(key: string, model: string): Promise<void> {

@@ -13,8 +13,11 @@ export default function Storage3D({
   model,
   selected,
   onSelect,
+  label,
 }: {
   model: BookcaseModel
+  /** คำอธิบายสำหรับโปรแกรมอ่านหน้าจอ */
+  label?: string
   selected?: Pick3D | null
   onSelect?: (target: Pick3D | null) => void
 }) {
@@ -91,6 +94,8 @@ export default function Storage3D({
       renderer.domElement.removeEventListener('pointerup', onUp)
       controls.dispose()
       if (state.current?.built) dispose(state.current.built.root)
+      // คืน WebGL context ทันที ไม่อย่างนั้นเปิดหน้านี้หลายครั้งจะเกินจำนวนที่เบราว์เซอร์ยอม
+      renderer.forceContextLoss()
       renderer.dispose()
       renderer.domElement.remove()
       state.current = null
@@ -159,5 +164,5 @@ export default function Storage3D({
     s.render()
   }, [selectedBook, selectedDrawer, key])
 
-  return <div ref={host} className="view3d" />
+  return <div ref={host} className="view3d" role="img" aria-label={label} />
 }

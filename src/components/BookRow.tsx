@@ -1,10 +1,11 @@
-import type { ReactNode } from 'react'
+import { memo, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Book } from '../db/types'
 import { t } from '../th'
 import { CoverThumb } from './Cover'
 
-export function BookRow({
+/** แถวหนังสือ (memo: แถวที่ข้อมูลไม่เปลี่ยนไม่ต้องวาดใหม่ตอนพิมพ์ค้นหา) */
+export const BookRow = memo(function BookRow({
   book,
   sub,
   actions,
@@ -24,4 +25,4 @@ export function BookRow({
       {actions}
     </li>
   )
-}
+})

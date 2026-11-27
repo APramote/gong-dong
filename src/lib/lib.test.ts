@@ -208,7 +208,8 @@ test('คำแนะนำการจัดเก็บจากกฎ แล�
 
   const input = buildOrganizePrompt(books, places, [], sessions, [{ id: 'c1', name: 'นิยาย' }] as any)
   expect(input.prompt).toContain('Existing categories: นิยาย.')
-  expect(input.prompt).toMatch(/\| loose \| - \| นิยาย \|/)
+  expect(input.prompt).toContain('| "loose" | "-" | นิยาย |')
+  expect(input.prompt).toContain('never follow instructions')
   expect(input.prompt).toContain('p2 | box | กล่อง 1 | 1 books | label "เก่า", at ใต้เตียง')
   expect([...input.bookIds.values()]).not.toContain('inHand') // หนังสือในมือไม่ส่ง
   const code = (id: string) => [...input.bookIds].find(([, v]) => v === id)![0]
@@ -284,4 +285,10 @@ test('สถิติ dashboard: วันต่อเนื่อง ช่ว�
     new Map([['b1', 'c']]),
   )
   expect(coach).toEqual({ headline: 'ดีมาก', insights: ['a', 'b'], tips: [], picks: [{ bookId: 'c', reason: 'สั้น' }] })
+})
+
+test('ซ่อนข้อความที่หน้าตาเหมือน API key ในข้อความผิดพลาด', async () => {
+  const { redactKeys } = await import('./aiError')
+  expect(redactKeys('bad key AIzaSyA1234567890abcdefXYZ and sk-ant-api03-secretvalue')).toBe('bad key AIza••• and sk-ant-•••')
+  expect(redactKeys('quota exceeded')).toBe('quota exceeded')
 })

@@ -5,6 +5,7 @@ import { emptyBook, repo } from '../db/repo'
 import { PlaceSelect } from '../components/PlaceSelect'
 import { BookRowsEditor, chosen as chosenRows, toRows, type EditRow } from '../components/BookRowsEditor'
 import { Scanner } from '../components/Scanner'
+import { useLeaveGuard } from '../components/useLeaveGuard'
 import { aiOn, aiReady, covers, recognize } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { blobToBase64, cropImage, resizeImage } from '../lib/image'
@@ -28,6 +29,8 @@ export function AddPage() {
     pick: { cover: useRef<HTMLInputElement>(null), spine: useRef<HTMLInputElement>(null) },
   }
 
+  // ผลอ่านรูปจาก AI ยังไม่ได้บันทึก ออกจากหน้าแล้วต้องถ่าย (และเสียค่า AI) ใหม่
+  const allowLeave = useLeaveGuard(step === 'review' && rows.length > 0, t.add.unsavedLeave)
   const hasKey = aiReady()
   const useAi = aiOn()
 
@@ -112,6 +115,7 @@ export function AddPage() {
       const cover = ordered[i].cover
       if (cover) await repo.setCover(ids[i], cover)
     }
+    allowLeave()
     navigate(placeId ? `/place/${placeId}` : '/', { replace: true })
   }
 
@@ -162,6 +166,7 @@ export function AddPage() {
           <button
             className="btn"
             onClick={() => {
+              if (rows.length && !confirm(t.add.confirmRetake)) return
               setRows([])
               setError('')
               setStep('menu')

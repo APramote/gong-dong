@@ -135,12 +135,12 @@ export function OrganizePage() {
     const p = placeId ? places.find((x) => x.id === placeId) : undefined
     return p ? placeLabel(p, bookcases) : '—'
   }
-  if (!books) return null
+  if (!books) return <p className="empty">{t.common.loading}</p>
 
   const advice = ruleAdvice(books, places, sessions)
   const groups = placeGroups(places, bookcases)
-  const boxes = groups.filter((g) => g.title === t.kind.box)
-  const reachable = groups.filter((g) => g.title !== t.kind.box)
+  const boxes = groups.filter((g) => g.title === t.places.boxes)
+  const reachable = groups.filter((g) => g.title !== t.places.boxes)
   const quiet = !advice.toBox.length && !advice.outOfBox.length && !advice.unplaced.length
 
   async function analyse() {

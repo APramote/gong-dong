@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useBlocker, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { emptyBook, repo, type BookInput } from '../db/repo'
 import type { ReadingStatus } from '../db/types'
 import { useBlobUrl } from '../components/Cover'
@@ -30,7 +30,8 @@ export function BookFormPage() {
   const { id } = useParams()
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { prefill, isbnFound } = (useLocation().state ?? {}) as Prefill
+  const location = useLocation()
+  const { prefill, isbnFound } = (location.state ?? {}) as Prefill
 
   const { category: prefillCategory, ...prefillFields } = prefill ?? {}
   const [form, setForm] = useState<BookInput>({
@@ -60,6 +61,37 @@ export function BookFormPage() {
   const bookcases = useLiveQuery(() => repo.listBookcases(), []) ?? []
   const [returning, setReturning] = useState(false)
   const coverUrl = useBlobUrl(newCover === undefined ? savedCover : newCover)
+  const titleRef = useRef<HTMLInputElement>(null)
+
+  // ---------- เตือนก่อนออกจากหน้าเมื่อยังไม่ได้บันทึก ----------
+  /** สภาพของฟอร์มตอนเปิด ใช้เทียบว่ามีการแก้ไขหรือไม่ */
+  const [baseline, setBaseline] = useState<string | null>(id ? null : JSON.stringify({ form, tagsText }))
+  const dirty =
+    baseline !== null && (JSON.stringify({ form, tagsText }) !== baseline || newCover !== undefined)
+  /** ออกจากหน้าหลังบันทึกหรือลบแล้ว ไม่ต้องถาม */
+  const leaving = useRef(false)
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      dirty && !leaving.current && currentLocation.pathname !== nextLocation.pathname,
+  )
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return
+    if (confirm(t.book.unsavedLeave)) blocker.proceed()
+    else blocker.reset()
+  }, [blocker])
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
+
+  /** กลับหน้าก่อน ถ้าเปิดหน้านี้ตรง ๆ (ไม่มีประวัติ) ไปหน้าที่เหมาะสมแทน ไม่ให้แอปปิด */
+  const goBack = (fallback: string) => {
+    leaving.current = true
+    if (location.key !== 'default') navigate(-1)
+    else navigate(fallback, { replace: true })
+  }
 
   useEffect(() => {
     if (!id) return
@@ -80,6 +112,7 @@ export function BookFormPage() {
       } = b
       setForm(input)
       setTagsText(b.tags.join(', '))
+      setBaseline(JSON.stringify({ form: input, tagsText: b.tags.join(', ') }))
       setSavedCover(cover ?? null)
       setState('ready')
     })
@@ -88,16 +121,23 @@ export function BookFormPage() {
     }
   }, [id])
 
-  if (state === 'loading') return null
+  if (state === 'loading') return <p className="empty">{t.common.loading}</p>
   if (state === 'missing') return <p className="empty">{t.book.notFound}</p>
 
   const set = <K extends keyof BookInput>(key: K, value: BookInput[K]) =>
     setForm((f) => ({ ...f, [key]: value }))
 
-  async function submit(e: FormEvent) {
-    e.preventDefault()
+  /** บันทึกฟอร์ม คืน id ของหนังสือ หรือ null ถ้าข้อมูลไม่ครบ */
+  async function save(): Promise<string | null> {
     const title = form.title.trim()
-    if (!title) return setError(t.book.titleRequired)
+    if (!title) {
+      setError(t.book.titleRequired)
+      // ปุ่มบันทึกอยู่ล่างสุด ต้องพาไปที่ช่องที่ผิดให้เห็น
+      titleRef.current?.focus()
+      titleRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      return null
+    }
+    setError('')
     const input: BookInput = {
       ...form,
       title,
@@ -109,15 +149,32 @@ export function BookFormPage() {
     const bookId = id ?? (await repo.addBook(input))
     if (id) await repo.updateBook(id, input)
     if (newCover !== undefined) await repo.setCover(bookId, newCover)
+    setForm(input)
+    setBaseline(JSON.stringify({ form: input, tagsText }))
+    if (newCover !== undefined) {
+      setSavedCover(newCover)
+      setNewCover(undefined)
+    }
+    return bookId
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    const bookId = await save()
+    if (!bookId) return
+    const placeId = form.placeId
     // เล่มใหม่ไปที่ที่เก็บของเล่มนั้น ไม่ย้อนกลับไปหน้าเมนูเพิ่มหนังสือ
-    if (id) navigate(-1)
-    else navigate(input.placeId ? `/place/${input.placeId}` : '/', { replace: true })
+    if (id) goBack(placeId ? `/place/${placeId}` : '/')
+    else {
+      leaving.current = true
+      navigate(placeId ? `/place/${placeId}` : '/', { replace: true })
+    }
   }
 
   async function remove() {
     if (!id || !confirm(t.book.confirmDelete(form.title))) return
     await repo.deleteBook(id)
-    navigate(-1)
+    goBack('/')
   }
 
   /** เติมเฉพาะช่องที่ยังว่าง ไม่ทับสิ่งที่ผู้ใช้พิมพ์ไว้ คืนจำนวนช่องที่เติม */
@@ -170,10 +227,14 @@ export function BookFormPage() {
     setIsbnMsg(t.book.isbnFilled)
   }
 
-  const text = (key: 'title' | 'authors' | 'publisher' | 'year') => (
+  const text = (key: 'authors' | 'publisher' | 'year') => (
     <label>
       {t.book[key]}
-      <input value={form[key]} onChange={(e) => set(key, e.target.value)} />
+      <input
+        value={form[key]}
+        inputMode={key === 'year' ? 'numeric' : undefined}
+        onChange={(e) => set(key, e.target.value)}
+      />
     </label>
   )
 
@@ -216,7 +277,10 @@ export function BookFormPage() {
               type="button"
               className="btn primary"
               onClick={async () => {
+                // มีการแก้ไขค้างอยู่ บันทึกก่อนหยิบ ไม่ให้สิ่งที่พิมพ์หาย
+                if (dirty && !(await save())) return
                 await repo.takeBook(live.id)
+                leaving.current = true
                 navigate('/reading')
               }}
             >
@@ -268,8 +332,21 @@ export function BookFormPage() {
         </div>
       </div>
 
-      {text('title')}
-      {error && <p className="error">{error}</p>}
+      <label>
+        {t.book.title}
+        <input
+          ref={titleRef}
+          value={form.title}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? 'title-error' : undefined}
+          onChange={(e) => set('title', e.target.value)}
+        />
+      </label>
+      {error && (
+        <p className="error" id="title-error" role="alert">
+          {error}
+        </p>
+      )}
       {text('authors')}
       <div className="cols">
         {text('publisher')}
@@ -399,7 +476,7 @@ export function BookFormPage() {
         <button type="submit" className="btn primary">
           {t.common.save}
         </button>
-        <button type="button" className="btn" onClick={() => navigate(-1)}>
+        <button type="button" className="btn" onClick={() => goBack(form.placeId ? `/place/${form.placeId}` : '/')}>
           {t.common.cancel}
         </button>
         {id && (

@@ -11,12 +11,27 @@ export interface ReadingStats {
   addedMonth: number
 }
 
+/** วันที่แบบ yyyy-mm-dd ตามเวลาท้องถิ่น ใช้เป็นกุญแจรายวัน */
+export const dayKey = (t: number) => {
+  const d = new Date(t)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** เที่ยงวันของวันที่ย้อนไป k วันตามปฏิทิน (ไม่ใช้ k×24 ชม. ซึ่งเพี้ยนในเขตเวลาที่มีเวลาออมแสง) */
+export const daysAgo = (now: number, k: number) => {
+  const d = new Date(now)
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - k, 12).getTime()
+}
+
+/** กุญแจของ 7 วันล่าสุดตามปฏิทิน รวมวันนี้ */
+export const lastWeekKeys = (now: number) => new Set(Array.from({ length: 7 }, (_, k) => dayKey(daysAgo(now, k))))
+
 const startOfMonth = (now: Date) => new Date(now.getFullYear(), now.getMonth(), 1).getTime()
 const startOfYear = (now: Date) => new Date(now.getFullYear(), 0, 1).getTime()
 
 /** สรุปสถิติการอ่าน — นับเฉพาะการหยิบที่วางคืนแล้ว */
 export function readingStats(books: Book[], sessions: ReadingSession[], now = new Date()): ReadingStats {
-  const week = now.getTime() - 7 * 24 * 60 * 60 * 1000
+  const week = lastWeekKeys(now.getTime())
   const month = startOfMonth(now)
   const year = startOfYear(now)
   const done = sessions.filter((s) => s.endedAt !== null)
@@ -26,7 +41,7 @@ export function readingStats(books: Book[], sessions: ReadingSession[], now = ne
   return {
     inHand: books.filter((b) => b.takenAt).length,
     dong: books.filter((b) => b.status === 'dong').length,
-    minutesWeek: sum(done.filter((s) => s.endedAt! >= week), (s) => s.minutes ?? 0),
+    minutesWeek: sum(done.filter((s) => week.has(dayKey(s.endedAt!))), (s) => s.minutes ?? 0),
     minutesMonth: sum(inMonth, (s) => s.minutes ?? 0),
     // ไม่มีที่คั่นตอนหยิบ ถือว่าเริ่มจากหน้าแรก
     pagesMonth: sum(inMonth, (s) => (s.endPage !== null ? Math.max(0, s.endPage - (s.startPage ?? 0)) : 0)),

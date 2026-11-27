@@ -20,7 +20,7 @@ export function PlacePage() {
   const books = useLiveQuery(() => repo.booksIn(placeId), [placeId]) ?? []
   const [editing, setEditing] = useState(false)
 
-  if (place === undefined) return null
+  if (place === undefined) return <p className="empty">{t.common.loading}</p>
   if (!place && !isNone) return <p className="empty">{t.place.notFound}</p>
 
   const title = place ? placeLabel(place, bookcases) : t.places.unplaced
@@ -96,46 +96,52 @@ export function PlacePage() {
         <p className="empty">{t.place.empty}</p>
       ) : (
         <ol className="list">
-          {books.map((b, i) => (
-            <BookRow
-              key={b.id}
-              book={b}
-              actions={
-                <span className="reorder">
-                  {place && (place.kind === 'shelf' || place.kind === 'pile') && (
-                    <>
-                      <button
-                        className="btn small"
-                        aria-label={t.place.moveEarlier}
-                        disabled={i === 0}
-                        onClick={() => repo.shiftBook(b.id, -1)}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        className="btn small"
-                        aria-label={t.place.moveLater}
-                        disabled={i === books.length - 1}
-                        onClick={() => repo.shiftBook(b.id, 1)}
-                      >
-                        ↓
-                      </button>
-                    </>
-                  )}
-                  <button
-                    className="btn small"
-                    aria-label={`${t.reading.take} ${b.title}`}
-                    onClick={async () => {
-                      await repo.takeBook(b.id)
-                      navigate('/reading')
-                    }}
-                  >
-                    {t.reading.takeShort}
-                  </button>
-                </span>
-              }
-            />
-          ))}
+          {/* กอง: แสดงเล่มบนสุดก่อนเหมือนมองกองจริง ↑ = ขึ้นไปบนกอง; ชั้นวาง: ← → = ซ้าย/ขวา */}
+          {(place?.kind === 'pile' ? [...books].reverse() : books).map((b, i, shown) => {
+            const pile = place?.kind === 'pile'
+            const first = i === 0
+            const last = i === shown.length - 1
+            return (
+              <BookRow
+                key={b.id}
+                book={b}
+                actions={
+                  <span className="reorder">
+                    {place && (place.kind === 'shelf' || place.kind === 'pile') && (
+                      <>
+                        <button
+                          className="btn small"
+                          aria-label={`${pile ? t.place.moveUp : t.place.moveLeft} ${b.title}`}
+                          disabled={first}
+                          onClick={() => repo.shiftBook(b.id, pile ? 1 : -1)}
+                        >
+                          {pile ? '↑' : '←'}
+                        </button>
+                        <button
+                          className="btn small"
+                          aria-label={`${pile ? t.place.moveDown : t.place.moveRight} ${b.title}`}
+                          disabled={last}
+                          onClick={() => repo.shiftBook(b.id, pile ? -1 : 1)}
+                        >
+                          {pile ? '↓' : '→'}
+                        </button>
+                      </>
+                    )}
+                    <button
+                      className="btn small"
+                      aria-label={`${t.reading.take} ${b.title}`}
+                      onClick={async () => {
+                        await repo.takeBook(b.id)
+                        navigate('/reading')
+                      }}
+                    >
+                      {t.reading.takeShort}
+                    </button>
+                  </span>
+                }
+              />
+            )
+          })}
         </ol>
       )}
     </>

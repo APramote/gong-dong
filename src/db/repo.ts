@@ -63,15 +63,27 @@ const withDefaults = (b: Book): Book => ({
 /** คำสั่งอ่าน/เขียนข้อมูลทั้งหมดของแอป รับ db เข้ามาเพื่อให้ทดสอบได้ */
 export function createRepo(db: GongDongDB = defaultDb) {
   async function booksIn(placeId: string | null): Promise<Book[]> {
+    // ใช้ดัชนี placeId (IndexedDB ไม่ทำดัชนีค่า null จึงต้องไล่ทั้งตารางเฉพาะกรณียังไม่ระบุที่เก็บ)
+    const rows =
+      placeId === null
+        ? await db.books.filter((b) => b.placeId === null).toArray()
+        : await db.books.where('placeId').equals(placeId).toArray()
     // หนังสือที่อยู่ในมือไม่นับว่าอยู่ในที่เก็บใด
-    const rows = alive(await db.books.toArray()).filter((b) => b.placeId === placeId && !b.takenAt)
-    return rows.sort((a, b) => a.position - b.position)
+    return alive(rows)
+      .filter((b) => !b.takenAt)
+      .sort((a, b) => a.position - b.position)
   }
 
   /** การหยิบที่ยังไม่วางคืนของหนังสือเล่มนี้ */
   async function openSession(bookId: string): Promise<ReadingSession | undefined> {
     const rows = await db.sessions.where('bookId').equals(bookId).toArray()
     return rows.find((r) => r.deletedAt === null && r.endedAt === null)
+  }
+
+  async function placeAlive(placeId: string | null): Promise<boolean> {
+    if (placeId === null) return true
+    const p = await db.places.get(placeId)
+    return Boolean(p && p.deletedAt === null)
   }
 
   async function findCategory(name: string): Promise<Category | undefined> {
@@ -146,11 +158,14 @@ export function createRepo(db: GongDongDB = defaultDb) {
     async ensureCategory(name: string): Promise<string> {
       const clean = normName(name)
       if (!clean) throw new Error('empty category name')
-      const found = await findCategory(clean)
-      if (found) return found.id
-      const cat: Category = { ...stamp(), name: clean }
-      await db.categories.add(cat)
-      return cat.id
+      // หาและสร้างในธุรกรรมเดียว กันกดซ้ำแล้วได้หมวดชื่อเดียวกันสองอัน
+      return db.transaction('rw', db.categories, async () => {
+        const found = await findCategory(clean)
+        if (found) return found.id
+        const cat: Category = { ...stamp(), name: clean }
+        await db.categories.add(cat)
+        return cat.id
+      })
     },
 
     async setCategory(bookId: string, categoryId: string | null): Promise<void> {
@@ -191,12 +206,15 @@ export function createRepo(db: GongDongDB = defaultDb) {
     },
 
     async moveBook(id: string, placeId: string | null): Promise<void> {
-      const old = await db.books.get(id)
-      if (!old || old.takenAt || old.placeId === placeId) return
-      await db.books.update(id, {
-        placeId,
-        position: await nextPosition(placeId),
-        updatedAt: Date.now(),
+      await db.transaction('rw', db.books, db.places, async () => {
+        const old = await db.books.get(id)
+        // ที่ปลายทางถูกลบไปแล้ว (เช่น แผนจัดระเบียบที่เปิดค้างไว้) ไม่ย้าย
+        if (!old || old.takenAt || old.placeId === placeId || !(await placeAlive(placeId))) return
+        await db.books.update(id, {
+          placeId,
+          position: await nextPosition(placeId),
+          updatedAt: Date.now(),
+        })
       })
     },
 
@@ -217,8 +235,13 @@ export function createRepo(db: GongDongDB = defaultDb) {
 
     async deleteBook(id: string): Promise<void> {
       const now = Date.now()
-      await db.books.update(id, { deletedAt: now, updatedAt: now })
-      await db.covers.delete(id)
+      await db.transaction('rw', db.books, db.sessions, db.covers, async () => {
+        await db.books.update(id, { deletedAt: now, updatedAt: now })
+        // การหยิบที่ค้างอยู่ของเล่มที่ถูกลบ ไม่ควรค้างเป็น "อยู่ในมือ" ตลอดไป
+        const open = await openSession(id)
+        if (open) await db.sessions.update(open.id, { deletedAt: now, updatedAt: now })
+        await putCover(db, id, null)
+      })
     },
 
     // ---------- หยิบไปอ่าน / วางคืน ----------
@@ -253,8 +276,10 @@ export function createRepo(db: GongDongDB = defaultDb) {
 
     /** วางคืนที่เดิมหรือที่ใหม่ บันทึกหน้าที่คั่นและเวลาอ่าน */
     async returnBook(id: string, input: ReturnInput): Promise<void> {
-      const position = await nextPosition(input.placeId)
-      await db.transaction('rw', db.books, db.sessions, async () => {
+      await db.transaction('rw', db.books, db.sessions, db.places, async () => {
+        // ที่วางคืนถูกลบไประหว่างนั้น วางเป็น "ยังไม่ระบุที่เก็บ" แทน
+        const placeId = (await placeAlive(input.placeId)) ? input.placeId : null
+        const position = await nextPosition(placeId)
         const book = await db.books.get(id)
         if (!book || !book.takenAt) return
         const now = Date.now()
@@ -263,7 +288,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
           const running = session.timerStartedAt ? now - session.timerStartedAt : 0
           await db.sessions.update(session.id, {
             endedAt: now,
-            toPlaceId: input.placeId,
+            toPlaceId: placeId,
             endPage: input.page,
             minutes: input.minutes,
             timerMs: session.timerMs + running,
@@ -273,13 +298,14 @@ export function createRepo(db: GongDongDB = defaultDb) {
         }
         const finished = input.finished
         await db.books.update(id, {
-          placeId: input.placeId,
+          placeId,
           position,
           takenAt: null,
           takenFrom: null,
           currentPage: finished && book.pages ? book.pages : input.page,
           status: finished ? 'done' : book.status === 'done' ? 'reading' : book.status,
-          finishedAt: finished ? (book.status === 'done' ? book.finishedAt : now) : book.finishedAt,
+          // กฎเดียวกับฟอร์ม: อ่านจบ = วันที่วางคืน (อ่านซ้ำจบก็นับใหม่) ไม่จบ = ไม่มีวันที่อ่านจบ
+          finishedAt: finished ? now : null,
           updatedAt: now,
         })
       })
@@ -309,21 +335,50 @@ export function createRepo(db: GongDongDB = defaultDb) {
       return rows.sort((a, b) => b.startedAt - a.startedAt)
     },
 
-    /** เพิ่มหลายเล่มต่อท้ายที่เก็บเดียวกันตามลำดับที่ส่งมา คืน id ตามลำดับ */
+    /** เพิ่มหลายเล่มต่อท้ายที่เก็บตามลำดับที่ส่งมา ในธุรกรรมเดียว คืน id ตามลำดับ */
     async addBooks(inputs: BookInput[]): Promise<string[]> {
-      const ids: string[] = []
-      for (const input of inputs) ids.push(await this.addBook(input))
-      return ids
+      return db.transaction('rw', db.books, async () => {
+        const next = new Map<string | null, number>()
+        const rows: Book[] = []
+        for (const input of inputs) {
+          if (!next.has(input.placeId)) next.set(input.placeId, await nextPosition(input.placeId))
+          const position = next.get(input.placeId)!
+          next.set(input.placeId, position + 1)
+          rows.push({
+            ...stamp(),
+            ...input,
+            position,
+            takenAt: null,
+            takenFrom: null,
+            finishedAt: input.status === 'done' ? Date.now() : null,
+          })
+        }
+        await db.books.bulkAdd(rows)
+        return rows.map((r) => r.id)
+      })
     },
 
     // ---------- รูปปก ----------
     async getCover(bookId: string): Promise<Blob | undefined> {
-      return (await db.covers.get(bookId))?.blob
+      const c = await db.covers.get(bookId)
+      return c && c.deletedAt === null && c.blob ? c.blob : undefined
     },
 
-    async setCover(bookId: string, blob: Blob | null): Promise<void> {
-      if (blob) await db.covers.put({ id: bookId, blob, updatedAt: Date.now() })
-      else await db.covers.delete(bookId)
+    /** รูปย่อของปก (ถ้ามี) และรูปเต็มไว้สร้างรูปย่อ */
+    async getThumb(id: string): Promise<{ thumb?: Blob; blob?: Blob }> {
+      const c = await db.covers.get(id)
+      if (!c || c.deletedAt !== null || !c.blob) return {}
+      return { thumb: c.thumb ?? undefined, blob: c.blob }
+    },
+
+    /** เก็บรูปย่อที่สร้างแล้ว ไม่แตะ updatedAt เพราะเป็นข้อมูลที่สร้างใหม่ได้ในเครื่อง ไม่ใช่การแก้ไข */
+    async saveThumb(id: string, thumb: Blob): Promise<void> {
+      await db.covers.update(id, { thumb })
+    },
+
+    /** ตั้งรูป (ปกหนังสือ หรือรูปที่เก็บ) — null = ลบ โดยเก็บเครื่องหมายลบไว้ */
+    async setCover(id: string, blob: Blob | null): Promise<void> {
+      await putCover(db, id, blob)
     },
 
     // ---------- ตู้หนังสือ ----------
@@ -360,7 +415,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
       shelves: BookInput[][],
     ): Promise<string> {
       const id = await this.addBookcase(input, Math.max(1, shelves.length))
-      await db.bookcases.update(id, { look })
+      await db.bookcases.update(id, { look, updatedAt: Date.now() })
       const created = alive(await db.places.where('bookcaseId').equals(id).toArray())
         .filter((p) => p.kind === 'shelf')
         .sort(
@@ -403,8 +458,9 @@ export function createRepo(db: GongDongDB = defaultDb) {
      */
     async syncDrawers(bookcaseId: string, look: Look): Promise<void> {
       const want = drawerCount(look)
-      const have = await drawers(bookcaseId)
       await db.transaction('rw', db.places, db.books, async () => {
+        // อ่านภายในธุรกรรม กันกดเร็ว ๆ แล้วได้ลิ้นชักซ้ำ
+        const have = await drawers(bookcaseId)
         for (let i = have.length; i < want; i++) {
           await db.places.add({
             ...stamp(),
@@ -426,7 +482,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
 
     /** ลบตู้ = ลบชั้นวางทั้งหมดในตู้ หนังสือกลับไปเป็น "ยังไม่ระบุที่เก็บ" */
     async deleteBookcase(id: string): Promise<void> {
-      await db.covers.delete(id)
+      await putCover(db, id, null)
       const shelves = alive(await db.places.where('bookcaseId').equals(id).toArray())
       await db.transaction('rw', db.bookcases, db.places, db.books, async () => {
         for (const s of shelves) await removePlace(db, s.id)
@@ -477,7 +533,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
 
     /** ลบที่เก็บ หนังสือข้างในกลับไปเป็น "ยังไม่ระบุที่เก็บ" (ไม่ลบหนังสือ) */
     async deletePlace(id: string): Promise<void> {
-      await db.covers.delete(id)
+      await putCover(db, id, null)
       await db.transaction('rw', db.places, db.books, () => removePlace(db, id))
     },
   }
@@ -485,11 +541,29 @@ export function createRepo(db: GongDongDB = defaultDb) {
 
 async function removePlace(db: GongDongDB, id: string): Promise<void> {
   const now = Date.now()
-  const books = await db.books.where('placeId').equals(id).toArray()
-  for (const b of books) {
-    if (b.deletedAt === null) await db.books.update(b.id, { placeId: null, updatedAt: now })
-  }
+  const books = (await db.books.where('placeId').equals(id).toArray())
+    .filter((b) => b.deletedAt === null)
+    .sort((a, b) => a.position - b.position)
+  // ต่อท้ายรายการ "ยังไม่ระบุที่เก็บ" ตามลำดับเดิม ไม่ให้ตำแหน่งชนกับเล่มที่อยู่ก่อน
+  const unplaced = (await db.books.toArray()).filter((b) => b.placeId === null && b.deletedAt === null && !b.takenAt)
+  let next = unplaced.reduce((m, b) => Math.max(m, b.position + 1), 0)
+  for (const b of books) await db.books.update(b.id, { placeId: null, position: next++, updatedAt: now })
   await db.places.update(id, { deletedAt: now, updatedAt: now })
+}
+
+/** ตั้งหรือลบรูป โดยการลบเก็บเป็นเครื่องหมายลบ (blob = null) */
+async function putCover(db: GongDongDB, id: string, blob: Blob | null): Promise<void> {
+  const now = Date.now()
+  const old = await db.covers.get(id)
+  if (!blob && (!old || old.deletedAt !== null)) return
+  await db.covers.put({
+    id,
+    blob,
+    thumb: null,
+    createdAt: old?.createdAt ?? now,
+    updatedAt: now,
+    deletedAt: blob ? null : now,
+  })
 }
 
 export const repo = createRepo()

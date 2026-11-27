@@ -114,8 +114,9 @@ export interface Place extends SyncFields {
 }
 
 /** รูปปก เก็บแยกจากข้อมูลหนังสือเพื่อให้รายการหนังสือเบา — id คือ id ของหนังสือ */
-export interface Cover {
-  id: string
-  blob: Blob
-  updatedAt: number
+export interface Cover extends SyncFields {
+  /** null เมื่อถูกลบ (เก็บเป็นเครื่องหมายลบไว้ไม่ให้รูปเก่ากลับมาตอน sync) */
+  blob: Blob | null
+  /** รูปย่อสำหรับรายการ สร้างจาก blob ในเครื่อง (ไม่ sync) */
+  thumb?: Blob | null
 }

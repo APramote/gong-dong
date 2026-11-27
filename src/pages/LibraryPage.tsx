@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
@@ -10,6 +10,7 @@ import { t } from '../th'
 const NO_PLACE = '__none__'
 const IN_HAND = '__hand__'
 const NO_CATEGORY = '__none__'
+const PAGE = 100
 
 export function LibraryPage() {
   const books = useLiveQuery(() => repo.listBooks(), [])
@@ -22,6 +23,10 @@ export function LibraryPage() {
   const setCategoryId = (v: string) => setParams(v ? { cat: v } : {}, { replace: true })
 
   const [query, setQuery] = useState('')
+  // ค้นหาตามค่าที่ตามหลังการพิมพ์ ช่องพิมพ์จะไม่หน่วงเมื่อคลังใหญ่
+  const deferredQuery = useDeferredValue(query)
+  /** แสดงทีละหน้า คลังหลายพันเล่มไม่ต้องวาดทุกแถวพร้อมกัน */
+  const [limit, setLimit] = useState(PAGE)
   const [status, setStatus] = useState<ReadingStatus | ''>('')
   const [placeId, setPlaceId] = useState('')
 
@@ -33,7 +38,7 @@ export function LibraryPage() {
   const catName = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories])
 
   const shown = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const q = deferredQuery.trim().toLowerCase()
     return (books ?? [])
       .filter((b) =>
         !categoryId ? true : categoryId === NO_CATEGORY ? !b.categoryId : b.categoryId === categoryId,
@@ -57,9 +62,12 @@ export function LibraryPage() {
             .includes(q),
       )
       .sort((a, b) => a.title.localeCompare(b.title, 'th'))
-  }, [books, query, status, placeId, categoryId, catName])
+  }, [books, deferredQuery, status, placeId, categoryId, catName])
 
-  if (!books) return null
+  // เปลี่ยนเงื่อนไขค้นหาแล้วเริ่มแสดงหน้าแรกใหม่
+  useEffect(() => setLimit(PAGE), [deferredQuery, status, placeId, categoryId])
+
+  if (!books) return <p className="empty">{t.common.loading}</p>
   const dong = books.filter((b) => b.status === 'dong').length
 
   return (
@@ -128,7 +136,7 @@ export function LibraryPage() {
         <p className="empty">{books.length === 0 ? t.library.empty : t.library.noMatch}</p>
       ) : (
         <ul className="list">
-          {shown.map((b) => (
+          {shown.slice(0, limit).map((b) => (
             <BookRow
               key={b.id}
               book={b}
@@ -141,6 +149,13 @@ export function LibraryPage() {
             />
           ))}
         </ul>
+      )}
+      {shown.length > limit && (
+        <p className="center-actions actions">
+          <button className="btn" onClick={() => setLimit((l) => l + PAGE)}>
+            {t.library.showMore(Math.min(PAGE, shown.length - limit), shown.length - limit)}
+          </button>
+        </p>
       )}
     </>
   )

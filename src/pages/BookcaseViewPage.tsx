@@ -24,7 +24,7 @@ export function BookcaseViewPage() {
   /** ค่าที่กำลังแก้ ใช้แสดงทันทีระหว่างรอบันทึกลงฐานข้อมูล — null = ไม่ได้แก้อยู่ */
   const [draft, setDraft] = useState<Look | null>(null)
 
-  if (bookcase === undefined) return null
+  if (bookcase === undefined) return <p className="empty">{t.common.loading}</p>
   if (!bookcase) return <p className="empty">{t.view.notFound}</p>
 
   // listPlaces เรียงตาม order อยู่แล้ว: ชั้นที่ 1 (ล่างสุด) มาก่อน
@@ -57,7 +57,7 @@ export function BookcaseViewPage() {
       <div className="page-head">
         <div>
           <p className="muted">
-            <Link to="/places">‹ {t.nav.places}</Link> · {t.kind.shelf}
+            <Link to="/places">‹ {t.nav.places}</Link> · {t.places.bookcases}
           </p>
           <h1>{bookcase.name}</h1>
           {bookcase.room && <p className="muted">{bookcase.room}</p>}
@@ -72,6 +72,7 @@ export function BookcaseViewPage() {
               look,
               doorsOpen,
             }}
+            label={t.view.label3d(bookcase.name, shelves.length, drawers.length, onShelf.flat().length)}
             selected={pick || drawer ? selected : null}
             onSelect={setSelected}
           />
@@ -173,7 +174,10 @@ export function BookcaseViewPage() {
             <li className="row" key={p.id}>
               <Link to={`/place/${p.id}`} className="row-main">
                 <span className="row-title">{p.name}</span>
-                <span className="row-sub">{t.common.books(inPlace(p.id).length)}</span>
+                <span className="row-sub">
+                  {t.common.books(inPlace(p.id).length)}
+                  {inPlace(p.id).length > 0 && ` · ${inPlace(p.id).map((b) => b.title).join(', ')}`}
+                </span>
               </Link>
               <Link className="btn small" to={`/add?place=${p.id}`}>
                 {t.view.addBooks}

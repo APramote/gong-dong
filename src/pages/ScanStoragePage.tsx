@@ -4,6 +4,7 @@ import { repo } from '../db/repo'
 import type { Look } from '../db/types'
 import { useBlobUrl } from '../components/Cover'
 import { ShapeFields } from '../components/ShapeFields'
+import { useLeaveGuard } from '../components/useLeaveGuard'
 import { aiOn, aiReady, scanShape } from '../lib/ai'
 import type { StorageKind } from '../lib/aiCommon'
 import { aiErrorText } from '../lib/aiError'
@@ -34,6 +35,7 @@ export function ScanStoragePage() {
   const camera = useRef<Record<StorageKind, HTMLInputElement | null>>({ bookcase: null, pile: null, box: null })
   const gallery = useRef<HTMLInputElement>(null)
   const ready = aiReady()
+  const allowLeave = useLeaveGuard(step === 'review', t.add.unsavedLeave)
   const useAi = aiOn()
 
   async function onPhoto(k: StorageKind, e: ChangeEvent<HTMLInputElement>) {
@@ -92,6 +94,7 @@ export function ScanStoragePage() {
       to = `/place/${id}`
     }
     if (photo) await repo.setCover(id, await resizeImage(photo, 1024, 0.8))
+    allowLeave()
     navigate(to, { replace: true })
   }
 
@@ -144,7 +147,7 @@ export function ScanStoragePage() {
           <button className="btn primary" onClick={create}>
             {t.scan.createEmpty}
           </button>
-          <button className="btn" onClick={() => setStep('menu')}>
+          <button className="btn" onClick={() => confirm(t.add.confirmRetake) && setStep('menu')}>
             {t.add.retake}
           </button>
         </div>

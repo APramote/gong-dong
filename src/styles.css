@@ -2,7 +2,7 @@
   --bg: #f6f1e7;
   --surface: #fffdf8;
   --text: #2b2118;
-  --muted: #7b6e60;
+  --muted: #6e6255;
   --line: #e4dccb;
   --accent: #7a4b2a;
   --accent-text: #fff;
@@ -58,8 +58,8 @@ p {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 10px 16px;
-  padding-top: calc(10px + env(safe-area-inset-top));
+  padding: 0 12px;
+  padding-top: env(safe-area-inset-top);
   background: var(--accent);
   color: var(--accent-text);
 }
@@ -74,11 +74,10 @@ p {
 .topbar nav a {
   padding: 4px 12px;
   border-radius: 999px;
-  opacity: 0.8;
 }
 .topbar nav a.active {
-  opacity: 1;
-  background: rgb(255 255 255 / 0.22);
+  background: rgb(0 0 0 / 0.25);
+  font-weight: 600;
 }
 
 main {
@@ -135,7 +134,7 @@ section {
   font-size: 0.9rem;
 }
 .btn:disabled {
-  opacity: 0.35;
+  opacity: 0.5;
   cursor: default;
 }
 .actions {
@@ -456,7 +455,7 @@ textarea {
   gap: 10px;
 }
 .topbar nav a {
-  padding: 4px 10px;
+  padding: 4px 9px;
 }
 .view3d-wrap {
   height: 62vh;
@@ -830,4 +829,40 @@ textarea {
   width: 22px;
   height: 22px;
   margin-top: 2px;
+}
+.update-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.update-banner span {
+  flex: 1;
+}
+
+/* ---------- พื้นที่แตะอย่างน้อย ~44px บนมือถือ ---------- */
+.topbar nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.topbar nav {
+  flex-wrap: nowrap;
+}
+.btn.small {
+  min-height: 40px;
+}
+.muted a,
+.link-btn {
+  display: inline-block;
+  padding: 10px 0;
+}
+.page-head {
+  flex-wrap: wrap;
+}
+.page-head h1 {
+  white-space: nowrap;
 }

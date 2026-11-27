@@ -25,7 +25,7 @@ export function ReadingPage() {
     return () => clearInterval(id)
   }, [running])
 
-  if (!books) return null
+  if (!books) return <p className="empty">{t.common.loading}</p>
   const byId = new Map(books.map((b) => [b.id, b]))
   const placeName = (id: string | null) => {
     const p = id ? places.find((x) => x.id === id) : undefined

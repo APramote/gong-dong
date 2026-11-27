@@ -13,6 +13,14 @@ export const t = {
     add: 'เพิ่ม',
     back: 'กลับ',
     books: (n: number) => `${n} เล่ม`,
+    loading: 'กำลังโหลด…',
+    errorTitle: 'เกิดข้อผิดพลาด',
+    errorBody: 'หน้านี้แสดงไม่ได้ ข้อมูลของคุณยังอยู่ครบ ลองโหลดหน้าใหม่',
+    errorUpdate: 'แอปเพิ่งอัปเดต ต้องโหลดหน้าใหม่เพื่อใช้เวอร์ชันล่าสุด',
+    reload: 'โหลดหน้าใหม่',
+    updateReady: 'มีกองดองเวอร์ชันใหม่',
+    update: 'อัปเดต',
+    later: 'ภายหลัง',
   },
 
   status: {
@@ -23,10 +31,10 @@ export const t = {
   } satisfies Record<ReadingStatus, string>,
 
   kind: {
-    shelf: 'หนังสือชั้นวาง',
-    drawer: 'ลิ้นชักในตู้',
-    pile: 'หนังสือวางกอง',
-    box: 'หนังสือเก็บในกล่อง',
+    shelf: 'ชั้นวาง',
+    drawer: 'ลิ้นชัก',
+    pile: 'กอง',
+    box: 'กล่อง',
   } satisfies Record<PlaceKind, string>,
 
   library: {
@@ -38,6 +46,7 @@ export const t = {
     inHand: 'อยู่ในมือ',
     empty: 'ยังไม่มีหนังสือ กด "เพิ่มหนังสือ" เพื่อเริ่มต้น',
     noMatch: 'ไม่พบหนังสือที่ตรงกับเงื่อนไข',
+    showMore: (n: number, left: number) => `แสดงเพิ่มอีก ${n} เล่ม (เหลือ ${left} เล่ม)`,
     summary: (total: number, dong: number) => `ทั้งหมด ${total} เล่ม · ดองอยู่ ${dong} เล่ม`,
   },
 
@@ -68,6 +77,7 @@ export const t = {
     currentPage: 'อ่านถึงหน้า',
     place: 'ที่เก็บ',
     titleRequired: 'กรุณากรอกชื่อเรื่อง',
+    unsavedLeave: 'ยังไม่ได้บันทึกการแก้ไข ออกจากหน้านี้และทิ้งสิ่งที่แก้ไขไหม?',
     confirmDelete: (title: string) => `ลบ "${title}" ออกจากคลัง?`,
     cover: 'รูปปก',
     takeCover: 'ถ่ายรูปปก',
@@ -109,6 +119,8 @@ export const t = {
     addRow: 'เพิ่มเล่มที่ AI อ่านไม่เจอ',
     saveN: (n: number) => `บันทึก ${n} เล่ม`,
     retake: 'ถ่ายใหม่',
+    confirmRetake: 'ทิ้งรายการที่ตรวจสอบไว้แล้วถ่ายใหม่ไหม?',
+    unsavedLeave: 'ยังไม่ได้บันทึก ออกจากหน้านี้แล้วรายการที่ AI อ่านไว้จะหายไป ออกไหม?',
     include: 'บันทึกเล่มนี้',
     scanHint: 'เล็งกล้องไปที่บาร์โค้ด ISBN หลังปก',
     cameraError: 'เปิดกล้องไม่ได้ ตรวจสอบสิทธิ์การใช้กล้องของเบราว์เซอร์ หรือพิมพ์ ISBN ในฟอร์มกรอกเองแทน',
@@ -143,7 +155,8 @@ export const t = {
     aiEnabled: 'ใช้ AI',
     aiEnabledHint:
       'ปิดแล้วแอปจะไม่ส่งรูปหรือข้อมูลหนังสือให้ AI เลย และซ่อนปุ่มที่ใช้ AI ทั้งหมด (key ที่บันทึกไว้ยังอยู่ เปิดกลับมาใช้ได้ทันที)',
-    aiOffNow: 'AI ปิดอยู่ ใช้ได้: สแกน ISBN, กรอกเอง, ถ่ายรูปกองและกล่อง, จัดระเบียบเบื้องต้น และสถิติ',
+    aiOffNow:
+      'AI ปิดอยู่ ใช้ได้: สแกน ISBN, กรอกเอง, ถ่ายรูปกองและกล่อง, จัดระเบียบเบื้องต้น และสถิติ (การค้นจาก ISBN ยังส่งเลข ISBN ไปที่ Google Books และ Open Library ซึ่งไม่ใช่ AI)',
     provider: 'AI ที่ใช้อ่านรูปและค้นข้อมูล',
     gemini: 'Gemini (Google)',
     geminiHint: 'ใช้ฟรีภายในโควตา เมื่อโควตาหมดต้องรอ',
@@ -153,10 +166,10 @@ export const t = {
     geminiKeyHint:
       'สร้างได้ที่ aistudio.google.com → Get API key — key เก็บไว้ในเครื่องนี้เท่านั้น และส่งให้ Google โดยตรง',
     claudeKeyHint:
-      'สร้างได้ที่ platform.claude.com → API keys (ต้องเติมเครดิตก่อน และควรตั้ง spend limit) — key เก็บไว้ในเครื่องนี้เท่านั้น และส่งให้ Anthropic โดยตรง',
+      'สร้างได้ที่ platform.claude.com → API keys (ต้องเติมเครดิตก่อน และควรตั้งวงเงินใช้จ่ายสูงสุด) — key เก็บไว้ในเครื่องนี้เท่านั้น และส่งให้ Anthropic โดยตรง',
     model: 'รุ่นที่ใช้',
     modelNone: 'กดตรวจสอบ key เพื่อโหลดรายการรุ่น',
-    price: (p: string) => `${p} ต่อล้าน token (input / output)`,
+    price: (p: string) => `${p} ต่อล้านโทเคน (ขาเข้า / ขาออก)`,
     searchCost: 'การค้นเว็บคิดเพิ่มราว $10 ต่อ 1,000 ครั้ง',
     check: 'บันทึกและตรวจสอบ key',
     checking: 'กำลังตรวจสอบ…',
@@ -236,7 +249,7 @@ export const t = {
 
   scan: {
     title: 'ถ่ายรูปเพิ่มที่เก็บ',
-    open: 'ถ่ายรูปเพิ่มตู้ กอง หรือกล่อง',
+    open: 'ถ่ายรูปที่เก็บ',
     hint: 'ตู้: AI ดูโครงสร้าง (ชั้น ลิ้นชัก บานกระจก ขา) แล้วสร้างแบบ 3D · กองและกล่อง: แอปจำรูปไว้ ไม่ใช้ AI · หนังสือค่อยเพิ่มทีละที่ภายหลัง',
     bookcase: 'ถ่ายตู้หนังสือ',
     bookcaseHint: 'ได้ตู้พร้อมชั้นวาง ลิ้นชัก บานกระจก และขาตู้ หนังสือค่อยเพิ่มทีละชั้น',
@@ -276,6 +289,8 @@ export const t = {
   view: {
     open: 'ดู 3D',
     openBookcase: 'ดูทั้งตู้แบบ 3D',
+    label3d: (name: string, shelves: number, drawers: number, books: number) =>
+      `ภาพ 3 มิติของ${name}: ${shelves} ชั้น${drawers ? ` ${drawers} ลิ้นชัก` : ''} หนังสือ ${books} เล่ม รายชื่อหนังสือแต่ละชั้นอยู่ด้านล่าง`,
     parts: 'ชั้นวางและลิ้นชัก',
     addBooks: 'เพิ่มหนังสือ',
     hint: 'ลากเพื่อหมุน · บีบหรือเลื่อนเพื่อซูม · แตะหนังสือหรือลิ้นชักเพื่อเลือก',
@@ -325,6 +340,10 @@ export const t = {
     applied: (c: number, m: number) => `เรียบร้อย ตั้งหมวด ${c} เล่ม ย้าย ${m} เล่ม`,
     nothing: 'AI ไม่มีข้อเสนอเพิ่มเติม',
     inHand: 'อยู่ในมือ',
+  },
+
+  charts: {
+    table: 'ดูเป็นตาราง',
   },
 
   dash: {
@@ -396,9 +415,11 @@ export const t = {
     notFound: 'ไม่พบที่เก็บนี้',
     empty: 'ยังไม่มีหนังสือในที่เก็บนี้',
     orderShelf: 'เรียงจากซ้ายไปขวา',
-    orderPile: 'เรียงจากล่างขึ้นบน',
-    moveEarlier: 'เลื่อนขึ้น',
-    moveLater: 'เลื่อนลง',
+    orderPile: 'เล่มบนสุดอยู่ก่อน',
+    moveUp: 'เลื่อนขึ้นไปบนกอง',
+    moveDown: 'เลื่อนลงในกอง',
+    moveLeft: 'เลื่อนไปทางซ้าย',
+    moveRight: 'เลื่อนไปทางขวา',
     addHere: 'เพิ่มหนังสือที่นี่',
   },
 }

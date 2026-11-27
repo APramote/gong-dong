@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { t } from '../th'
 
 /** ความกว้างจริงของกล่อง ใช้วาด SVG ให้พอดีจอโดยไม่บิดตัวอักษร */
 function useWidth<T extends HTMLElement>() {
@@ -155,6 +156,7 @@ export function ColumnChart({
                   width={band}
                   height={plotH}
                   fill="transparent"
+                  role="img"
                   tabIndex={0}
                   aria-label={`${l}: ${series.map((s) => `${series.length > 1 ? s.name + ' ' : ''}${tipFormat(s.values[i])}`).join(', ')}`}
                   onPointerEnter={(e) => show(i, e.currentTarget)}
@@ -190,7 +192,7 @@ export function Legend({ items }: { items: { name: string; color: string }[] }) 
 export function TableView({ head, rows }: { head: string[]; rows: (string | number)[][] }) {
   return (
     <details className="table-view">
-      <summary>ดูเป็นตาราง</summary>
+      <summary>{t.charts.table}</summary>
       <table>
         <thead>
           <tr>
@@ -263,10 +265,10 @@ export function SegmentedBar({
   parts,
   label,
 }: {
-  parts: { name: string; value: number; color: string; ink: string }[]
+  parts: { name: string; value: number; color: string }[]
   label: string
 }) {
-  const [ref, width] = useWidth<HTMLDivElement>()
+  const ref = useRef<HTMLDivElement>(null)
   const [tip, setTip] = useState<Tip | null>(null)
   const total = parts.reduce((n, p) => n + p.value, 0)
   const shown = parts.filter((p) => p.value > 0)
@@ -276,8 +278,6 @@ export function SegmentedBar({
         {shown.map((p) => {
           const share = total ? p.value / total : 0
           const pct = `${Math.round(share * 100)}%`
-          // ประมาณความกว้างข้อความ ถ้าไม่พอให้ดูค่าจากกล่องลอยหรือตารางแทน
-          const fits = share * width > pct.length * 9 + 12
           const show = (el: HTMLElement) => {
             const box = el.getBoundingClientRect()
             const host = ref.current!.getBoundingClientRect()
@@ -285,7 +285,7 @@ export function SegmentedBar({
               x: Math.min(Math.max(box.left - host.left + box.width / 2, 70), host.width - 70),
               y: 36,
               title: p.name,
-              rows: [{ value: `${p.value} เล่ม`, name: pct, color: p.color }],
+              rows: [{ value: t.common.books(p.value), name: pct, color: p.color }],
             })
           }
           return (
@@ -293,20 +293,25 @@ export function SegmentedBar({
               key={p.name}
               className="seg"
               tabIndex={0}
-              aria-label={`${p.name} ${p.value} เล่ม (${pct})`}
-              style={{ flexGrow: p.value, background: p.color, color: p.ink }}
+              aria-label={`${p.name} ${t.common.books(p.value)} (${pct})`}
+              style={{ flexGrow: p.value, background: p.color }}
               onPointerEnter={(e) => show(e.currentTarget)}
               onPointerDown={(e) => show(e.currentTarget)}
               onFocus={(e) => show(e.currentTarget)}
               onBlur={() => setTip(null)}
             >
-              {fits ? pct : ''}
             </span>
           )
         })}
       </div>
       <Tooltip tip={tip} />
-      <Legend items={parts.map((p) => ({ name: `${p.name} ${p.value}`, color: p.color }))} />
+      {/* สัดส่วนอยู่ในคำอธิบายสี (ตัวหนังสือบนแท่งสีอ่านยากเกินเกณฑ์) */}
+      <Legend
+        items={parts.map((p) => ({
+          name: `${p.name} ${p.value}${total ? ` (${Math.round((p.value / total) * 100)}%)` : ''}`,
+          color: p.color,
+        }))}
+      />
     </div>
   )
 }

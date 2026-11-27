@@ -31,8 +31,8 @@ export function placeGroups(
     ].map((p) => ({ id: p.id, label: placeLabel(p, bookcases) }))
   })
   return [
-    { title: t.kind.shelf, options: shelves },
-    { title: t.kind.pile, options: of('pile') },
-    { title: t.kind.box, options: of('box') },
+    { title: t.places.bookcases, options: shelves },
+    { title: t.places.piles, options: of('pile') },
+    { title: t.places.boxes, options: of('box') },
   ].filter((g) => g.options.length > 0)
 }
