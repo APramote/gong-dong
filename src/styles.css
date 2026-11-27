@@ -586,3 +586,208 @@ textarea {
   margin: 12px 0 6px;
   font-size: 0.95rem;
 }
+
+/* ---------- กราฟ: สีชุดข้อมูลผ่านการตรวจแล้วทั้งโหมดสว่างและมืด ---------- */
+:root {
+  --series-1: #257de0;
+  --series-2: #f47230;
+  --series-3: #00b894;
+  --series-4: #f2a600;
+  --track: #dbe9fb;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series-1: #338ced;
+    --series-2: #e76624;
+    --series-3: #00a888;
+    --series-4: #d28e05;
+    --track: #1d2c40;
+  }
+}
+.dash section {
+  margin-top: 22px;
+}
+.chart-card {
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.charts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.charts .card {
+  margin: 0;
+}
+.chart {
+  position: relative;
+  width: 100%;
+}
+.chart svg {
+  display: block;
+  overflow: visible;
+}
+.chart .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.chart .axis {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.chart rect:focus {
+  outline: none;
+}
+.chart rect:focus-visible {
+  outline: 2px solid var(--text);
+}
+.chart-tip {
+  position: absolute;
+  transform: translateX(-50%);
+  pointer-events: none;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  z-index: 2;
+}
+.chart-tip-title {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.chart-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.line-key {
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.swatch-key {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.table-view summary {
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.table-view table {
+  width: 100%;
+  margin-top: 6px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.table-view th,
+.table-view td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.meter-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.meter-track {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--track);
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%;
+  border-radius: 5px;
+  background: var(--series-1);
+}
+.ranked {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ranked li {
+  display: grid;
+  grid-template-columns: minmax(80px, 34%) 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+.ranked-name {
+  overflow-wrap: anywhere;
+}
+.ranked-track {
+  height: 12px;
+}
+.ranked-bar {
+  display: block;
+  height: 12px;
+  min-width: 2px;
+  border-radius: 0 4px 4px 0;
+  background: var(--series-1);
+}
+.ranked-value {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.segbar {
+  display: flex;
+  gap: 2px;
+  height: 28px;
+  margin-bottom: 8px;
+}
+.seg {
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+  min-width: 2px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  overflow: visible;
+  white-space: nowrap;
+}
+.motivation {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.coach-headline {
+  font-weight: 600;
+}
+.dash .stats {
+  margin-top: 4px;
+}

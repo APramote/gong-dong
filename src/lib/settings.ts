@@ -14,6 +14,10 @@ export interface Settings {
   geminiModel: string
   claudeKey: string
   claudeModel: string
+  /** เป้าเวลาอ่านต่อวัน (นาที) */
+  dailyGoalMinutes: number
+  /** เป้าจำนวนเล่มที่อ่านจบต่อปี */
+  yearGoalBooks: number
 }
 
 const defaults: Settings = {
@@ -22,6 +26,8 @@ const defaults: Settings = {
   geminiModel: '',
   claudeKey: '',
   claudeModel: DEFAULT_CLAUDE_MODEL,
+  dailyGoalMinutes: 20,
+  yearGoalBooks: 12,
 }
 
 export function loadSettings(): Settings {

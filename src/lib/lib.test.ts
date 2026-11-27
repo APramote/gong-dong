@@ -235,3 +235,51 @@ test('คำแนะนำการจัดเก็บจากกฎ แล�
     moves: [{ bookId: 'doneOld', toPlaceId: 'box', reason: 'อ่านจบนานแล้ว' }],
   })
 })
+
+test('สถิติ dashboard: วันต่อเนื่อง ช่วงเวลา รายเดือน และข้อความให้กำลังใจ', async () => {
+  const { dashboard, motivation, readCoach } = await import('./dashboard')
+  const now = new Date(2026, 10, 27, 22, 0).getTime()
+  const at = (daysAgo: number, hour: number) => {
+    const d = new Date(now - daysAgo * 86400000)
+    d.setHours(hour, 0, 0, 0)
+    return d.getTime()
+  }
+  const s = (daysAgo: number, hour: number, minutes: number, a: number | null = null, z: number | null = null) =>
+    ({ bookId: 'x', startedAt: at(daysAgo, hour), endedAt: at(daysAgo, hour) + minutes * 60000, minutes, startPage: a, endPage: z, deletedAt: null }) as any
+  // อ่านวันนี้ เมื่อวาน และ 2 วันก่อน (ต่อเนื่อง 3) และช่วง 10-14 วันก่อน (ต่อเนื่อง 5)
+  const sessions = [s(0, 21, 30, 10, 40), s(1, 21, 20), s(2, 7, 10)]
+  for (let i = 10; i <= 14; i++) sessions.push(s(i, 21, 15))
+  sessions.push({ ...s(3, 21, 99), endedAt: null }) // ยังไม่วางคืน ไม่นับ
+  const book = (o: object) => ({ status: 'dong', category: '', takenAt: null, finishedAt: null, createdAt: at(40, 12), pages: null, ...o }) as any
+  const books = [
+    book({ id: 'a', status: 'done', finishedAt: at(3, 12), category: 'นิยาย' }),
+    book({ id: 'b', category: 'นิยาย', pages: 500 }),
+    book({ id: 'c', pages: 120, createdAt: at(1, 12) }),
+    book({ id: 'd', status: 'reading', category: 'ธุรกิจ' }),
+  ]
+  const d = dashboard(books, sessions, now)
+  expect(d.daily).toHaveLength(30)
+  expect(d.todayMinutes).toBe(30)
+  expect(d.weekMinutes).toBe(60)
+  expect(d.streak).toBe(3)
+  expect(d.bestStreak).toBe(5)
+  expect(d.byHour[21]).toBe(30 + 20 + 75)
+  expect(d.byHour[7]).toBe(10)
+  expect(d.avgPages).toBe(30)
+  expect(d.monthly.at(-1)).toMatchObject({ finished: 1, added: 1 })
+  expect(d.status).toEqual({ dong: 2, reading: 1, done: 1, dropped: 0 })
+  expect(d.categories[0]).toEqual({ name: 'นิยาย', count: 2 })
+  expect(d.oldestDong?.id).toBe('b')
+  expect(d.shortestDong?.id).toBe('c')
+
+  const msgs = motivation(d, { dailyMinutes: 20, yearBooks: 12 })
+  expect(msgs[0]).toContain('ครบเป้า')
+  expect(msgs[1]).toContain('ต่อเนื่อง 3 วัน')
+  expect(msgs.some((m) => m.includes('21:00–22:00'))).toBe(true)
+
+  const coach = readCoach(
+    { headline: ' ดีมาก ', insights: ['a', 1, 'b'], tips: [], picks: [{ book: 'b1', reason: 'สั้น' }, { book: 'b9', reason: 'x' }] },
+    new Map([['b1', 'c']]),
+  )
+  expect(coach).toEqual({ headline: 'ดีมาก', insights: ['a', 'b'], tips: [], picks: [{ bookId: 'c', reason: 'สั้น' }] })
+})

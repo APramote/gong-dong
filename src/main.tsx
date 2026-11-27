@@ -13,6 +13,7 @@ import { ReadingPage } from './pages/ReadingPage'
 import { ScanStoragePage } from './pages/ScanStoragePage'
 import { BookcaseViewPage } from './pages/BookcaseViewPage'
 import { OrganizePage } from './pages/OrganizePage'
+import { DashboardPage } from './pages/DashboardPage'
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
             {t.nav.library}
           </NavLink>
           <NavLink to="/reading">{t.nav.reading}</NavLink>
+          <NavLink to="/stats">{t.nav.stats}</NavLink>
           <NavLink to="/places">{t.nav.places}</NavLink>
           <NavLink to="/settings" aria-label={t.nav.settings} title={t.nav.settings}>
             ⚙
@@ -38,6 +40,7 @@ function App() {
           <Route path="/reading" element={<ReadingPage />} />
           <Route path="/scan" element={<ScanStoragePage />} />
           <Route path="/organize" element={<OrganizePage />} />
+          <Route path="/stats" element={<DashboardPage />} />
           <Route path="/view/bookcase/:id" element={<BookcaseViewPage />} />
           <Route path="/book/new" element={<BookFormPage />} />
           <Route path="/book/:id" element={<BookFormPage />} />
