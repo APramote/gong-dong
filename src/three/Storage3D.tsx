@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { build, dispose, type BookcaseModel, type Built } from './scene'
+import { build, dispose, type BookcaseModel, type Built, type Pick3D } from './scene'
+
+export type { Pick3D }
 
 /**
  * วาดตู้หนังสือแบบ 3D หมุน/ซูมได้ แตะหนังสือเพื่อเลือก
@@ -9,12 +11,12 @@ import { build, dispose, type BookcaseModel, type Built } from './scene'
  */
 export default function Storage3D({
   model,
-  selectedId,
+  selected,
   onSelect,
 }: {
   model: BookcaseModel
-  selectedId?: string | null
-  onSelect?: (bookId: string | null) => void
+  selected?: Pick3D | null
+  onSelect?: (target: Pick3D | null) => void
 }) {
   const host = useRef<HTMLDivElement>(null)
   const state = useRef<{
@@ -73,8 +75,10 @@ export default function Storage3D({
       )
       const ray = new THREE.Raycaster()
       ray.setFromCamera(ndc, camera)
-      const hit = ray.intersectObjects(s.built.pickable, false)[0]
-      onSelectRef.current?.((hit?.object.userData.bookId as string) ?? null)
+      const data = ray.intersectObjects(s.built.pickable, false)[0]?.object.userData
+      onSelectRef.current?.(
+        data?.bookId ? { kind: 'book', id: data.bookId } : data?.drawerId ? { kind: 'drawer', id: data.drawerId } : null,
+      )
     }
     renderer.domElement.addEventListener('pointerdown', onDown)
     renderer.domElement.addEventListener('pointerup', onUp)
@@ -113,7 +117,7 @@ export default function Storage3D({
       const fitH = built.size.y / 2 / Math.tan(fov / 2)
       const fitW = built.size.x / 2 / Math.tan(fov / 2) / s.camera.aspect
       const dist = Math.max(fitH, fitW) * 1.15 + built.size.z / 2
-      s.camera.position.set(dist * 0.25, dist * 0.15, dist)
+      s.camera.position.set(dist * 0.25, dist * 0.32, dist)
       s.controls.target.set(0, 0, 0)
       s.controls.minDistance = dist * 0.35
       s.controls.maxDistance = dist * 2.5
@@ -123,20 +127,37 @@ export default function Storage3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
 
-  // ดึงเล่มที่เลือกออกมาจากชั้นเล็กน้อย
+  // ดึงเล่มที่เลือกออกมาจากชั้นเล็กน้อย / เลื่อนลิ้นชักที่เลือกออกมา
+  const selectedBook = selected?.kind === 'book' ? selected.id : null
+  const selectedDrawer = selected?.kind === 'drawer' ? selected.id : null
   useEffect(() => {
     const s = state.current
     if (!s?.built) return
+    for (const g of s.built.drawerGroups) {
+      g.position.copy(g.userData.home as THREE.Vector3)
+      if (g.userData.drawerId === selectedDrawer) g.position.z += 26
+    }
+    // เปิดลิ้นชักแล้วเอียงกล้องลงให้มองเห็นของในลิ้นชัก (ถ้ามุมยังต่ำเกินไป)
+    if (selectedDrawer) {
+      const offset = s.camera.position.clone().sub(s.controls.target)
+      const sph = new THREE.Spherical().setFromVector3(offset)
+      if (sph.phi > 0.95) {
+        sph.phi = 0.95
+        s.camera.position.copy(s.controls.target).add(new THREE.Vector3().setFromSpherical(sph))
+        s.controls.update()
+      }
+    }
     for (const m of s.built.pickable) {
+      if (!m.userData.bookId) continue
       const home = m.userData.home as THREE.Vector3
-      const picked = m.userData.bookId === selectedId
+      const picked = m.userData.bookId === selectedBook
       m.position.copy(home)
       if (picked) m.position.z += 5
       const mats = (Array.isArray(m.material) ? m.material : [m.material]) as THREE.MeshStandardMaterial[]
       for (const mat of new Set(mats)) mat.emissive.setHex(picked ? 0x332200 : 0x000000)
     }
     s.render()
-  }, [selectedId, key])
+  }, [selectedBook, selectedDrawer, key])
 
   return <div ref={host} className="view3d" />
 }

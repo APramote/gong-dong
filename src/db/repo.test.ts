@@ -153,3 +153,28 @@ test('เปิดฐานข้อมูลเวอร์ชันเก่�
     ['top', 1, 'ชั้นที่ 2'],
   ])
 })
+
+test('ลิ้นชักเป็นที่เก็บ: สร้างตามรูปทรงตู้ ลดจำนวนแล้วหนังสือไม่หาย และไม่ปนกับชั้น', async () => {
+  const look = { color: '', ratio: 0, drawerRows: 1, drawersPerRow: 2 }
+  const id = await repo.addBookcaseWithBooks({ name: 'ตู้ลิ้นชัก', room: '' }, look, [[{ ...emptyBook, title: 'บนชั้น' }]])
+  let drawers = await repo.drawersOf(id)
+  expect(drawers.map((d) => [d.name, d.order, d.kind])).toEqual([
+    ['ลิ้นชัก 1', 0, 'drawer'],
+    ['ลิ้นชัก 2', 1, 'drawer'],
+  ])
+  await repo.addBook({ ...emptyBook, title: 'ในลิ้นชัก 2', placeId: drawers[1].id })
+  // เพิ่มชั้นไม่ชนเลขกับลิ้นชัก
+  await repo.addShelf(id)
+  const shelves = (await repo.listPlaces()).filter((p) => p.bookcaseId === id && p.kind === 'shelf')
+  expect(shelves.map((s) => s.name)).toEqual(['ชั้นที่ 1', 'ชั้นที่ 2'])
+
+  const fewer = { ...look, drawersPerRow: 1 }
+  expect(await repo.booksInRemovedDrawers(id, fewer)).toBe(1)
+  await repo.updateBookcaseLook(id, fewer)
+  drawers = await repo.drawersOf(id)
+  expect(drawers.map((d) => d.name)).toEqual(['ลิ้นชัก 1'])
+  expect(await titles(null)).toEqual(['ในลิ้นชัก 2'])
+
+  await repo.updateBookcaseLook(id, { ...look, drawerRows: 2, drawersPerRow: 2 })
+  expect((await repo.drawersOf(id)).map((d) => d.name)).toEqual(['ลิ้นชัก 1', 'ลิ้นชัก 2', 'ลิ้นชัก 3', 'ลิ้นชัก 4'])
+})

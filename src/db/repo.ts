@@ -43,6 +43,10 @@ export const emptyBook: BookInput = {
   placeId: null,
 }
 
+/** จำนวนลิ้นชักตามรูปทรงตู้ */
+export const drawerCount = (look?: Look) =>
+  look?.drawerRows ? look.drawerRows * Math.max(1, look.drawersPerRow ?? 2) : 0
+
 /** หนังสือที่บันทึกจากเวอร์ชันก่อนอาจขาดฟิลด์ใหม่ เติมค่าเริ่มต้นให้ */
 const withDefaults = (b: Book): Book => ({
   ...emptyBook,
@@ -64,6 +68,11 @@ export function createRepo(db: GongDongDB = defaultDb) {
   async function openSession(bookId: string): Promise<ReadingSession | undefined> {
     const rows = await db.sessions.where('bookId').equals(bookId).toArray()
     return rows.find((r) => r.deletedAt === null && r.endedAt === null)
+  }
+
+  async function drawers(bookcaseId: string): Promise<Place[]> {
+    const rows = alive(await db.places.where('bookcaseId').equals(bookcaseId).toArray())
+    return rows.filter((p) => p.kind === 'drawer').sort((a, b) => a.order - b.order)
   }
 
   /** ตำแหน่งถัดไปต่อท้ายที่เก็บ */
@@ -290,12 +299,15 @@ export function createRepo(db: GongDongDB = defaultDb) {
     ): Promise<string> {
       const id = await this.addBookcase(input, Math.max(1, shelves.length))
       await db.bookcases.update(id, { look })
-      const created = alive(await db.places.where('bookcaseId').equals(id).toArray()).sort(
+      const created = alive(await db.places.where('bookcaseId').equals(id).toArray())
+        .filter((p) => p.kind === 'shelf')
+        .sort(
         (a, b) => a.order - b.order,
       )
       for (let i = 0; i < shelves.length; i++) {
         for (const book of shelves[i]) await this.addBook({ ...book, placeId: created[i].id })
       }
+      await this.syncDrawers(id, look)
       return id
     },
 
@@ -319,6 +331,44 @@ export function createRepo(db: GongDongDB = defaultDb) {
 
     async updateBookcaseLook(id: string, look: Look): Promise<void> {
       await db.bookcases.update(id, { look, updatedAt: Date.now() })
+      await this.syncDrawers(id, look)
+    },
+
+    /** ลิ้นชักของตู้ เรียงจากแถวล่างสุด ซ้ายไปขวา */
+    async drawersOf(bookcaseId: string): Promise<Place[]> {
+      return drawers(bookcaseId)
+    },
+
+    /** จำนวนหนังสือในลิ้นชักที่จะหายไปถ้าเปลี่ยนเป็นรูปทรงนี้ ใช้ถามก่อนบันทึก */
+    async booksInRemovedDrawers(bookcaseId: string, look: Look): Promise<number> {
+      const keep = drawerCount(look)
+      const extra = (await drawers(bookcaseId)).slice(keep)
+      let n = 0
+      for (const d of extra) n += (await booksIn(d.id)).length
+      return n
+    },
+
+    /**
+     * ทำให้จำนวนลิ้นชักตรงกับรูปทรงตู้: เพิ่มที่ขาด ลบที่เกิน
+     * หนังสือในลิ้นชักที่ถูกลบกลับไปเป็น "ยังไม่ระบุที่เก็บ"
+     */
+    async syncDrawers(bookcaseId: string, look: Look): Promise<void> {
+      const want = drawerCount(look)
+      const have = await drawers(bookcaseId)
+      await db.transaction('rw', db.places, db.books, async () => {
+        for (let i = have.length; i < want; i++) {
+          await db.places.add({
+            ...stamp(),
+            kind: 'drawer',
+            name: `ลิ้นชัก ${i + 1}`,
+            bookcaseId,
+            order: i,
+            location: '',
+            label: '',
+          })
+        }
+        for (const d of have.slice(want)) await removePlace(db, d.id)
+      })
     },
 
     async updateBookcase(id: string, input: BookcaseInput): Promise<void> {
@@ -337,7 +387,9 @@ export function createRepo(db: GongDongDB = defaultDb) {
     },
 
     async addShelf(bookcaseId: string): Promise<string> {
-      const shelves = alive(await db.places.where('bookcaseId').equals(bookcaseId).toArray())
+      const shelves = alive(await db.places.where('bookcaseId').equals(bookcaseId).toArray()).filter(
+        (p) => p.kind === 'shelf',
+      )
       const order = shelves.reduce((m, s) => Math.max(m, s.order), -1) + 1
       const shelf: Place = {
         ...stamp(),

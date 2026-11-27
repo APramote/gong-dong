@@ -9,6 +9,7 @@ export const bookcaseFields: Field[] = [
 
 export const placeFields: Record<PlaceKind, Field[]> = {
   shelf: [{ key: 'name', label: t.places.shelfName, required: true }],
+  drawer: [{ key: 'name', label: t.places.shelfName, required: true }],
   pile: [
     { key: 'name', label: t.places.pileName, required: true },
     { key: 'location', label: t.places.pileLocation },

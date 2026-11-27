@@ -88,11 +88,12 @@ export interface Bookcase extends SyncFields {
   look?: Look
 }
 
-export type PlaceKind = 'shelf' | 'pile' | 'box'
+export type PlaceKind = 'shelf' | 'drawer' | 'pile' | 'box'
 
 /**
  * ที่เก็บหนังสือหนึ่งจุด
  * - shelf: ชั้นวางในตู้ (ใช้ bookcaseId, order — order 0 คือชั้นล่างสุด)
+ * - drawer: ลิ้นชักในตู้ (ใช้ bookcaseId, order — นับจากแถวล่างสุด ซ้ายไปขวา)
  * - pile:  วางกอง (ใช้ location = ตำแหน่งในห้อง/บ้าน)
  * - box:   กล่อง (ใช้ label = ป้ายหน้ากล่อง, location = ที่จัดเก็บกล่อง)
  */

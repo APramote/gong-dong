@@ -24,6 +24,7 @@ export const t = {
 
   kind: {
     shelf: 'หนังสือชั้นวาง',
+    drawer: 'ลิ้นชักในตู้',
     pile: 'หนังสือวางกอง',
     box: 'หนังสือเก็บในกล่อง',
   } satisfies Record<PlaceKind, string>,
@@ -261,6 +262,8 @@ export const t = {
     doorsNone: 'ไม่มี',
     doorsN: (n: number) => `${n} บาน`,
     legs: 'มีขาตู้',
+    confirmFewerDrawers: (n: number) =>
+      `ลิ้นชักที่จะถูกเอาออกมีหนังสือ ${n} เล่ม หนังสือจะไม่ถูกลบ แต่จะกลับไปเป็น "ยังไม่ระบุที่เก็บ" ทำต่อไหม?`,
     openDoors: 'เปิดบานตู้',
     closeDoors: 'ปิดบานตู้',
   },
@@ -268,13 +271,16 @@ export const t = {
   view: {
     open: 'ดู 3D',
     openBookcase: 'ดูทั้งตู้แบบ 3D',
-    hint: 'ลากเพื่อหมุน · บีบหรือเลื่อนเพื่อซูม · แตะหนังสือเพื่อเลือก',
+    hint: 'ลากเพื่อหมุน · บีบหรือเลื่อนเพื่อซูม · แตะหนังสือหรือลิ้นชักเพื่อเลือก',
     photo: 'รูปที่ถ่ายไว้',
     takePhoto: 'ถ่ายรูปจำไว้',
     changePhoto: 'ถ่ายรูปใหม่',
     pickPhoto: 'เลือกรูปจากเครื่อง',
     removePhoto: 'ลบรูป',
     openBook: 'เปิดหนังสือ',
+    drawerEmpty: 'ลิ้นชักว่าง',
+    openDrawer: 'เปิดหน้าลิ้นชัก',
+    addToDrawer: 'เพิ่มหนังสือในลิ้นชัก',
     notFound: 'ไม่พบที่เก็บนี้',
     inside: 'ในกล่อง',
     onShelf: (shelf: string) => `อยู่ที่ ${shelf}`,

@@ -7,9 +7,14 @@ export type Book3D = Pick<Book, 'id' | 'title' | 'pages' | 'spineColor'>
 /** ตู้หนังสือ: ชั้นจากล่างขึ้นบน (ชั้นที่ 1 = ล่างสุด) หนังสือในชั้นเรียงซ้ายไปขวา */
 export interface BookcaseModel {
   shelves: Book3D[][]
+  /** ลิ้นชักที่เป็นที่เก็บจริง เรียงจากแถวล่างสุด ซ้ายไปขวา (ไม่มี id = ตัวอย่าง แตะไม่ได้) */
+  drawers?: { id: string; books: Book3D[] }[]
   look?: Look
   doorsOpen?: boolean
 }
+
+/** สิ่งที่แตะเลือกได้ในตู้ */
+export type Pick3D = { kind: 'book' | 'drawer'; id: string }
 
 /** สีเริ่มต้นเมื่อหนังสือไม่มีสีจากรูป เลือกตาม id เพื่อให้สีคงที่ */
 const PALETTE = ['#8c3b2e', '#2f5d62', '#c9a227', '#4a4e8c', '#6b8e4e', '#a0522d', '#3d3d3d', '#b5654a', '#5b7fa6', '#7a5c99']
@@ -76,8 +81,10 @@ export interface Built {
   root: THREE.Group
   /** ขนาดรวม ใช้จัดมุมกล้อง */
   size: THREE.Vector3
-  /** mesh ของหนังสือที่แตะเลือกได้ (userData.bookId) */
+  /** mesh ที่แตะเลือกได้ (userData.bookId หรือ userData.drawerId) */
   pickable: THREE.Mesh[]
+  /** ลิ้นชักที่เลื่อนเปิดได้ (userData.drawerId, userData.home) */
+  drawerGroups: THREE.Group[]
 }
 
 const BOARD = 2
@@ -85,9 +92,11 @@ const SHELF_SPACE = 30
 const DRAWER_H = 16
 const LEG_H = 10
 
-function buildBookcase(shelves: Book3D[][], look?: Look, doorsOpen = false): Built {
+function buildBookcase(model: BookcaseModel): Built {
+  const { shelves, look, doorsOpen = false } = model
   const root = new THREE.Group()
   const pickable: THREE.Mesh[] = []
+  const drawerGroups: THREE.Group[] = []
   const wood = look?.color || '#8b6a4e'
   const darker = new THREE.Color(wood).multiplyScalar(0.7).getStyle()
   const lighter = new THREE.Color(wood).offsetHSL(0, 0, 0.05).getStyle()
@@ -129,20 +138,54 @@ function buildBookcase(shelves: Book3D[][], look?: Look, doorsOpen = false): Bui
     }
   }
 
-  // ลิ้นชัก: แถว 0 อยู่ล่างสุด
+  // ลิ้นชัก: แถว 0 อยู่ล่างสุด แต่ละช่องเป็นกลุ่มที่เลื่อนออกมาได้ พร้อมถาดและหนังสือข้างใน
   const fronts = y0 + BOARD
+  const brass = new THREE.MeshStandardMaterial({ color: '#c9b37a', metalness: 0.6, roughness: 0.35 })
   for (let r = 0; r < drawerRows; r++) {
     const w = innerW / perRow
     for (let c = 0; c < perRow; c++) {
-      const x = -innerW / 2 + w * c + w / 2
-      const y = fronts + r * DRAWER_H + DRAWER_H / 2
-      part(w - 0.6, DRAWER_H - 0.6, 1.6, x, y, depth / 2 - 0.8, lighter)
-      const knob = new THREE.Mesh(
-        new THREE.SphereGeometry(0.9, 16, 12),
-        new THREE.MeshStandardMaterial({ color: '#c9b37a', metalness: 0.6, roughness: 0.35 }),
-      )
-      knob.position.set(x, y, depth / 2 + 0.6)
-      root.add(knob)
+      const slot = model.drawers?.[r * perRow + c]
+      const g = new THREE.Group()
+      g.position.set(-innerW / 2 + w * c + w / 2, fronts + r * DRAWER_H + DRAWER_H / 2, depth / 2 - 0.8)
+      const front = boxMesh(w - 0.6, DRAWER_H - 0.6, 1.6, lighter)
+      g.add(front)
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.9, 16, 12), brass)
+      knob.position.z = 1.4
+      g.add(knob)
+      // ถาดด้านใน: พื้นและผนังข้าง
+      const trayD = depth - 4
+      const trayW = w - 2
+      const inner = new THREE.Color(wood).multiplyScalar(0.85).getStyle()
+      const tray = (tw: number, th: number, td: number, x: number, y: number, z: number) => {
+        const m = boxMesh(tw, th, td, inner)
+        m.position.set(x, y, z)
+        g.add(m)
+      }
+      const floorY = -DRAWER_H / 2 + 1.5
+      tray(trayW, 0.8, trayD, 0, floorY, -trayD / 2 - 0.8)
+      tray(0.8, DRAWER_H - 4, trayD, -trayW / 2, floorY + (DRAWER_H - 4) / 2, -trayD / 2 - 0.8)
+      tray(0.8, DRAWER_H - 4, trayD, trayW / 2, floorY + (DRAWER_H - 4) / 2, -trayD / 2 - 0.8)
+      tray(trayW, DRAWER_H - 4, 0.8, 0, floorY + (DRAWER_H - 4) / 2, -trayD - 0.8)
+      // หนังสือนอนซ้อนในลิ้นชัก (แสดงไม่เกินที่ใส่ได้)
+      let y = floorY + 0.4
+      for (const b of slot?.books ?? []) {
+        const s2 = bookSize(b)
+        if (y + s2.thick > DRAWER_H / 2 - 1.5) break
+        const color = bookColor(b)
+        const bw = Math.min(s2.height, trayW - 2)
+        const book = boxMesh(bw, s2.thick, Math.min(s2.depth, trayD - 2), color, textTexture(b.title, color, false))
+        // ชิดด้านในของถาด มองเห็นได้ง่ายกว่าตอนดึงลิ้นชักออก
+        book.position.set(0, y + s2.thick / 2, -trayD + Math.min(s2.depth, trayD - 2) / 2)
+        g.add(book)
+        y += s2.thick
+      }
+      if (slot) {
+        front.userData = { drawerId: slot.id }
+        pickable.push(front)
+        g.userData = { drawerId: slot.id, home: g.position.clone() }
+        drawerGroups.push(g)
+      }
+      root.add(g)
     }
   }
   if (drawerRows) part(innerW, BOARD, depth, 0, fronts + drawerRows * DRAWER_H + BOARD / 2, 0)
@@ -206,11 +249,11 @@ function buildBookcase(shelves: Book3D[][], look?: Look, doorsOpen = false): Bui
 
   const totalH = legH + outerH
   root.position.y = -totalH / 2
-  return { root, size: new THREE.Vector3(outerW, totalH, depth), pickable }
+  return { root, size: new THREE.Vector3(outerW, totalH, depth), pickable, drawerGroups }
 }
 
 export function build(model: BookcaseModel): Built {
-  return buildBookcase(model.shelves, model.look, model.doorsOpen)
+  return buildBookcase(model)
 }
 
 /** คืนหน่วยความจำ GPU ของทุก mesh ในกลุ่ม */

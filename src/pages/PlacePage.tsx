@@ -48,9 +48,12 @@ export function PlacePage() {
             <button className="btn small" onClick={() => setEditing(true)}>
               {t.common.edit}
             </button>
-            <button className="btn small danger" onClick={remove}>
-              {t.common.delete}
-            </button>
+            {/* ลิ้นชักเพิ่ม/ลดผ่านรูปทรงตู้ ไม่ลบทีละช่อง */}
+            {place.kind !== 'drawer' && (
+              <button className="btn small danger" onClick={remove}>
+                {t.common.delete}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -67,19 +70,19 @@ export function PlacePage() {
         />
       )}
 
-      {place?.kind === 'shelf' && place.bookcaseId && (
+      {(place?.kind === 'shelf' || place?.kind === 'drawer') && place.bookcaseId && (
         <p>
           <Link className="btn small" to={`/view/bookcase/${place.bookcaseId}`}>
             {t.view.openBookcase}
           </Link>
         </p>
       )}
-      {place && place.kind !== 'shelf' && <StoragePhoto id={place.id} />}
+      {place && (place.kind === 'pile' || place.kind === 'box') && <StoragePhoto id={place.id} />}
 
       <div className="section-head">
         <p className="muted">
           {t.common.books(books.length)}
-          {place && place.kind !== 'box' && books.length > 1 &&
+          {place && (place.kind === 'shelf' || place.kind === 'pile') && books.length > 1 &&
             ` · ${place.kind === 'pile' ? t.place.orderPile : t.place.orderShelf}`}
         </p>
         {place && (
@@ -99,7 +102,7 @@ export function PlacePage() {
               book={b}
               actions={
                 <span className="reorder">
-                  {place && place.kind !== 'box' && (
+                  {place && (place.kind === 'shelf' || place.kind === 'pile') && (
                     <>
                       <button
                         className="btn small"

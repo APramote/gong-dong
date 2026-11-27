@@ -6,6 +6,8 @@ import type { Look } from '../db/types'
 import { CoverThumb } from '../components/Cover'
 import { StoragePhoto } from '../components/StoragePhoto'
 import { ShapeFields } from '../components/ShapeFields'
+import { BookRow } from '../components/BookRow'
+import type { Pick3D } from '../three/scene'
 import { t } from '../th'
 
 const Storage3D = lazy(() => import('../three/Storage3D'))
@@ -17,7 +19,7 @@ export function BookcaseViewPage() {
   const bookcase = useLiveQuery(async () => (await repo.getBookcase(id)) ?? null, [id])
   const places = useLiveQuery(() => repo.listPlaces(), []) ?? []
   const books = useLiveQuery(() => repo.listBooks(), []) ?? []
-  const [selected, setSelected] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Pick3D | null>(null)
   const [doorsOpen, setDoorsOpen] = useState(false)
   /** ค่าที่กำลังแก้ ใช้แสดงทันทีระหว่างรอบันทึกลงฐานข้อมูล — null = ไม่ได้แก้อยู่ */
   const [draft, setDraft] = useState<Look | null>(null)
@@ -32,8 +34,22 @@ export function BookcaseViewPage() {
   const onShelf = shelves.map((s) =>
     books.filter((b) => b.placeId === s.id && !b.takenAt).sort((a, b) => a.position - b.position),
   )
-  const pick = books.find((b) => b.id === selected && !b.takenAt)
+  const drawers = places.filter((p) => p.kind === 'drawer' && p.bookcaseId === id)
+  const inPlace = (pid: string) =>
+    books.filter((b) => b.placeId === pid && !b.takenAt).sort((a, b) => a.position - b.position)
+  const as3D = (b: (typeof books)[number]) => ({ id: b.id, title: b.title, pages: b.pages, spineColor: b.spineColor })
+  const pick = selected?.kind === 'book' ? books.find((b) => b.id === selected.id && !b.takenAt) : undefined
   const pickShelf = pick && shelves.find((s) => s.id === pick.placeId)
+  const drawer = selected?.kind === 'drawer' ? drawers.find((d) => d.id === selected.id) : undefined
+  const drawerBooks = drawer ? inPlace(drawer.id) : []
+
+  async function changeShape(l: Look) {
+    // ลดลิ้นชักที่มีหนังสืออยู่ ต้องถามก่อน
+    const lost = await repo.booksInRemovedDrawers(id, l)
+    if (lost && !confirm(t.shape.confirmFewerDrawers(lost))) return
+    setDraft(l)
+    await repo.updateBookcaseLook(id, l)
+  }
 
   return (
     <>
@@ -50,11 +66,12 @@ export function BookcaseViewPage() {
         <Suspense fallback={null}>
           <Storage3D
             model={{
-              shelves: onShelf.map((row) => row.map((b) => ({ id: b.id, title: b.title, pages: b.pages, spineColor: b.spineColor }))),
+              shelves: onShelf.map((row) => row.map(as3D)),
+              drawers: drawers.map((d) => ({ id: d.id, books: inPlace(d.id).map(as3D) })),
               look,
               doorsOpen,
             }}
-            selectedId={pick?.id ?? null}
+            selected={pick || drawer ? selected : null}
             onSelect={setSelected}
           />
         </Suspense>
@@ -74,10 +91,7 @@ export function BookcaseViewPage() {
         <div className="inline-form form">
           <ShapeFields
             look={draft}
-            onChange={(l) => {
-              setDraft(l)
-              repo.updateBookcaseLook(id, l)
-            }}
+            onChange={changeShape}
           />
         </div>
       )}
@@ -105,6 +119,46 @@ export function BookcaseViewPage() {
             </button>
             <Link className="btn" to={`/book/${pick.id}`}>
               {t.view.openBook}
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {drawer && (
+        <div className="card picked">
+          <div className="section-head">
+            <h3>{drawer.name}</h3>
+            <Link className="btn small" to={`/place/${drawer.id}`}>
+              {t.view.openDrawer}
+            </Link>
+          </div>
+          {drawerBooks.length === 0 ? (
+            <p className="muted">{t.view.drawerEmpty}</p>
+          ) : (
+            <ul className="list">
+              {drawerBooks.map((b) => (
+                <BookRow
+                  key={b.id}
+                  book={b}
+                  actions={
+                    <button
+                      className="btn small"
+                      aria-label={`${t.reading.take} ${b.title}`}
+                      onClick={async () => {
+                        await repo.takeBook(b.id)
+                        navigate('/reading')
+                      }}
+                    >
+                      {t.reading.takeShort}
+                    </button>
+                  }
+                />
+              ))}
+            </ul>
+          )}
+          <div className="actions">
+            <Link className="btn primary" to={`/add?place=${drawer.id}`}>
+              {t.view.addToDrawer}
             </Link>
           </div>
         </div>
