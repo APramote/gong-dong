@@ -161,104 +161,47 @@ export function parseEnrichmentText(
   }
 }
 
-// ---------- อ่านรูปที่เก็บ (ตู้ / กอง / กล่อง) ----------
+// ---------- อ่านโครงสร้างตู้จากรูป ----------
 
+/** ประเภทที่เก็บที่สร้างจากรูปได้ (เฉพาะตู้ที่ใช้ AI กอง/กล่องแค่จำรูป) */
 export type StorageKind = 'bookcase' | 'pile' | 'box'
 
-export interface ScannedBook extends RecognizedBook {
-  /** สีสันของหนังสือ #rrggbb หรือว่าง */
-  color: string
-}
-
-export interface StorageScan {
-  /** สีหลักของตู้หรือกล่อง #rrggbb */
+/** โครงสร้างตู้ที่อ่านจากรูป — ไม่รวมหนังสือ เพื่อความแม่นยำ */
+export interface BookcaseScan {
+  /** สีหลักของตู้ #rrggbb */
   color: string
   /** สัดส่วนกว้าง/สูงที่เห็นในรูป (0 = ไม่ทราบ) */
   ratio: number
-  /** ข้อความบนป้ายกล่อง */
-  label: string
-  /** ตู้: แถวลิ้นชักใต้ชั้นวาง */
-  drawerRows: number
-  /** ตู้: ลิ้นชักต่อแถว */
-  drawersPerRow: number
-  /** ตู้: บานปิดหน้าชั้น (0, 1, 2) */
-  doors: number
-  /** ตู้: มีขาตู้ */
-  legs: boolean
-  /** ตู้: จำนวนชั้นวาง (ไม่อ่านหนังสือบนชั้น) */
+  /** จำนวนชั้นวาง (อย่างน้อย 1) */
   shelfCount: number
-  /**
-   * ตู้: แต่ละชั้นจากบนลงล่าง หนังสือในชั้นเรียงซ้ายไปขวา
-   * กอง: หนึ่งรายการ หนังสือเรียงจากบนลงล่าง
-   * กล่อง: หนังสือที่มองเห็นในกล่อง (ถ้าเปิดอยู่)
-   */
-  shelves: { books: ScannedBook[] }[]
+  drawerRows: number
+  drawersPerRow: number
+  /** บานปิดหน้าชั้น (0, 1, 2) */
+  doors: number
+  legs: boolean
 }
 
-const STORAGE_PROMPTS: Record<StorageKind, string> = {
-  bookcase:
-    'This photo shows a bookcase. Describe only its structure; do not read or list any books, and return an ' +
-    'empty list of shelves. Return "shelfCount": the number of open shelf levels that can hold books (count empty ' +
-    'ones too, do not count drawers), the main colour of the bookcase, its visible width divided by height, ' +
-    '"drawerRows" (rows of drawers below the shelves, 0 if none), "drawersPerRow" (drawers side by side in one row, ' +
-    '0 if none), "doors" (number of glass or other doors covering the shelves: 0, 1 or 2) and "legs" (true if it ' +
-    'stands on visible legs).',
-  pile:
-    'This photo shows a pile of books lying on top of each other. Return exactly one shelf entry whose books are ' +
-    'listed from the top of the pile to the bottom. Also return the colour of the surface they rest on, 0 for ratio, ' +
-    'shelfCount, drawerRows, drawersPerRow and doors, and false for legs.',
-  box:
-    'This photo shows a storage box. Read any text written or printed on the box (its label) exactly as written. ' +
-    'Return the main colour of the box and its visible width divided by height. If the box is open and book spines ' +
-    'or covers are readable, return them as one shelf entry; otherwise return an empty list of shelves. ' +
-    'Return 0 for shelfCount, drawerRows, drawersPerRow and doors, and false for legs.',
-}
+export const bookcasePrompt = () =>
+  'This photo shows a bookcase. Describe only its structure; do not read or list any books. Return ' +
+  '"shelfCount": the number of open shelf levels that can hold books (count empty ones too, do not count drawers), ' +
+  '"color": the main colour of the bookcase as #rrggbb, "ratio": its visible width divided by height, ' +
+  '"drawerRows" (rows of drawers below the shelves, 0 if none), "drawersPerRow" (drawers side by side in one row, ' +
+  '0 if none), "doors" (number of glass or other doors covering the shelves: 0, 1 or 2) and "legs" (true if it ' +
+  'stands on visible legs).'
 
-export const storagePrompt = (kind: StorageKind) =>
-  STORAGE_PROMPTS[kind] +
-  (kind === 'bookcase'
-    ? ''
-    : ' For each book give "color": the dominant colour of its spine (or cover) as #rrggbb.' + RECOGNIZE_RULES) +
-  ' Colours must be #rrggbb hex values.'
-
-/** JSON Schema ของผลอ่านรูปที่เก็บ (สำหรับ Claude) */
-export const storageSchema = {
+/** JSON Schema ของโครงสร้างตู้ (สำหรับ Claude) */
+export const bookcaseSchema = {
   type: 'object',
   properties: {
+    shelfCount: { type: 'integer' },
     color: { type: 'string' },
     ratio: { type: 'number' },
-    label: { type: 'string' },
     drawerRows: { type: 'integer' },
     drawersPerRow: { type: 'integer' },
     doors: { type: 'integer' },
     legs: { type: 'boolean' },
-    shelfCount: { type: 'integer' },
-    shelves: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          books: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                title: { type: 'string' },
-                authors: { type: 'string' },
-                publisher: { type: 'string' },
-                color: { type: 'string' },
-              },
-              required: ['title', 'authors', 'publisher', 'color'],
-              additionalProperties: false,
-            },
-          },
-        },
-        required: ['books'],
-        additionalProperties: false,
-      },
-    },
   },
-  required: ['color', 'ratio', 'label', 'drawerRows', 'drawersPerRow', 'doors', 'legs', 'shelfCount', 'shelves'],
+  required: ['shelfCount', 'color', 'ratio', 'drawerRows', 'drawersPerRow', 'doors', 'legs'],
   additionalProperties: false,
 } as const
 
@@ -267,33 +210,24 @@ const hex = (v: unknown) => {
   return m ? `#${m[1].toLowerCase()}` : ''
 }
 
-/** ทำความสะอาดผลอ่านรูปที่เก็บ: สีผิดรูปแบบทิ้งไป หนังสือไม่มีชื่อทิ้งไป จำกัดจำนวนชั้น */
-export function cleanStorage(raw: any, kind: StorageKind): StorageScan {
+const clampInt = (v: unknown, max: number) => {
+  const n = Math.round(Number(v))
+  return Number.isFinite(n) ? Math.min(max, Math.max(0, n)) : 0
+}
+
+/** ทำความสะอาดผลอ่านโครงสร้างตู้: ค่าผิดรูปแบบใช้ค่าปลอดภัยแทน */
+export function cleanBookcase(raw: any): BookcaseScan {
   const ratio = Number(raw?.ratio)
-  let shelves = (Array.isArray(raw?.shelves) ? raw.shelves : []).slice(0, 20).map((s: any) => ({
-    books: cleanBooks(s?.books).map((b, i) => ({ ...b, color: hex(s?.books?.filter((x: any) => str(x?.title))[i]?.color) })),
-  }))
-  // ตู้: ไม่รับหนังสือจากรูปทั้งตู้ (อ่านพลาดง่าย) ให้เพิ่มทีละชั้นภายหลัง
-  // กอง/กล่อง: มีได้ชั้นเดียว รวมทุกรายการเข้าด้วยกัน
-  if (kind === 'bookcase') shelves = []
-  else shelves = shelves.length ? [{ books: shelves.flatMap((s: { books: ScannedBook[] }) => s.books) }] : []
-  const int = (v: unknown, max: number) => {
-    const n = Math.round(Number(v))
-    return Number.isFinite(n) ? Math.min(max, Math.max(0, n)) : 0
-  }
-  const isCase = kind === 'bookcase'
-  const drawerRows = isCase ? int(raw?.drawerRows, 4) : 0
+  const drawerRows = clampInt(raw?.drawerRows, 4)
   return {
     color: hex(raw?.color),
     ratio: Number.isFinite(ratio) && ratio > 0.1 && ratio < 10 ? ratio : 0,
-    label: str(raw?.label),
+    shelfCount: Math.max(1, clampInt(raw?.shelfCount, 20)),
     drawerRows,
     // มีแถวลิ้นชักแต่ไม่บอกจำนวนต่อแถว ถือว่าแถวละ 2
-    drawersPerRow: drawerRows ? int(raw?.drawersPerRow, 6) || 2 : 0,
-    doors: isCase ? int(raw?.doors, 2) : 0,
-    legs: isCase && raw?.legs === true,
-    shelfCount: isCase ? Math.max(1, int(raw?.shelfCount, 20) || raw?.shelves?.length || 1) : 0,
-    shelves,
+    drawersPerRow: drawerRows ? clampInt(raw?.drawersPerRow, 6) || 2 : 0,
+    doors: clampInt(raw?.doors, 2),
+    legs: raw?.legs === true,
   }
 }
 

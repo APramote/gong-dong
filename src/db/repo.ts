@@ -311,19 +311,6 @@ export function createRepo(db: GongDongDB = defaultDb) {
       return id
     },
 
-    /** สร้างกองหรือกล่องจากรูป พร้อมหนังสือตามลำดับที่ส่งมา */
-    async addPlaceWithBooks(
-      kind: Exclude<PlaceKind, 'shelf'>,
-      input: PlaceInput,
-      look: Look,
-      books: BookInput[],
-    ): Promise<string> {
-      const id = await this.addPlace(kind, input)
-      await db.places.update(id, { look })
-      for (const book of books) await this.addBook({ ...book, placeId: id })
-      return id
-    },
-
     async getBookcase(id: string): Promise<Bookcase | undefined> {
       const b = await db.bookcases.get(id)
       return b && b.deletedAt === null ? b : undefined

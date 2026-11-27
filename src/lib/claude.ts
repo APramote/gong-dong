@@ -5,11 +5,10 @@ import {
   coversPrompt,
   coversSchema,
   type CoverBook,
-  cleanStorage,
-  storagePrompt,
-  storageSchema,
-  type StorageKind,
-  type StorageScan,
+  bookcasePrompt,
+  bookcaseSchema,
+  cleanBookcase,
+  type BookcaseScan,
   booksSchema,
   cleanBooks,
   enrichPrompt,
@@ -154,24 +153,19 @@ export async function enrichBookClaude(
   }
 }
 
-export async function scanStorageClaude(
-  key: string,
-  model: string,
-  imageBase64: string,
-  kind: StorageKind,
-): Promise<StorageScan> {
+export async function scanBookcaseClaude(key: string, model: string, imageBase64: string): Promise<BookcaseScan> {
   try {
     const res = await client(key).beta.messages.create({
       model,
       max_tokens: 16000,
       ...fallback(model),
-      output_config: { format: { type: 'json_schema', schema: storageSchema as never } },
+      output_config: { format: { type: 'json_schema', schema: bookcaseSchema as never } },
       messages: [
         {
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 } },
-            { type: 'text', text: storagePrompt(kind) },
+            { type: 'text', text: bookcasePrompt() },
           ],
         },
       ],
@@ -183,7 +177,7 @@ export async function scanStorageClaude(
     } catch {
       throw new AiError('other', 'unreadable response')
     }
-    return cleanStorage(parsed, kind)
+    return cleanBookcase(parsed)
   } catch (e) {
     throw toAiError(e)
   }

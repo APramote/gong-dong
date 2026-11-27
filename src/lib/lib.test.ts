@@ -130,50 +130,20 @@ test('สถิติการอ่านและเวลาเริ่ม�
   expect(clock(3909000)).toBe('1:05:09')
 })
 
-test('ทำความสะอาดผลอ่านรูปที่เก็บ', async () => {
-  const { cleanStorage } = await import('./aiCommon')
-  const raw = {
-    color: '8B5A2B',
-    ratio: 0.8,
-    label: ' นิยาย ',
-    shelves: [
-      { books: [{ title: 'ก', authors: '', publisher: '', color: '#AA0000' }, { title: '', authors: 'x', publisher: '', color: '#00ff00' }, { title: 'ข', authors: '', publisher: '', color: 'red' }] },
-      { books: [] },
-    ],
-  }
-  // ตู้: เก็บแต่โครงสร้าง ไม่เอาหนังสือ จำนวนชั้นใช้ shelfCount หรือนับจากรายการถ้าไม่มี
-  expect(cleanStorage({ ...raw, shelfCount: 4, drawerRows: 1.2, drawersPerRow: 0, doors: 5, legs: true }, 'bookcase')).toEqual({
-    color: '#8b5a2b',
-    ratio: 0.8,
-    label: 'นิยาย',
-    drawerRows: 1,
-    drawersPerRow: 2,
-    doors: 2,
-    legs: true,
-    shelfCount: 4,
-    shelves: [],
-  })
-  expect(cleanStorage(raw, 'bookcase').shelfCount).toBe(2)
-  const pileClean = cleanStorage(raw, 'pile')
-  expect(pileClean.shelves[0].books).toEqual([
-    { title: 'ก', authors: '', publisher: '', color: '#aa0000' },
-    { title: 'ข', authors: '', publisher: '', color: '' },
-  ])
-  // กองรวมเป็นชั้นเดียว ratio ผิดช่วงเป็น 0
-  const pile = cleanStorage({ ...raw, ratio: 50 }, 'pile')
-  expect(pile.ratio).toBe(0)
-  expect(pile.shelves).toHaveLength(1)
-  expect(pile.shelves[0].books.map((b) => b.title)).toEqual(['ก', 'ข'])
-  expect(cleanStorage({ legs: true, doors: 2 }, 'box')).toEqual({
+test('ทำความสะอาดผลอ่านโครงสร้างตู้', async () => {
+  const { cleanBookcase } = await import('./aiCommon')
+  expect(
+    cleanBookcase({ shelfCount: 4.4, color: '8B5A2B', ratio: 0.8, drawerRows: 1.2, drawersPerRow: 0, doors: 5, legs: true }),
+  ).toEqual({ color: '#8b5a2b', ratio: 0.8, shelfCount: 4, drawerRows: 1, drawersPerRow: 2, doors: 2, legs: true })
+  // ค่าผิดรูปแบบ: อย่างน้อย 1 ชั้น สีว่าง ratio 0 ไม่มีลิ้นชัก/บาน/ขา
+  expect(cleanBookcase({ shelfCount: 'x', color: 'red', ratio: 50, legs: 'yes' })).toEqual({
     color: '',
     ratio: 0,
-    label: '',
+    shelfCount: 1,
     drawerRows: 0,
     drawersPerRow: 0,
     doors: 0,
     legs: false,
-    shelfCount: 0,
-    shelves: [],
   })
 })
 

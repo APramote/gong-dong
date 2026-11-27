@@ -5,10 +5,9 @@ import {
   cleanCovers,
   coversPrompt,
   type CoverBook,
-  cleanStorage,
-  storagePrompt,
-  type StorageKind,
-  type StorageScan,
+  bookcasePrompt,
+  cleanBookcase,
+  type BookcaseScan,
   cleanBooks,
   enrichPrompt,
   parseEnrichmentText,
@@ -165,29 +164,14 @@ export function parseEnrichment(data: any): Enrichment {
   return parseEnrichmentText(text, links)
 }
 
-/** อ่านรูปตู้ กอง หรือกล่อง */
-export async function scanStorage(
-  key: string,
-  model: string,
-  imageBase64: string,
-  kind: StorageKind,
-): Promise<StorageScan> {
-  const book = {
-    type: 'OBJECT',
-    properties: {
-      title: { type: 'STRING' },
-      authors: { type: 'STRING' },
-      publisher: { type: 'STRING' },
-      color: { type: 'STRING', description: '#rrggbb' },
-    },
-    required: ['title', 'authors', 'publisher', 'color'],
-  }
+/** อ่านโครงสร้างตู้จากรูป (ไม่อ่านหนังสือ) */
+export async function scanBookcase(key: string, model: string, imageBase64: string): Promise<BookcaseScan> {
   const data = await call(`models/${model}:generateContent`, key, {
     contents: [
       {
         parts: [
           { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
-          { text: storagePrompt(kind) },
+          { text: bookcasePrompt() },
         ],
       },
     ],
@@ -197,30 +181,21 @@ export async function scanStorage(
       responseSchema: {
         type: 'OBJECT',
         properties: {
+          shelfCount: { type: 'INTEGER' },
           color: { type: 'STRING', description: '#rrggbb' },
           ratio: { type: 'NUMBER' },
-          label: { type: 'STRING' },
           drawerRows: { type: 'INTEGER' },
           drawersPerRow: { type: 'INTEGER' },
           doors: { type: 'INTEGER' },
           legs: { type: 'BOOLEAN' },
-          shelfCount: { type: 'INTEGER' },
-          shelves: {
-            type: 'ARRAY',
-            items: {
-              type: 'OBJECT',
-              properties: { books: { type: 'ARRAY', items: book } },
-              required: ['books'],
-            },
-          },
         },
-        required: ['color', 'ratio', 'label', 'drawerRows', 'drawersPerRow', 'doors', 'legs', 'shelfCount', 'shelves'],
+        required: ['shelfCount', 'color', 'ratio', 'drawerRows', 'drawersPerRow', 'doors', 'legs'],
       },
     },
   })
   const text: string = (data?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? '').join('')
   try {
-    return cleanStorage(JSON.parse(text), kind)
+    return cleanBookcase(JSON.parse(text))
   } catch {
     throw new AiError('other', 'unreadable response')
   }
