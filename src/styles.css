@@ -2336,3 +2336,44 @@ details.more[open] {
   min-height: 40px;
   padding: 0;
 }
+
+/* ---------- เลือกหลายเล่มในคลัง ---------- */
+.result-count .actions {
+  gap: 16px;
+  flex-wrap: nowrap;
+}
+.row.is-picked {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.select-bar {
+  position: sticky;
+  bottom: calc(64px + env(safe-area-inset-bottom));
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px -8px 0;
+  padding: 14px;
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+}
+.select-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.select-bar .link-btn {
+  min-height: 40px;
+  padding: 0;
+}
+.select-bar label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}

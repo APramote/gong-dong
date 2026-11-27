@@ -1,9 +1,10 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
 import type { ReadingStatus } from '../db/types'
 import { BookRow } from '../components/BookRow'
+import { PlaceSelect } from '../components/PlaceSelect'
 import { CoverThumb } from '../components/Cover'
 import { placeGroups, placeLabel } from '../placeLabel'
 import { loadSettings } from '../lib/settings'
@@ -32,6 +33,21 @@ export function LibraryPage() {
   const [limit, setLimit] = useState(PAGE)
   const [status, setStatus] = useState<ReadingStatus | ''>('')
   const [placeId, setPlaceId] = useState('')
+  // ---------- เลือกหลายเล่มเพื่อย้ายที่เก็บ ----------
+  const [selecting, setSelecting] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [dest, setDest] = useState<string | null>(null)
+  const [moveMsg, setMoveMsg] = useState('')
+  const togglePick = useCallback(
+    (id: string) =>
+      setPicked((cur) => {
+        const next = new Set(cur)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      }),
+    [],
+  )
   const [hintHidden, setHintHidden] = useState(() => {
     try {
       return localStorage.getItem(HINT_KEY) === '1'
@@ -81,6 +97,8 @@ export function LibraryPage() {
   // มีหนังสือแล้วแต่ยังไม่ได้เชื่อม Google: ข้อมูลอยู่ในเครื่องนี้ที่เดียว ชวนให้เข้าสู่ระบบ
   const showBackupHint = !hintHidden && books.length > 0 && !loadSettings().googleAccount
   const dong = books.filter((b) => b.status === 'dong').length
+  // นับเฉพาะเล่มที่เลือกไว้และยังอยู่ในรายการที่กรองอยู่ (เปลี่ยนตัวกรองแล้วเล่มที่มองไม่เห็นจะไม่ถูกย้าย)
+  const pickedShown = selecting ? shown.filter((b) => picked.has(b.id)) : []
   const filtering = Boolean(deferredQuery.trim() || status || placeId || categoryId)
 
   return (
@@ -206,20 +224,40 @@ export function LibraryPage() {
       </div>
 
       {/* กรองหรือค้นอยู่: บอกจำนวนเล่มที่ตรง และล้างตัวกรองได้ในปุ่มเดียว */}
-      {filtering && (
+      {(filtering || books.length > 0) && (
         <p className="muted result-count" role="status">
-          <span>{t.library.found(shown.length, books.length)}</span>
-          <button
-            className="link-btn"
-            onClick={() => {
-              setQuery('')
-              setStatus('')
-              setPlaceId('')
-              setCategoryId('')
-            }}
-          >
-            {t.library.clearFilters}
-          </button>
+          <span>{filtering ? t.library.found(shown.length, books.length) : ''}</span>
+          <span className="actions">
+            {filtering && (
+              <button
+                className="link-btn"
+                onClick={() => {
+                  setQuery('')
+                  setStatus('')
+                  setPlaceId('')
+                  setCategoryId('')
+                }}
+              >
+                {t.library.clearFilters}
+              </button>
+            )}
+            {shown.length > 0 && !selecting && (
+              <button
+                className="link-btn"
+                onClick={() => {
+                  setSelecting(true)
+                  setMoveMsg('')
+                }}
+              >
+                {t.library.select}
+              </button>
+            )}
+          </span>
+        </p>
+      )}
+      {moveMsg && (
+        <p className="ok" role="status">
+          {moveMsg}
         </p>
       )}
 
@@ -231,6 +269,8 @@ export function LibraryPage() {
             <BookRow
               key={b.id}
               book={b}
+              selected={selecting ? picked.has(b.id) : undefined}
+              onSelect={selecting ? togglePick : undefined}
               sub={[
                 b.takenAt ? t.library.inHand : b.placeId ? labels.get(b.placeId) : t.library.noPlace,
                 b.categoryId && catName.get(b.categoryId),
@@ -247,6 +287,50 @@ export function LibraryPage() {
             {t.library.showMore(Math.min(PAGE, shown.length - limit), shown.length - limit)}
           </button>
         </p>
+      )}
+
+      {/* แถบคำสั่งของโหมดเลือกหลายเล่ม ลอยอยู่เหนือเมนูล่าง */}
+      {selecting && (
+        <div className="select-bar" role="region" aria-label={t.library.select}>
+          <div className="select-row">
+            <strong>{t.library.pickedN(pickedShown.length)}</strong>
+            <span className="actions">
+              <button className="link-btn" onClick={() => setPicked(new Set(shown.map((b) => b.id)))}>
+                {t.library.pickAll(shown.length)}
+              </button>
+              <button className="link-btn" disabled={picked.size === 0} onClick={() => setPicked(new Set())}>
+                {t.library.pickNone}
+              </button>
+            </span>
+          </div>
+          <PlaceSelect label={t.library.moveTo} value={dest} onChange={setDest} />
+          <div className="actions">
+            <button
+              className="btn primary"
+              disabled={pickedShown.length === 0}
+              onClick={async () => {
+                // ย้ายตามลำดับที่เห็นในรายการ เล่มที่อยู่ในมือถูกข้าม
+                const ids = pickedShown.map((b) => b.id)
+                const inHand = pickedShown.filter((b) => b.takenAt).length
+                const moved = await repo.moveBooks(ids, dest)
+                setMoveMsg(t.library.moved(moved, dest ? (labels.get(dest) ?? '') : t.library.noPlace, inHand))
+                setPicked(new Set())
+                setSelecting(false)
+              }}
+            >
+              {t.library.moveN(pickedShown.length)}
+            </button>
+            <button
+              className="btn"
+              onClick={() => {
+                setSelecting(false)
+                setPicked(new Set())
+              }}
+            >
+              {t.common.cancel}
+            </button>
+          </div>
+        </div>
       )}
     </>
   )

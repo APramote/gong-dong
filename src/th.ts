@@ -50,6 +50,14 @@ export const t = {
     noMatch: 'ไม่เจอเล่มที่ค้นหา ลองเปลี่ยนคำค้นหรือตัวกรอง',
     found: (n: number, total: number) => `พบ ${n} เล่ม จาก ${total} เล่ม`,
     clearFilters: 'ล้างตัวกรอง',
+    select: 'เลือกหลายเล่ม',
+    pickedN: (n: number) => `เลือกแล้ว ${n} เล่ม`,
+    pickAll: (n: number) => `เลือกทั้งหมด (${n})`,
+    pickNone: 'ไม่เลือก',
+    moveTo: 'ย้ายไปที่',
+    moveN: (n: number) => `ย้าย ${n} เล่ม`,
+    moved: (n: number, place: string, inHand: number) =>
+      `ย้าย ${n} เล่มไปที่ ${place} แล้ว${inHand ? ` (ข้าม ${inHand} เล่มที่อยู่ในมือ)` : ''}`,
     showMore: (n: number, left: number) => `แสดงเพิ่มอีก ${n} เล่ม (เหลือ ${left} เล่ม)`,
     summary: (total: number, dong: number) =>
       total === 0

@@ -9,13 +9,21 @@ export const BookRow = memo(function BookRow({
   book,
   sub,
   actions,
+  selected,
+  onSelect,
 }: {
   book: Book
   sub?: string
   actions?: ReactNode
+  /** โหมดเลือกหลายเล่ม: ส่ง onSelect มาเพื่อแสดงช่องติ๊กหน้าแถว (ต้องเป็นฟังก์ชันเดิมทุกครั้ง แถวจะไม่วาดใหม่เกินจำเป็น) */
+  selected?: boolean
+  onSelect?: (id: string) => void
 }) {
   return (
-    <li className="row">
+    <li className={`row${selected ? ' is-picked' : ''}`}>
+      {onSelect && (
+        <input type="checkbox" className="pick" aria-label={book.title} checked={Boolean(selected)} onChange={() => onSelect(book.id)} />
+      )}
       <CoverThumb bookId={book.id} title={book.title} color={book.spineColor} />
       <Link to={`/book/${book.id}`} className="row-main">
         <span className="row-title">{book.title}</span>

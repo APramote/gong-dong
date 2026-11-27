@@ -464,6 +464,26 @@ export function createRepo(db: GongDongDB = defaultDb) {
     },
 
     /** สลับลำดับกับเล่มข้างเคียงในที่เก็บเดียวกัน (dir -1 = เลื่อนไปก่อน, 1 = เลื่อนไปหลัง) */
+    /**
+     * ย้ายหลายเล่มไปที่เก็บเดียวกัน ต่อท้ายตามลำดับที่ส่งมา ในธุรกรรมเดียว คืนจำนวนเล่มที่ย้ายจริง
+     * (ข้ามเล่มที่อยู่ในมือ เล่มที่อยู่ที่นั้นอยู่แล้ว และไม่ย้ายถ้าที่ปลายทางถูกลบไปแล้ว)
+     */
+    async moveBooks(ids: string[], placeId: string | null): Promise<number> {
+      return db.transaction('rw', db.books, db.places, async () => {
+        if (!(await placeAlive(placeId))) return 0
+        let position = await nextPosition(placeId)
+        const now = Date.now()
+        let moved = 0
+        for (const id of ids) {
+          const b = await db.books.get(id)
+          if (!b || b.deletedAt !== null || b.takenAt || b.placeId === placeId) continue
+          await db.books.update(id, { placeId, position: position++, updatedAt: now })
+          moved++
+        }
+        return moved
+      })
+    },
+
     /** จัดลำดับหนังสือในที่เก็บตามรายการ id ที่ส่งมา (เล่มที่ไม่อยู่ในรายการต่อท้ายตามลำดับเดิม) คืนจำนวนเล่มที่เปลี่ยนตำแหน่ง */
     async setOrder(placeId: string, ids: string[]): Promise<number> {
       return db.transaction('rw', db.books, async () => {

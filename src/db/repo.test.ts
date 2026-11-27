@@ -454,3 +454,20 @@ test('จัดลำดับในที่เก็บตามรายก�
   expect(await titles(pile)).toEqual(['ค', 'ก', 'ข', 'ง'])
   expect(await repo.setOrder(pile, [ids['ค'], ids['ก']])).toBe(0) // ลำดับเดิมแล้ว ไม่แตะอะไร
 })
+
+test('ย้ายหลายเล่มพร้อมกัน: ต่อท้ายตามลำดับ ข้ามเล่มในมือและเล่มที่อยู่ที่นั้นแล้ว', async () => {
+  const shelf = await repo.addPlace('pile', { name: 'ปลายทาง', location: '', label: '' })
+  const gone = await repo.addPlace('box', { name: 'ถูกลบ', location: '', label: '' })
+  await repo.addBook({ ...emptyBook, title: 'อยู่ก่อน', placeId: shelf })
+  const a = await repo.addBook({ ...emptyBook, title: 'ก' })
+  const b = await repo.addBook({ ...emptyBook, title: 'ข' })
+  const hand = await repo.addBook({ ...emptyBook, title: 'ในมือ' })
+  const there = await repo.addBook({ ...emptyBook, title: 'อยู่แล้ว', placeId: shelf })
+  await repo.takeBook(hand)
+  expect(await repo.moveBooks([b, hand, there, a, 'ไม่มีจริง'], shelf)).toBe(2)
+  expect(await titles(shelf)).toEqual(['อยู่ก่อน', 'อยู่แล้ว', 'ข', 'ก'])
+  expect((await repo.getBook(hand))!.takenAt).not.toBeNull()
+  await repo.deletePlace(gone)
+  expect(await repo.moveBooks([a, b], gone)).toBe(0) // ที่ปลายทางถูกลบไปแล้ว ไม่ย้าย
+  expect(await repo.moveBooks([a], null)).toBe(1) // ย้ายออกเป็นยังไม่ระบุที่เก็บได้
+})
