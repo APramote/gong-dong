@@ -15,5 +15,6 @@ export function aiErrorText(e: unknown): string {
       : q.period === 'minute'
         ? t.ai.quotaMinute(what, q.retrySeconds)
         : t.ai.quota
-  return q.id ? `${main}\n${t.ai.quotaId(q.id)}` : main
+  const detail = [q.id, q.message].filter(Boolean).join(' — ')
+  return detail ? `${main}\n${t.ai.quotaId(detail)}` : main
 }

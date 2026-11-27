@@ -13,6 +13,8 @@ export interface QuotaInfo {
   retrySeconds: number | null
   /** ชื่อโควตาดิบจาก Google ใช้แสดงประกอบเพื่อตรวจสอบ */
   id: string
+  /** ข้อความ error ดิบจาก Google */
+  message: string
 }
 
 export class GeminiError extends Error {
@@ -27,10 +29,13 @@ export class GeminiError extends Error {
 
 export function parseQuota(body: string): QuotaInfo {
   let details: any[] = []
+  let message = ''
   try {
-    details = JSON.parse(body)?.error?.details ?? []
+    const err = JSON.parse(body)?.error
+    details = err?.details ?? []
+    message = String(err?.message ?? '')
   } catch {
-    // ไม่ใช่ JSON ใช้ค่าว่าง
+    message = body
   }
   const v = details.find((d) => /QuotaFailure$/.test(d?.['@type'] ?? ''))?.violations?.[0] ?? {}
   const retry = details.find((d) => /RetryInfo$/.test(d?.['@type'] ?? ''))?.retryDelay
@@ -43,6 +48,7 @@ export function parseQuota(body: string): QuotaInfo {
     limit: String(v.quotaValue ?? ''),
     retrySeconds: Number.isFinite(seconds) ? Math.ceil(seconds) : null,
     id,
+    message: message.replace(/\s+/g, ' ').trim().slice(0, 300),
   }
 }
 
