@@ -1,5 +1,5 @@
 import { db as defaultDb, type GongDongDB } from './db'
-import type { Book, Bookcase, Place, PlaceKind, ReadingSession, SyncFields } from './types'
+import type { Book, Bookcase, Look, Place, PlaceKind, ReadingSession, SyncFields } from './types'
 
 const newId = () => crypto.randomUUID()
 
@@ -36,6 +36,7 @@ export const emptyBook: BookInput = {
   blurb: '',
   reviewSummary: '',
   links: [],
+  spineColor: '',
   note: '',
   status: 'dong',
   currentPage: null,
@@ -278,12 +279,51 @@ export function createRepo(db: GongDongDB = defaultDb) {
       return bookcase.id
     },
 
+    /**
+     * สร้างตู้จากรูป: ชั้นตามจำนวนที่ส่งมา (บนลงล่าง) พร้อมหนังสือแต่ละชั้นเรียงซ้ายไปขวา
+     * คืน id ของตู้
+     */
+    async addBookcaseWithBooks(
+      input: BookcaseInput,
+      look: Look,
+      shelves: BookInput[][],
+    ): Promise<string> {
+      const id = await this.addBookcase(input, Math.max(1, shelves.length))
+      await db.bookcases.update(id, { look })
+      const created = alive(await db.places.where('bookcaseId').equals(id).toArray()).sort(
+        (a, b) => a.order - b.order,
+      )
+      for (let i = 0; i < shelves.length; i++) {
+        for (const book of shelves[i]) await this.addBook({ ...book, placeId: created[i].id })
+      }
+      return id
+    },
+
+    /** สร้างกองหรือกล่องจากรูป พร้อมหนังสือตามลำดับที่ส่งมา */
+    async addPlaceWithBooks(
+      kind: Exclude<PlaceKind, 'shelf'>,
+      input: PlaceInput,
+      look: Look,
+      books: BookInput[],
+    ): Promise<string> {
+      const id = await this.addPlace(kind, input)
+      await db.places.update(id, { look })
+      for (const book of books) await this.addBook({ ...book, placeId: id })
+      return id
+    },
+
+    async getBookcase(id: string): Promise<Bookcase | undefined> {
+      const b = await db.bookcases.get(id)
+      return b && b.deletedAt === null ? b : undefined
+    },
+
     async updateBookcase(id: string, input: BookcaseInput): Promise<void> {
       await db.bookcases.update(id, { ...input, updatedAt: Date.now() })
     },
 
     /** ลบตู้ = ลบชั้นวางทั้งหมดในตู้ หนังสือกลับไปเป็น "ยังไม่ระบุที่เก็บ" */
     async deleteBookcase(id: string): Promise<void> {
+      await db.covers.delete(id)
       const shelves = alive(await db.places.where('bookcaseId').equals(id).toArray())
       await db.transaction('rw', db.bookcases, db.places, db.books, async () => {
         for (const s of shelves) await removePlace(db, s.id)
@@ -332,6 +372,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
 
     /** ลบที่เก็บ หนังสือข้างในกลับไปเป็น "ยังไม่ระบุที่เก็บ" (ไม่ลบหนังสือ) */
     async deletePlace(id: string): Promise<void> {
+      await db.covers.delete(id)
       await db.transaction('rw', db.places, db.books, () => removePlace(db, id))
     },
   }

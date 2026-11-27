@@ -458,3 +458,79 @@ textarea {
 .topbar nav a {
   padding: 4px 10px;
 }
+.view3d-wrap {
+  height: 62vh;
+  min-height: 320px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(var(--surface), var(--bg));
+  overflow: hidden;
+  touch-action: none;
+}
+.view3d-wrap.small {
+  height: 42vh;
+  min-height: 240px;
+}
+.view3d {
+  width: 100%;
+  height: 100%;
+}
+.view3d canvas {
+  display: block;
+}
+.center {
+  text-align: center;
+  margin-top: 6px;
+}
+.card.picked {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface);
+}
+.card.picked .row {
+  padding: 0;
+}
+.storage-photo-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.photo-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+.storage-photo {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.storage-photo.zoom {
+  max-height: none;
+  object-fit: contain;
+}
+.swatch {
+  flex: none;
+  width: 10px;
+  align-self: stretch;
+  border-radius: 3px;
+}
+.color-field {
+  max-width: 120px;
+}
+.color-field input {
+  height: 40px;
+  padding: 2px;
+}
+.shelf-edit {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

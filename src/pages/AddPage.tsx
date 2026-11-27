@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { emptyBook, repo } from '../db/repo'
 import { PlaceSelect } from '../components/PlaceSelect'
+import { BookRowsEditor, chosen as chosenRows, toRows, type EditRow } from '../components/BookRowsEditor'
 import { Scanner } from '../components/Scanner'
 import { aiReady, recognize } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
@@ -11,17 +12,6 @@ import { lookupIsbn } from '../lib/isbn'
 import { t } from '../th'
 
 type Mode = 'cover' | 'spine'
-interface Row {
-  key: number
-  include: boolean
-  duplicate: boolean
-  title: string
-  authors: string
-  publisher: string
-}
-
-const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '')
-let rowKey = 0
 
 export function AddPage() {
   const [params] = useSearchParams()
@@ -31,7 +21,7 @@ export function AddPage() {
   const [step, setStep] = useState<'menu' | 'busy' | 'review' | 'scan'>('menu')
   const [busyText, setBusyText] = useState('')
   const [error, setError] = useState('')
-  const [rows, setRows] = useState<Row[]>([])
+  const [rows, setRows] = useState<EditRow[]>([])
   const [mode, setMode] = useState<Mode>('cover')
   const [photo, setPhoto] = useState<Blob | null>(null)
   const inputs = {
@@ -57,14 +47,8 @@ export function AddPage() {
         setError(t.add.none)
         return setStep('menu')
       }
-      const have = new Set(existing.map((b) => norm(b.title)))
       setPhoto(image)
-      setRows(
-        found.map((b) => {
-          const duplicate = have.has(norm(b.title))
-          return { key: rowKey++, include: !duplicate, duplicate, ...b }
-        }),
-      )
+      setRows(toRows(found, existing.map((b) => b.title)))
       setStep('review')
     } catch (err) {
       setError(aiErrorText(err))
@@ -81,10 +65,7 @@ export function AddPage() {
     })
   }
 
-  const patch = (key: number, change: Partial<Row>) =>
-    setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...change } : r)))
-
-  const chosen = rows.filter((r) => r.include && r.title.trim())
+  const chosen = chosenRows(rows)
 
   async function saveAll() {
     const place = placeId ? await repo.getPlace(placeId) : undefined
@@ -116,51 +97,7 @@ export function AddPage() {
         <h1>{t.add.reviewTitle}</h1>
         <p className="muted">{t.add.reviewHint(rows.length)}</p>
         <PlaceSelect label={t.add.dest} value={placeId} onChange={setPlaceId} />
-        <ol className="list">
-          {rows.map((r) => (
-            <li className="row review-row" key={r.key}>
-              <input
-                type="checkbox"
-                aria-label={t.add.include}
-                checked={r.include}
-                onChange={(e) => patch(r.key, { include: e.target.checked })}
-              />
-              <div className="review-fields">
-                <input
-                  aria-label={t.book.title}
-                  placeholder={t.book.title}
-                  value={r.title}
-                  onChange={(e) => patch(r.key, { title: e.target.value })}
-                />
-                <input
-                  aria-label={t.book.authors}
-                  placeholder={t.book.authors}
-                  value={r.authors}
-                  onChange={(e) => patch(r.key, { authors: e.target.value })}
-                />
-                <input
-                  aria-label={t.book.publisher}
-                  placeholder={t.book.publisher}
-                  value={r.publisher}
-                  onChange={(e) => patch(r.key, { publisher: e.target.value })}
-                />
-                {r.duplicate && <span className="badge badge-reading">{t.add.duplicate}</span>}
-              </div>
-            </li>
-          ))}
-        </ol>
-        <button
-          type="button"
-          className="btn"
-          onClick={() =>
-            setRows((rs) => [
-              ...rs,
-              { key: rowKey++, include: true, duplicate: false, title: '', authors: '', publisher: '' },
-            ])
-          }
-        >
-          {t.add.addRow}
-        </button>
+        <BookRowsEditor rows={rows} onChange={setRows} />
         <div className="actions">
           <button className="btn primary" disabled={chosen.length === 0} onClick={saveAll}>
             {t.add.saveN(chosen.length)}

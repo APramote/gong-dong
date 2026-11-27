@@ -6,6 +6,7 @@ import { BookRow } from '../components/BookRow'
 import { FieldsForm } from '../components/FieldsForm'
 import { placeFields } from '../placeFields'
 import { placeLabel } from '../placeLabel'
+import { StoragePhoto } from '../components/StoragePhoto'
 import { t } from '../th'
 
 export function PlacePage() {
@@ -65,6 +66,15 @@ export function PlacePage() {
           }}
         />
       )}
+
+      {place?.kind === 'shelf' && place.bookcaseId && (
+        <p>
+          <Link className="btn small" to={`/view/bookcase/${place.bookcaseId}`}>
+            {t.view.openBookcase}
+          </Link>
+        </p>
+      )}
+      {place && place.kind !== 'shelf' && <StoragePhoto id={place.id} />}
 
       <div className="section-head">
         <p className="muted">

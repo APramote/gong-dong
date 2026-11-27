@@ -52,6 +52,9 @@ export function PlacesPage() {
     <>
       <div className="page-head">
         <h1>{t.nav.places}</h1>
+        <Link to="/scan" className="btn primary">
+          {t.scan.open}
+        </Link>
       </div>
 
       {section(
@@ -81,6 +84,9 @@ export function PlacesPage() {
                     {bc.room && <p className="muted">{bc.room}</p>}
                   </div>
                   <div className="actions">
+                    <Link className="btn small primary" to={`/view/bookcase/${bc.id}`}>
+                      {t.view.open}
+                    </Link>
                     <button className="btn small" onClick={() => repo.addShelf(bc.id)}>
                       {t.places.addShelf}
                     </button>

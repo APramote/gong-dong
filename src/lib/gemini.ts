@@ -2,6 +2,10 @@ const BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
 import {
   AiError,
+  cleanStorage,
+  storagePrompt,
+  type StorageKind,
+  type StorageScan,
   cleanBooks,
   enrichPrompt,
   parseEnrichmentText,
@@ -156,4 +160,60 @@ export function parseEnrichment(data: any): Enrichment {
     url: c?.web?.uri,
   }))
   return parseEnrichmentText(text, links)
+}
+
+/** อ่านรูปตู้ กอง หรือกล่อง */
+export async function scanStorage(
+  key: string,
+  model: string,
+  imageBase64: string,
+  kind: StorageKind,
+): Promise<StorageScan> {
+  const book = {
+    type: 'OBJECT',
+    properties: {
+      title: { type: 'STRING' },
+      authors: { type: 'STRING' },
+      publisher: { type: 'STRING' },
+      color: { type: 'STRING', description: '#rrggbb' },
+    },
+    required: ['title', 'authors', 'publisher', 'color'],
+  }
+  const data = await call(`models/${model}:generateContent`, key, {
+    contents: [
+      {
+        parts: [
+          { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
+          { text: storagePrompt(kind) },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          color: { type: 'STRING', description: '#rrggbb' },
+          ratio: { type: 'NUMBER' },
+          label: { type: 'STRING' },
+          shelves: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: { books: { type: 'ARRAY', items: book } },
+              required: ['books'],
+            },
+          },
+        },
+        required: ['color', 'ratio', 'label', 'shelves'],
+      },
+    },
+  })
+  const text: string = (data?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? '').join('')
+  try {
+    return cleanStorage(JSON.parse(text), kind)
+  } catch {
+    throw new AiError('other', 'unreadable response')
+  }
 }

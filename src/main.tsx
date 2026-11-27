@@ -10,6 +10,8 @@ import { PlacePage } from './pages/PlacePage'
 import { AddPage } from './pages/AddPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { ReadingPage } from './pages/ReadingPage'
+import { ScanStoragePage } from './pages/ScanStoragePage'
+import { BookcaseViewPage } from './pages/BookcaseViewPage'
 
 function App() {
   return (
@@ -33,6 +35,8 @@ function App() {
           <Route path="/add" element={<AddPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/reading" element={<ReadingPage />} />
+          <Route path="/scan" element={<ScanStoragePage />} />
+          <Route path="/view/bookcase/:id" element={<BookcaseViewPage />} />
           <Route path="/book/new" element={<BookFormPage />} />
           <Route path="/book/:id" element={<BookFormPage />} />
           <Route path="/places" element={<PlacesPage />} />

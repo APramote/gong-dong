@@ -160,3 +160,104 @@ export function parseEnrichmentText(
     links,
   }
 }
+
+// ---------- อ่านรูปที่เก็บ (ตู้ / กอง / กล่อง) ----------
+
+export type StorageKind = 'bookcase' | 'pile' | 'box'
+
+export interface ScannedBook extends RecognizedBook {
+  /** สีสันของหนังสือ #rrggbb หรือว่าง */
+  color: string
+}
+
+export interface StorageScan {
+  /** สีหลักของตู้หรือกล่อง #rrggbb */
+  color: string
+  /** สัดส่วนกว้าง/สูงที่เห็นในรูป (0 = ไม่ทราบ) */
+  ratio: number
+  /** ข้อความบนป้ายกล่อง */
+  label: string
+  /**
+   * ตู้: แต่ละชั้นจากบนลงล่าง หนังสือในชั้นเรียงซ้ายไปขวา
+   * กอง: หนึ่งรายการ หนังสือเรียงจากบนลงล่าง
+   * กล่อง: หนังสือที่มองเห็นในกล่อง (ถ้าเปิดอยู่)
+   */
+  shelves: { books: ScannedBook[] }[]
+}
+
+const STORAGE_PROMPTS: Record<StorageKind, string> = {
+  bookcase:
+    'This photo shows a bookcase. Count every shelf level from top to bottom, including empty ones, ' +
+    'and return one entry per shelf in that order. For each shelf list every book whose spine is at least partly ' +
+    'readable, left to right. Also return the main colour of the bookcase itself and its visible width divided by height.',
+  pile:
+    'This photo shows a pile of books lying on top of each other. Return exactly one shelf entry whose books are ' +
+    'listed from the top of the pile to the bottom. Also return the colour of the surface they rest on and 0 for ratio.',
+  box:
+    'This photo shows a storage box. Read any text written or printed on the box (its label) exactly as written. ' +
+    'Return the main colour of the box and its visible width divided by height. If the box is open and book spines ' +
+    'or covers are readable, return them as one shelf entry; otherwise return an empty list of shelves.',
+}
+
+export const storagePrompt = (kind: StorageKind) =>
+  STORAGE_PROMPTS[kind] +
+  ' For each book give "color": the dominant colour of its spine (or cover) as #rrggbb.' +
+  RECOGNIZE_RULES +
+  ' Colours must be #rrggbb hex values.'
+
+/** JSON Schema ของผลอ่านรูปที่เก็บ (สำหรับ Claude) */
+export const storageSchema = {
+  type: 'object',
+  properties: {
+    color: { type: 'string' },
+    ratio: { type: 'number' },
+    label: { type: 'string' },
+    shelves: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          books: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                title: { type: 'string' },
+                authors: { type: 'string' },
+                publisher: { type: 'string' },
+                color: { type: 'string' },
+              },
+              required: ['title', 'authors', 'publisher', 'color'],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ['books'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['color', 'ratio', 'label', 'shelves'],
+  additionalProperties: false,
+} as const
+
+const hex = (v: unknown) => {
+  const m = /#?([0-9a-f]{6})\b/i.exec(typeof v === 'string' ? v : '')
+  return m ? `#${m[1].toLowerCase()}` : ''
+}
+
+/** ทำความสะอาดผลอ่านรูปที่เก็บ: สีผิดรูปแบบทิ้งไป หนังสือไม่มีชื่อทิ้งไป จำกัดจำนวนชั้น */
+export function cleanStorage(raw: any, kind: StorageKind): StorageScan {
+  const ratio = Number(raw?.ratio)
+  let shelves = (Array.isArray(raw?.shelves) ? raw.shelves : []).slice(0, 20).map((s: any) => ({
+    books: cleanBooks(s?.books).map((b, i) => ({ ...b, color: hex(s?.books?.filter((x: any) => str(x?.title))[i]?.color) })),
+  }))
+  // กองมีได้ชั้นเดียว รวมทุกรายการเข้าด้วยกัน
+  if (kind !== 'bookcase') shelves = shelves.length ? [{ books: shelves.flatMap((s: { books: ScannedBook[] }) => s.books) }] : []
+  return {
+    color: hex(raw?.color),
+    ratio: Number.isFinite(ratio) && ratio > 0.1 && ratio < 10 ? ratio : 0,
+    label: str(raw?.label),
+    shelves,
+  }
+}

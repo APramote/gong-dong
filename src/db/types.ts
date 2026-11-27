@@ -43,6 +43,16 @@ export interface Book extends SyncFields {
   takenFrom: string | null
   /** เวลาที่อ่านจบ ใช้ทำสถิติ */
   finishedAt: number | null
+  /** สีสัน (#rrggbb) จากรูป ใช้วาด 3D — ว่างคือให้แอปเลือกสีเอง */
+  spineColor: string
+}
+
+/** หน้าตาของที่เก็บสำหรับวาด 3D ได้จากรูปที่ถ่าย */
+export interface Look {
+  /** สีหลัก #rrggbb */
+  color: string
+  /** สัดส่วนกว้าง/สูงของตู้หรือกล่อง (0 = ไม่ทราบ) */
+  ratio: number
 }
 
 /** การหยิบไปอ่านหนึ่งครั้ง ตั้งแต่หยิบจนวางคืน */
@@ -67,6 +77,7 @@ export interface ReadingSession extends SyncFields {
 export interface Bookcase extends SyncFields {
   name: string
   room: string
+  look?: Look
 }
 
 export type PlaceKind = 'shelf' | 'pile' | 'box'
@@ -84,6 +95,7 @@ export interface Place extends SyncFields {
   order: number
   location: string
   label: string
+  look?: Look
 }
 
 /** รูปปก เก็บแยกจากข้อมูลหนังสือเพื่อให้รายการหนังสือเบา — id คือ id ของหนังสือ */

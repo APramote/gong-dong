@@ -1,6 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk'
 import {
   AiError,
+  cleanStorage,
+  storagePrompt,
+  storageSchema,
+  type StorageKind,
+  type StorageScan,
   booksSchema,
   cleanBooks,
   enrichPrompt,
@@ -140,6 +145,41 @@ export async function enrichBookClaude(
       return parseEnrichmentText(textOf(res.content), links)
     }
     throw new AiError('other', 'web search did not finish')
+  } catch (e) {
+    throw toAiError(e)
+  }
+}
+
+export async function scanStorageClaude(
+  key: string,
+  model: string,
+  imageBase64: string,
+  kind: StorageKind,
+): Promise<StorageScan> {
+  try {
+    const res = await client(key).beta.messages.create({
+      model,
+      max_tokens: 16000,
+      ...fallback(model),
+      output_config: { format: { type: 'json_schema', schema: storageSchema as never } },
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 } },
+            { type: 'text', text: storagePrompt(kind) },
+          ],
+        },
+      ],
+    })
+    if (res.stop_reason === 'refusal') throw new AiError('refusal')
+    let parsed: any
+    try {
+      parsed = JSON.parse(textOf(res.content))
+    } catch {
+      throw new AiError('other', 'unreadable response')
+    }
+    return cleanStorage(parsed, kind)
   } catch (e) {
     throw toAiError(e)
   }

@@ -129,3 +129,31 @@ test('สถิติการอ่านและเวลาเริ่ม�
   expect(formatMinutes(80)).toBe('1 ชม. 20 นาที')
   expect(clock(3909000)).toBe('1:05:09')
 })
+
+test('ทำความสะอาดผลอ่านรูปที่เก็บ', async () => {
+  const { cleanStorage } = await import('./aiCommon')
+  const raw = {
+    color: '8B5A2B',
+    ratio: 0.8,
+    label: ' นิยาย ',
+    shelves: [
+      { books: [{ title: 'ก', authors: '', publisher: '', color: '#AA0000' }, { title: '', authors: 'x', publisher: '', color: '#00ff00' }, { title: 'ข', authors: '', publisher: '', color: 'red' }] },
+      { books: [] },
+    ],
+  }
+  expect(cleanStorage(raw, 'bookcase')).toEqual({
+    color: '#8b5a2b',
+    ratio: 0.8,
+    label: 'นิยาย',
+    shelves: [
+      { books: [{ title: 'ก', authors: '', publisher: '', color: '#aa0000' }, { title: 'ข', authors: '', publisher: '', color: '' }] },
+      { books: [] },
+    ],
+  })
+  // กองรวมเป็นชั้นเดียว ratio ผิดช่วงเป็น 0
+  const pile = cleanStorage({ ...raw, ratio: 50 }, 'pile')
+  expect(pile.ratio).toBe(0)
+  expect(pile.shelves).toHaveLength(1)
+  expect(pile.shelves[0].books.map((b) => b.title)).toEqual(['ก', 'ข'])
+  expect(cleanStorage({}, 'box')).toEqual({ color: '', ratio: 0, label: '', shelves: [] })
+})
