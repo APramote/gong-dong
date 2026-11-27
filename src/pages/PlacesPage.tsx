@@ -4,8 +4,11 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
 import type { Place } from '../db/types'
 import { FieldsForm } from '../components/FieldsForm'
+import { BookcaseCard, PlaceCard } from '../components/PlaceCards'
 import { bookcaseFields, placeFields } from '../placeFields'
 import { t } from '../th'
+
+const VIEW_KEY = 'gong-dong.placesView'
 
 export function PlacesPage() {
   const books = useLiveQuery(() => repo.listBooks(), []) ?? []
@@ -14,6 +17,23 @@ export function PlacesPage() {
   /** ฟอร์มที่เปิดอยู่: 'bookcase' | 'pile' | 'box' | `edit:<bookcaseId>` */
   const [open, setOpen] = useState<string | null>(null)
   const close = () => setOpen(null)
+  // รูปเป็นค่าเริ่มต้น จำตัวเลือกไว้ในเครื่อง
+  const [view, setViewState] = useState<'gallery' | 'list'>(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'gallery'
+    } catch {
+      return 'gallery'
+    }
+  })
+  const setView = (v: 'gallery' | 'list') => {
+    setViewState(v)
+    try {
+      localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      // เก็บไม่ได้ก็ใช้ได้ตามปกติ
+    }
+  }
+  const gallery = view === 'gallery'
 
   const count = (placeId: string | null) =>
     books.filter((b) => b.placeId === placeId && !b.takenAt).length
@@ -51,7 +71,16 @@ export function PlacesPage() {
   return (
     <>
       <div className="page-head">
-        <h1>{t.nav.places}</h1>
+        <div className="title-row">
+          <h1>{t.nav.places}</h1>
+          <div className="chips small" role="group" aria-label={t.places.viewLabel}>
+            {(['gallery', 'list'] as const).map((v) => (
+              <button key={v} className={view === v ? 'on' : ''} aria-pressed={view === v} onClick={() => setView(v)}>
+                {v === 'gallery' ? t.places.viewGallery : t.places.viewList}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="actions">
           <Link to="/labels" className="btn">
             {t.labels.title}
@@ -81,6 +110,12 @@ export function PlacesPage() {
         />,
         bookcases.length === 0 ? (
           <p className="empty">{t.places.emptyBookcases}</p>
+        ) : gallery ? (
+          <div className="place-grid">
+            {bookcases.map((bc) => (
+              <BookcaseCard key={bc.id} bookcase={bc} places={places} books={books} />
+            ))}
+          </div>
         ) : (
           bookcases.map((bc) => {
             // แสดงชั้นบนสุดก่อนให้ตรงกับตู้จริง (ชั้นที่ 1 อยู่ล่างสุด)
@@ -146,8 +181,11 @@ export function PlacesPage() {
           }}
         />,
         <PlaceList
-          rows={places.filter((p) => p.kind === 'pile').map((p) => placeRow(p, p.location))}
+          rows={places
+            .filter((p) => p.kind === 'pile')
+            .map((p) => (gallery ? <PlaceCard key={p.id} place={p} count={count(p.id)} /> : placeRow(p, p.location)))}
           empty={t.places.emptyPiles}
+          gallery={gallery}
         />,
       )}
 
@@ -166,8 +204,15 @@ export function PlacesPage() {
         <PlaceList
           rows={places
             .filter((p) => p.kind === 'box')
-            .map((p) => placeRow(p, [p.label, p.location].filter(Boolean).join(' · ')))}
+            .map((p) =>
+              gallery ? (
+                <PlaceCard key={p.id} place={p} count={count(p.id)} />
+              ) : (
+                placeRow(p, [p.label, p.location].filter(Boolean).join(' · '))
+              ),
+            )}
           empty={t.places.emptyBoxes}
+          gallery={gallery}
         />,
       )}
 
@@ -187,6 +232,7 @@ export function PlacesPage() {
   )
 }
 
-function PlaceList({ rows, empty }: { rows: ReactNode[]; empty: string }) {
-  return rows.length === 0 ? <p className="empty">{empty}</p> : <ul className="list">{rows}</ul>
+function PlaceList({ rows, empty, gallery }: { rows: ReactNode[]; empty: string; gallery: boolean }) {
+  if (rows.length === 0) return <p className="empty">{empty}</p>
+  return gallery ? <div className="place-grid">{rows}</div> : <ul className="list">{rows}</ul>
 }

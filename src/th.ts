@@ -257,6 +257,12 @@ export const t = {
 
 
   places: {
+    viewGallery: 'รูป',
+    viewList: 'รายการ',
+    viewLabel: 'รูปแบบการแสดง',
+    shelvesN: (n: number) => `${n} ชั้น`,
+    drawersN: (n: number) => `${n} ลิ้นชัก`,
+    open3d: 'แตะเพื่อดู 3D',
     bookcases: 'ตู้หนังสือ',
     piles: 'วางกอง',
     boxes: 'กล่อง',
