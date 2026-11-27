@@ -56,6 +56,11 @@ export const t = {
     pickNone: 'ไม่เลือก',
     moveTo: 'ย้ายไปที่',
     moveN: (n: number) => `ย้าย ${n} เล่ม`,
+    applyN: (n: number) => `ใช้กับ ${n} เล่ม`,
+    bulkLabel: 'สิ่งที่จะทำกับเล่มที่เลือก',
+    bulk: { move: 'ย้ายที่เก็บ', category: 'ตั้งหมวด', status: 'เปลี่ยนสถานะ' },
+    categorized: (n: number, name: string) => `ตั้งหมวด ${n} เล่มเป็น ${name} แล้ว`,
+    statusSet: (n: number, name: string) => `เปลี่ยนสถานะ ${n} เล่มเป็น ${name} แล้ว`,
     moved: (n: number, place: string, inHand: number) =>
       `ย้าย ${n} เล่มไปที่ ${place} แล้ว${inHand ? ` (ข้าม ${inHand} เล่มที่อยู่ในมือ)` : ''}`,
     showMore: (n: number, left: number) => `แสดงเพิ่มอีก ${n} เล่ม (เหลือ ${left} เล่ม)`,

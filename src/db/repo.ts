@@ -484,6 +484,39 @@ export function createRepo(db: GongDongDB = defaultDb) {
       })
     },
 
+    /** ตั้งหมวดให้หลายเล่มพร้อมกัน (null = ไม่มีหมวด) คืนจำนวนเล่มที่เปลี่ยน */
+    async setCategoryMany(ids: string[], categoryId: string | null): Promise<number> {
+      return db.transaction('rw', db.books, async () => {
+        const now = Date.now()
+        let changed = 0
+        for (const id of ids) {
+          const b = await db.books.get(id)
+          if (!b || b.deletedAt !== null || (b.categoryId ?? null) === categoryId) continue
+          await db.books.update(id, { categoryId, updatedAt: now })
+          changed++
+        }
+        return changed
+      })
+    },
+
+    /**
+     * เปลี่ยนสถานะการอ่านหลายเล่มพร้อมกัน คืนจำนวนเล่มที่เปลี่ยน
+     * วันที่อ่านจบใช้กฎเดียวกับฟอร์มหนังสือ: เปลี่ยนเป็นอ่านจบ = วันนี้ เปลี่ยนออกจากอ่านจบ = ล้างวันที่
+     */
+    async setStatusMany(ids: string[], status: Book['status']): Promise<number> {
+      return db.transaction('rw', db.books, async () => {
+        const now = Date.now()
+        let changed = 0
+        for (const id of ids) {
+          const b = await db.books.get(id)
+          if (!b || b.deletedAt !== null || b.status === status) continue
+          await db.books.update(id, { status, finishedAt: status === 'done' ? now : null, updatedAt: now })
+          changed++
+        }
+        return changed
+      })
+    },
+
     /** จัดลำดับหนังสือในที่เก็บตามรายการ id ที่ส่งมา (เล่มที่ไม่อยู่ในรายการต่อท้ายตามลำดับเดิม) คืนจำนวนเล่มที่เปลี่ยนตำแหน่ง */
     async setOrder(placeId: string, ids: string[]): Promise<number> {
       return db.transaction('rw', db.books, async () => {

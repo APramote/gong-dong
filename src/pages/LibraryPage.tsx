@@ -5,6 +5,7 @@ import { repo } from '../db/repo'
 import type { ReadingStatus } from '../db/types'
 import { BookRow } from '../components/BookRow'
 import { PlaceSelect } from '../components/PlaceSelect'
+import { CategorySelect } from '../components/CategorySelect'
 import { CoverThumb } from '../components/Cover'
 import { placeGroups, placeLabel } from '../placeLabel'
 import { loadSettings } from '../lib/settings'
@@ -37,6 +38,10 @@ export function LibraryPage() {
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [dest, setDest] = useState<string | null>(null)
+  /** จะทำอะไรกับเล่มที่เลือก: ย้ายที่เก็บ ตั้งหมวด หรือเปลี่ยนสถานะ */
+  const [bulk, setBulk] = useState<'move' | 'category' | 'status'>('move')
+  const [bulkCat, setBulkCat] = useState<string | null>(null)
+  const [bulkStatus, setBulkStatus] = useState<ReadingStatus>('dong')
   const [moveMsg, setMoveMsg] = useState('')
   const togglePick = useCallback(
     (id: string) =>
@@ -303,22 +308,50 @@ export function LibraryPage() {
               </button>
             </span>
           </div>
-          <PlaceSelect label={t.library.moveTo} value={dest} onChange={setDest} />
+          <div className="chips small" role="group" aria-label={t.library.bulkLabel}>
+            {(['move', 'category', 'status'] as const).map((k) => (
+              <button key={k} className={bulk === k ? 'on' : ''} aria-pressed={bulk === k} onClick={() => setBulk(k)}>
+                {t.library.bulk[k]}
+              </button>
+            ))}
+          </div>
+          {bulk === 'move' && <PlaceSelect label={t.library.moveTo} value={dest} onChange={setDest} />}
+          {bulk === 'category' && <CategorySelect value={bulkCat} onChange={setBulkCat} />}
+          {bulk === 'status' && (
+            <label>
+              {t.book.status}
+              <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value as ReadingStatus)}>
+                {Object.entries(t.status).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="actions">
             <button
               className="btn primary"
               disabled={pickedShown.length === 0}
               onClick={async () => {
-                // ย้ายตามลำดับที่เห็นในรายการ เล่มที่อยู่ในมือถูกข้าม
                 const ids = pickedShown.map((b) => b.id)
-                const inHand = pickedShown.filter((b) => b.takenAt).length
-                const moved = await repo.moveBooks(ids, dest)
-                setMoveMsg(t.library.moved(moved, dest ? (labels.get(dest) ?? '') : t.library.noPlace, inHand))
+                if (bulk === 'move') {
+                  // ย้ายตามลำดับที่เห็นในรายการ เล่มที่อยู่ในมือถูกข้าม
+                  const inHand = pickedShown.filter((b) => b.takenAt).length
+                  const moved = await repo.moveBooks(ids, dest)
+                  setMoveMsg(t.library.moved(moved, dest ? (labels.get(dest) ?? '') : t.library.noPlace, inHand))
+                } else if (bulk === 'category') {
+                  const n = await repo.setCategoryMany(ids, bulkCat)
+                  setMoveMsg(t.library.categorized(n, bulkCat ? (catName.get(bulkCat) ?? '') : t.categories.none))
+                } else {
+                  const n = await repo.setStatusMany(ids, bulkStatus)
+                  setMoveMsg(t.library.statusSet(n, t.status[bulkStatus]))
+                }
                 setPicked(new Set())
                 setSelecting(false)
               }}
             >
-              {t.library.moveN(pickedShown.length)}
+              {bulk === 'move' ? t.library.moveN(pickedShown.length) : t.library.applyN(pickedShown.length)}
             </button>
             <button
               className="btn"

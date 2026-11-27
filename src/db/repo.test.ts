@@ -471,3 +471,19 @@ test('ย้ายหลายเล่มพร้อมกัน: ต่อท
   expect(await repo.moveBooks([a, b], gone)).toBe(0) // ที่ปลายทางถูกลบไปแล้ว ไม่ย้าย
   expect(await repo.moveBooks([a], null)).toBe(1) // ย้ายออกเป็นยังไม่ระบุที่เก็บได้
 })
+
+test('ตั้งหมวดและเปลี่ยนสถานะหลายเล่มพร้อมกัน', async () => {
+  const cat = await repo.ensureCategory('นิยาย')
+  const a = await repo.addBook({ ...emptyBook, title: 'ก' })
+  const b = await repo.addBook({ ...emptyBook, title: 'ข', categoryId: cat })
+  const done = await repo.addBook({ ...emptyBook, title: 'จบแล้ว', status: 'done' })
+  expect(await repo.setCategoryMany([a, b, 'ไม่มีจริง'], cat)).toBe(1) // ข อยู่หมวดนี้แล้ว
+  expect((await repo.getBook(a))!.categoryId).toBe(cat)
+  expect(await repo.setCategoryMany([a, b], null)).toBe(2)
+  const before = (await repo.getBook(done))!.finishedAt
+  expect(await repo.setStatusMany([a, done], 'done')).toBe(1) // เล่มที่จบอยู่แล้วไม่ถูกแตะ วันที่อ่านจบคงเดิม
+  expect((await repo.getBook(a))!.finishedAt).not.toBeNull()
+  expect((await repo.getBook(done))!.finishedAt).toBe(before)
+  expect(await repo.setStatusMany([a, done], 'dong')).toBe(2)
+  expect((await repo.getBook(done))!).toMatchObject({ status: 'dong', finishedAt: null })
+})
