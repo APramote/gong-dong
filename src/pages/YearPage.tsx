@@ -39,7 +39,7 @@ export function YearPage() {
     try {
       const { toBlob } = await import('html-to-image')
       const bg = getComputedStyle(card.current).backgroundColor
-      const blob = await toBlob(card.current, { pixelRatio: 2, backgroundColor: bg, cacheBust: true })
+      const blob = await toBlob(card.current, { pixelRatio: 2, backgroundColor: bg })
       if (!blob) throw new Error('no image')
       const file = new File([blob], t.year.file(year), { type: 'image/png' })
       // มือถือ: เปิดเมนูแชร์ (บันทึกลงคลังรูปหรือส่งต่อได้) ไม่มีก็ดาวน์โหลด

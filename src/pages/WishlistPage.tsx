@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo, type WishInput } from '../db/repo'
-import { findMatches } from '../lib/picks'
+import { matcher } from '../lib/picks'
 import { t } from '../th'
 
 const blank: WishInput = { title: '', authors: '', isbn: '', note: '' }
@@ -15,10 +15,10 @@ export function WishlistPage() {
   const [done, setDone] = useState<{ id: string; title: string } | null>(null)
 
   // เล่มที่อยากได้แต่จริง ๆ มีในคลังแล้ว (เช่น ซื้อมาแล้วลืมติ๊ก)
-  const owned = useMemo(
-    () => new Set((wishes ?? []).filter((w) => findMatches(w, books, []).owned.length > 0).map((w) => w.id)),
-    [wishes, books],
-  )
+  const owned = useMemo(() => {
+    const find = matcher(books)
+    return new Set((wishes ?? []).filter((w) => find(w).length > 0).map((w) => w.id))
+  }, [wishes, books])
   if (!wishes) return <p className="empty">{t.common.loading}</p>
 
   async function add(e: FormEvent) {

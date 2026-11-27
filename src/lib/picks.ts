@@ -14,9 +14,7 @@ function isbnKey(raw: string): string {
   return s.startsWith('978') ? s.slice(3, 12) : s
 }
 
-function sameTitle(a: string, b: string): boolean {
-  const x = titleKey(a)
-  const y = titleKey(b)
+function sameKey(x: string, y: string): boolean {
   if (!x || !y) return false
   if (x === y) return true
   // ชื่อสั้นกว่าอยู่ในชื่อยาว เช่น "แฮร์รี่ พอตเตอร์ กับศิลาอาถรรพ์" กับ "แฮร์รี่ พอตเตอร์ กับศิลาอาถรรพ์ (ปกแข็ง)"
@@ -29,13 +27,23 @@ export interface MatchQuery {
   isbn?: string
 }
 
+/**
+ * เตรียมรายการไว้ค้นซ้ำหลายครั้ง: คำนวณกุญแจของแต่ละเล่มครั้งเดียว
+ * (หน้าอยากได้เทียบทุกรายการกับทั้งคลัง คลังใหญ่จะช้าถ้าคำนวณใหม่ทุกคู่)
+ */
+export function matcher<T extends { isbn: string; title: string }>(rows: T[]) {
+  const keyed = rows.map((row) => ({ row, isbn: isbnKey(row.isbn), title: titleKey(row.title) }))
+  return (query: MatchQuery): T[] => {
+    const isbn = query.isbn ? isbnKey(query.isbn) : ''
+    const title = titleKey(query.title ?? '')
+    if (!isbn && !title) return []
+    return keyed.filter((k) => (isbn !== '' && k.isbn === isbn) || sameKey(k.title, title)).map((k) => k.row)
+  }
+}
+
 /** หาว่าเล่มนี้มีในคลังหรือในรายการอยากได้แล้วหรือยัง */
 export function findMatches(query: MatchQuery, books: Book[], wishes: Wish[]) {
-  const isbn = query.isbn ? isbnKey(query.isbn) : ''
-  const title = query.title?.trim() ?? ''
-  const hit = (b: { isbn: string; title: string }) =>
-    (isbn !== '' && isbnKey(b.isbn) === isbn) || (title !== '' && sameTitle(b.title, title))
-  return { owned: books.filter(hit), wished: wishes.filter(hit) }
+  return { owned: matcher(books)(query), wished: matcher(wishes)(query) }
 }
 
 export type PickFilter = 'any' | 'thin' | 'old'

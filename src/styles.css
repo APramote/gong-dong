@@ -2086,3 +2086,18 @@ details.more[open] {
   font-weight: 700;
   letter-spacing: 0.05em;
 }
+
+/* คำยาวที่ไม่มีช่องว่าง (เช่น ชื่ออังกฤษยาว ๆ) ต้องตัดบรรทัดได้ ไม่ดันหน้าจอให้ล้น */
+.desk-title,
+.pick-text h2,
+.place-name,
+.suggest-title,
+.label-head h2,
+.label-titles li,
+.year-big,
+.year-facts dd,
+.quote blockquote,
+.year-quote blockquote,
+.para-pick button {
+  overflow-wrap: anywhere;
+}

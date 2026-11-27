@@ -7,7 +7,7 @@ const pad = (n: number) => String(n).padStart(2, '0')
 const local = (d: Date) =>
   `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`
 const utc = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
-const escape = (s: string) => s.replace(/[\;,]/g, (c) => `\\${c}`).replace(/\n/g, '\\n')
+const escape = (s: string) => s.replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\r?\n|\r/g, '\\n')
 
 export interface ReminderPlan {
   /** วันในสัปดาห์ 0 = อาทิตย์ */

@@ -12,7 +12,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "media-src 'self' blob:",
-  "connect-src 'self' blob: data: https://generativelanguage.googleapis.com https://api.anthropic.com https://www.googleapis.com https://openlibrary.org",
+  "connect-src 'self' blob: https://generativelanguage.googleapis.com https://api.anthropic.com https://www.googleapis.com https://openlibrary.org",
   "worker-src 'self'",
   "font-src 'self'",
   "object-src 'none'",

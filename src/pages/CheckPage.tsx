@@ -8,7 +8,7 @@ import { aiOn, aiReady, covers } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { blobToBase64, resizeImage } from '../lib/image'
 import { lookupIsbn, normalizeIsbn } from '../lib/isbn'
-import { findMatches } from '../lib/picks'
+import { matcher } from '../lib/picks'
 import { placeLabel } from '../placeLabel'
 import { t } from '../th'
 
@@ -39,9 +39,12 @@ export function CheckPage() {
     const isbn = normalizeIsbn(deferred)
     return isbn ? { title: '', authors: '', isbn } : { title: deferred.trim(), ...extra }
   }, [deferred, extra])
+  // เตรียมกุญแจของทั้งคลังครั้งเดียว พิมพ์ค้นแต่ละตัวอักษรจึงเร็ว
+  const findOwned = useMemo(() => matcher(books ?? []), [books])
+  const findWished = useMemo(() => matcher(wishes), [wishes])
   const result = useMemo(
-    () => (target.title || target.isbn ? findMatches(target, books ?? [], wishes) : null),
-    [target, books, wishes],
+    () => (target.title || target.isbn ? { owned: findOwned(target), wished: findWished(target) } : null),
+    [target, findOwned, findWished],
   )
   if (!books) return <p className="empty">{t.common.loading}</p>
 
