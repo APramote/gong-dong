@@ -25,6 +25,10 @@ export interface Settings {
   /** เตือนเวลาอ่าน: วันในสัปดาห์ (0 = อาทิตย์) และเวลา HH:MM */
   reminderDays: number[]
   reminderTime: string
+  /** OAuth Client ID ของ Google (ไม่ใช่รหัสลับ) ใช้ sync กับ Google Drive */
+  googleClientId: string
+  /** เวลาที่ sync สำเร็จล่าสุด (0 = ยังไม่เคย) */
+  lastSyncAt: number
 }
 
 const defaults: Settings = {
@@ -39,6 +43,8 @@ const defaults: Settings = {
   yearGoalBooks: 12,
   reminderDays: [0, 1, 2, 3, 4, 5, 6],
   reminderTime: '21:00',
+  googleClientId: '',
+  lastSyncAt: 0,
 }
 
 export function loadSettings(): Settings {

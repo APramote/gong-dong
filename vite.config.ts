@@ -8,7 +8,8 @@ import { VitePWA } from 'vite-plugin-pwa'
  */
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  // สคริปต์เข้าสู่ระบบของ Google โหลดเฉพาะตอนผู้ใช้กด sync กับ Google Drive
+  "script-src 'self' https://accounts.google.com/gsi/client",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "media-src 'self' blob:",
