@@ -9,8 +9,11 @@ type Msg = { ok: boolean; text: string } | null
 
 /** ข้อความภาษาไทยของข้อผิดพลาดตอน sync */
 function errorText(e: unknown): string {
-  const kind = (e as { kind?: string })?.kind ?? ((e as Error)?.message === 'bad-file' ? 'bad-file' : 'other')
-  return t.sync.errors[kind as keyof typeof t.sync.errors] ?? t.sync.errors.other
+  const message = (e as Error)?.message ?? ''
+  const kind = (e as { kind?: string })?.kind ?? (message === 'bad-file' ? 'bad-file' : 'other')
+  const text = t.sync.errors[kind as keyof typeof t.sync.errors] ?? t.sync.errors.other
+  // สาเหตุที่ไม่รู้จัก: แนบรายละเอียดจาก Google ไว้ให้ส่งมาถามได้ (ไม่มีโทเคนหรือข้อมูลส่วนตัวในข้อความนี้)
+  return kind === 'other' && message && message !== 'other' ? `${text} (${message})` : text
 }
 
 /** ซิงก์กับ Google Drive และสำรอง/กู้คืนเป็นไฟล์ */

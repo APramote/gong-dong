@@ -11,7 +11,7 @@ const GIS = 'https://accounts.google.com/gsi/client'
 const API = 'https://www.googleapis.com/drive/v3/files'
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files'
 
-export type DriveErrorKind = 'no-client' | 'blocked' | 'denied' | 'auth' | 'quota' | 'network' | 'other'
+export type DriveErrorKind = 'no-client' | 'blocked' | 'denied' | 'scope' | 'api-off' | 'auth' | 'quota' | 'network' | 'other'
 export class DriveError extends Error {
   kind: DriveErrorKind
   constructor(kind: DriveErrorKind, detail = '') {
@@ -22,6 +22,8 @@ export class DriveError extends Error {
 
 interface TokenResponse {
   access_token?: string
+  /** สิทธิ์ที่ผู้ใช้ติ๊กอนุญาตจริง (คั่นด้วยช่องว่าง) */
+  scope?: string
   expires_in?: number
   error?: string
 }
@@ -79,6 +81,8 @@ export async function signIn(clientId: string): Promise<string> {
       scope: SCOPE,
       callback: (r) => {
         if (!r.access_token) return reject(new DriveError(r.error === 'access_denied' ? 'denied' : 'auth', r.error))
+        // หน้าขออนุญาตของ Google มีช่องให้ติ๊กทีละสิทธิ์ ถ้าไม่ติ๊ก โทเคนจะใช้กับ Drive ไม่ได้
+        if (r.scope !== undefined && !r.scope.split(' ').includes(SCOPE)) return reject(new DriveError('scope'))
         token = { value: r.access_token, clientId: id, expires: Date.now() + (r.expires_in ?? 3600) * 1000 }
         resolve(r.access_token)
       },
@@ -104,10 +108,25 @@ async function call(accessToken: string, url: string, init: RequestInit = {}): P
     token = null
     throw new DriveError('auth')
   }
-  // 403 มีทั้งโควตาเต็มและยังไม่ได้เปิด Drive API แยกจากข้อความที่ Google ส่งมา
+  // 403 มีหลายสาเหตุ แยกจากเหตุผลที่ Google ส่งมา
   const body = await res.text().catch(() => '')
-  if (res.status === 403 && /storageQuota|rateLimit|quota/i.test(body)) throw new DriveError('quota')
-  throw new DriveError('other', `${res.status} ${body.slice(0, 200)}`)
+  let reason = ''
+  let message = ''
+  try {
+    const err = (JSON.parse(body) as { error?: { message?: string; status?: string; errors?: { reason?: string }[] } }).error
+    reason = err?.errors?.[0]?.reason ?? err?.status ?? ''
+    message = err?.message ?? ''
+  } catch {
+    // ไม่ใช่ JSON ใช้รหัสสถานะอย่างเดียว
+  }
+  const detail = `${res.status} ${reason} ${message}`.trim().slice(0, 240)
+  if (res.status === 403) {
+    if (/accessNotConfigured|SERVICE_DISABLED/i.test(reason + message) || /has not been used|is disabled/i.test(message))
+      throw new DriveError('api-off', detail)
+    if (/insufficient|scope/i.test(reason + message)) throw new DriveError('scope', detail)
+    if (/storageQuota|rateLimit|quota/i.test(reason + message)) throw new DriveError('quota', detail)
+  }
+  throw new DriveError('other', detail)
 }
 
 /** ที่เก็บไฟล์ใน appDataFolder ของบัญชีที่อนุญาต */
