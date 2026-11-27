@@ -27,22 +27,35 @@ export function CheckInForm({
   const [minutes, setMinutes] = useState<number | null>(null)
   const [custom, setCustom] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const blank = page.trim() === ''
   const n = parseInt(page, 10)
-  const valid = Number.isFinite(n) && n >= 0 && (!book.pages || n <= book.pages)
+  const tooFar = Boolean(book.pages && Number.isFinite(n) && n > book.pages)
+  const pageOk = blank || (Number.isFinite(n) && n >= 0 && !tooFar)
+  const typed = parseInt(custom, 10)
+  const chosen = Number.isFinite(typed) && typed > 0 ? Math.min(typed, 1440) : minutes
+  // ต้องมีอะไรให้บันทึก: หน้าเปลี่ยน ใส่เวลา หรือมีเวลาที่จับไว้
+  const changed = (!blank && n !== book.currentPage) || chosen !== null || timerMinutes > 0
+  const valid = pageOk && changed
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (!valid || saving) return
     setSaving(true)
-    const typed = parseInt(custom, 10)
-    await repo.checkIn(book.id, { page: n, minutes: Number.isFinite(typed) && typed > 0 ? Math.min(typed, 1440) : minutes })
-    onDone()
+    setError('')
+    try {
+      await repo.checkIn(book.id, { page: blank ? null : n, minutes: chosen })
+      onDone()
+    } catch {
+      setError(t.reading.saveFailed)
+      setSaving(false)
+    }
   }
 
   const chip = (value: number | null, label: string) => (
     <button
       type="button"
-      key={label}
+      key={value ?? 'auto'}
       className={minutes === value && !custom ? 'on' : ''}
       aria-pressed={minutes === value && !custom}
       onClick={() => {
@@ -58,8 +71,21 @@ export function CheckInForm({
     <form className="form inline-form" onSubmit={submit}>
       <label className="narrow">
         {t.reading.checkInPage}
-        <input inputMode="numeric" autoFocus value={page} onChange={(e) => setPage(e.target.value)} onFocus={(e) => e.target.select()} />
-        {book.pages && <span className="muted">{t.reading.ofPages(book.pages)}</span>}
+        <input
+          inputMode="numeric"
+          autoFocus
+          aria-invalid={tooFar}
+          value={page}
+          onChange={(e) => setPage(e.target.value)}
+          onFocus={(e) => e.target.select()}
+        />
+        {tooFar ? (
+          <span className="error" role="alert">
+            {t.reading.pageTooFar(book.pages!)}
+          </span>
+        ) : (
+          book.pages && <span className="muted">{t.reading.ofPages(book.pages)}</span>
+        )}
       </label>
       <div>
         <span className="muted">{t.reading.howLong}</span>
@@ -76,6 +102,11 @@ export function CheckInForm({
           />
         </div>
       </div>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
       <div className="actions">
         <button type="submit" className="btn primary" disabled={!valid || saving}>
           {t.reading.saveCheckIn}

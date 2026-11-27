@@ -39,31 +39,151 @@ export interface SyncResult {
 export const DATA_FILE = 'data.json'
 const coverFile = (id: string) => `cover-${id}`
 
-const isRow = (x: unknown): x is Row =>
-  typeof x === 'object' && x !== null && typeof (x as Row).id === 'string' && typeof (x as Row).updatedAt === 'number'
+const DAY = 86400000
+const str = (v: unknown) => (typeof v === 'string' ? v : '')
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+const ref = (v: unknown) => (typeof v === 'string' && v ? v : null)
+const oneOf = <T extends string>(v: unknown, list: readonly T[], fallback: T): T => (list.includes(v as T) ? (v as T) : fallback)
+
+/** ฟิลด์ sync ของทุกรายการ — คืน null ถ้าใช้ไม่ได้ (เวลาแก้ไขในอนาคตไกลจะชนะทุกการรวมตลอดไป จึงไม่รับ) */
+function syncFields(x: unknown, now: number): SyncFields | null {
+  if (typeof x !== 'object' || x === null) return null
+  const r = x as Record<string, unknown>
+  const updatedAt = num(r.updatedAt)
+  if (typeof r.id !== 'string' || !r.id || updatedAt === null || updatedAt > now + DAY) return null
+  if (r.deletedAt !== null && r.deletedAt !== undefined && num(r.deletedAt) === null) return null
+  return { id: r.id, createdAt: num(r.createdAt) ?? updatedAt, updatedAt, deletedAt: num(r.deletedAt) }
+}
+
+/**
+ * รับเฉพาะฟิลด์ที่รู้จักและบังคับชนิดให้ถูก
+ * ข้อมูลจากไฟล์หรือ Drive อาจถูกแก้มา ค่าชนิดผิดจะทำให้หน้าจอพังทุกครั้งที่เปิด และฟิลด์แปลกปลอมจะถูกส่งต่อไปทุกเครื่อง
+ */
+const CLEAN: Record<TableName, (r: Record<string, unknown>) => Record<string, unknown> | null> = {
+  books: (r) => ({
+    title: str(r.title),
+    authors: str(r.authors),
+    publisher: str(r.publisher),
+    year: str(r.year),
+    pages: num(r.pages),
+    isbn: str(r.isbn),
+    categoryId: ref(r.categoryId),
+    tags: Array.isArray(r.tags) ? r.tags.filter((x): x is string => typeof x === 'string') : [],
+    synopsis: str(r.synopsis),
+    blurb: str(r.blurb),
+    reviewSummary: str(r.reviewSummary),
+    // ลิงก์ต้องเป็น https เท่านั้น (เหมือนลิงก์ที่ได้จาก AI)
+    links: Array.isArray(r.links)
+      ? r.links
+          .filter((l): l is { title?: unknown; url: string } => typeof l?.url === 'string' && /^https:\/\//i.test(l.url))
+          .map((l) => ({ title: str(l.title), url: l.url }))
+      : [],
+    note: str(r.note),
+    status: oneOf(r.status, ['dong', 'reading', 'done', 'dropped'] as const, 'dong'),
+    currentPage: num(r.currentPage),
+    placeId: ref(r.placeId),
+    position: num(r.position) ?? 0,
+    takenAt: num(r.takenAt),
+    takenFrom: ref(r.takenFrom),
+    finishedAt: num(r.finishedAt),
+    spineColor: /^#[0-9a-f]{6}$/i.test(str(r.spineColor)) ? str(r.spineColor) : '',
+    seriesId: ref(r.seriesId),
+    seriesNo: num(r.seriesNo),
+    edition: str(r.edition),
+    condition: str(r.condition),
+    price: num(r.price),
+    boughtAt: str(r.boughtAt),
+    boughtFrom: str(r.boughtFrom),
+    signed: r.signed === true,
+  }),
+  bookcases: (r) => ({ name: str(r.name), room: str(r.room), ...(look(r.look) && { look: look(r.look) }) }),
+  places: (r) =>
+    ['shelf', 'drawer', 'pile', 'box'].includes(r.kind as string)
+      ? {
+          kind: r.kind,
+          name: str(r.name),
+          bookcaseId: ref(r.bookcaseId),
+          order: num(r.order) ?? 0,
+          location: str(r.location),
+          label: str(r.label),
+          ...(look(r.look) && { look: look(r.look) }),
+        }
+      : null,
+  sessions: (r) =>
+    typeof r.bookId === 'string'
+      ? {
+          ...(r.kind === 'carry' || r.kind === 'read' ? { kind: r.kind } : {}),
+          ...(r.estimated === true && { estimated: true }),
+          bookId: r.bookId,
+          fromPlaceId: ref(r.fromPlaceId),
+          toPlaceId: ref(r.toPlaceId),
+          startedAt: num(r.startedAt) ?? 0,
+          endedAt: num(r.endedAt),
+          startPage: num(r.startPage),
+          endPage: num(r.endPage),
+          minutes: num(r.minutes),
+          timerMs: num(r.timerMs) ?? 0,
+          timerStartedAt: num(r.timerStartedAt),
+        }
+      : null,
+  categories: (r) => ({ name: str(r.name) }),
+  wishes: (r) => ({ title: str(r.title), authors: str(r.authors), isbn: str(r.isbn), note: str(r.note) }),
+  series: (r) => ({ name: str(r.name), total: num(r.total) }),
+  quotes: (r) =>
+    typeof r.bookId === 'string' ? { bookId: r.bookId, text: str(r.text), page: num(r.page), note: str(r.note) } : null,
+}
+
+function look(v: unknown): Record<string, unknown> | null {
+  if (typeof v !== 'object' || v === null) return null
+  const l = v as Record<string, unknown>
+  return {
+    color: /^#[0-9a-f]{6}$/i.test(str(l.color)) ? str(l.color) : '',
+    ratio: num(l.ratio) ?? 0,
+    ...(num(l.drawerRows) !== null && { drawerRows: num(l.drawerRows) }),
+    ...(num(l.drawersPerRow) !== null && { drawersPerRow: num(l.drawersPerRow) }),
+    ...(num(l.doors) !== null && { doors: num(l.doors) }),
+    ...(typeof l.legs === 'boolean' && { legs: l.legs }),
+  }
+}
+
+function cleanRows(name: TableName, rows: unknown, now: number): Row[] {
+  if (!Array.isArray(rows)) return []
+  const out: Row[] = []
+  for (const x of rows) {
+    const base = syncFields(x, now)
+    const body = base && CLEAN[name](x as Record<string, unknown>)
+    if (base && body) out.push({ ...body, ...base })
+  }
+  return out
+}
 
 /** อ่านไฟล์ข้อมูลกลาง รับเฉพาะรูปแบบที่รู้จัก ข้อมูลแปลกปลอมถูกทิ้ง */
-export function parseSnapshot(text: string): Snapshot {
+export function parseSnapshot(text: string, now = Date.now()): Snapshot {
   let raw: unknown
   try {
     raw = JSON.parse(text)
   } catch {
     throw new Error('bad-file')
   }
+  return readSnapshot(raw, now)
+}
+
+function readSnapshot(raw: unknown, now: number): Snapshot {
   const o = raw as Partial<Snapshot> | null
   if (!o || typeof o !== 'object' || o.version !== 1 || typeof o.tables !== 'object' || o.tables === null) throw new Error('bad-file')
   const tables: Snapshot['tables'] = {}
-  for (const name of TABLES) {
-    const rows = (o.tables as Record<string, unknown>)[name]
-    tables[name] = Array.isArray(rows) ? rows.filter(isRow) : []
-  }
-  return {
-    version: 1,
-    savedAt: typeof o.savedAt === 'number' ? o.savedAt : 0,
-    tables,
-    covers: Array.isArray(o.covers) ? (o.covers.filter(isRow) as unknown as CoverMeta[]) : [],
-  }
+  for (const name of TABLES) tables[name] = cleanRows(name, (o.tables as Record<string, unknown>)[name], now)
+  const covers: CoverMeta[] = []
+  if (Array.isArray(o.covers))
+    for (const c of o.covers) {
+      const base = syncFields(c, now)
+      if (base) covers.push(base)
+    }
+  return { version: 1, savedAt: num(o.savedAt) ?? 0, tables, covers }
 }
+
+/** ชนิดรูปที่รับเข้าเครื่อง (ไม่รับ SVG หรือไฟล์ชนิดอื่นที่ปลอมเป็นรูป) */
+const IMAGE = /^image\/(jpeg|png|webp)$/
 
 const empty = (): Snapshot => ({ version: 1, savedAt: 0, tables: {}, covers: [] })
 
@@ -72,7 +192,6 @@ const empty = (): Snapshot => ({ version: 1, savedAt: 0, tables: {}, covers: [] 
  * คืน snapshot ที่รวมแล้ว (ไว้ส่งขึ้น) และจำนวนรายการที่ต่างกันแต่ละทาง
  */
 async function mergeTables(db: GongDongDB, remote: Snapshot) {
-  const tables: Snapshot['tables'] = {}
   let pushed = 0
   let pulled = 0
   for (const name of TABLES) {
@@ -95,9 +214,57 @@ async function mergeTables(db: GongDongDB, remote: Snapshot) {
     }
     if (incoming.length) await table.bulkPut(incoming)
     pulled += incoming.length
-    tables[name] = [...merged.values()]
   }
-  return { tables, pushed, pulled }
+  // รวมแล้วอาจมีข้อมูลที่อ้างถึงกันไม่ครบ ซ่อมก่อน (รายการที่ซ่อมต้องส่งขึ้นด้วย)
+  if (pulled > 0) pushed += await repair(db)
+  return { pushed, pulled }
+}
+
+/**
+ * ซ่อมความสัมพันธ์ของข้อมูลหลังรวมจากเครื่องอื่น คืนจำนวนรายการที่แก้
+ * - หนังสือที่ชี้ไปยังที่เก็บหรือชุดที่ถูกลบแล้ว: ย้ายไป "ยังไม่ระบุที่เก็บ" / ออกจากชุด (ไม่ให้หายจากทุกหน้า)
+ * - การหยิบที่ค้างอยู่ของเล่มที่ไม่ได้อยู่ในมือแล้ว หรือค้างซ้อนกันหลายอัน: ปิดให้เหลืออันเดียว
+ */
+export async function repair(db: GongDongDB, now = Date.now()): Promise<number> {
+  return db.transaction('rw', [db.books, db.places, db.series, db.sessions], async () => {
+    let fixed = 0
+    const live = async (name: 'places' | 'series') =>
+      new Set((await db.table<Row, string>(name).toArray()).filter((x) => x.deletedAt === null).map((x) => x.id))
+    const places = await live('places')
+    const series = await live('series')
+    const books = (await db.books.toArray()).filter((b) => b.deletedAt === null)
+    let next = books.filter((b) => b.placeId === null).reduce((m, b) => Math.max(m, b.position + 1), 0)
+    for (const b of books) {
+      const patch: Record<string, unknown> = {}
+      if (b.placeId && !places.has(b.placeId)) Object.assign(patch, { placeId: null, position: next++ })
+      if (b.seriesId && !series.has(b.seriesId)) Object.assign(patch, { seriesId: null, seriesNo: null })
+      if (Object.keys(patch).length) {
+        await db.books.update(b.id, { ...patch, updatedAt: now })
+        fixed++
+      }
+    }
+    const inHand = new Set(books.filter((b) => b.takenAt).map((b) => b.id))
+    const open = (await db.sessions.toArray())
+      .filter((x) => x.deletedAt === null && x.endedAt === null)
+      .sort((a, b) => b.startedAt - a.startedAt)
+    const kept = new Set<string>()
+    for (const x of open) {
+      if (inHand.has(x.bookId) && !kept.has(x.bookId)) {
+        kept.add(x.bookId)
+        continue
+      }
+      await db.sessions.update(x.id, { kind: 'carry', endedAt: now, timerStartedAt: null, updatedAt: now })
+      fixed++
+    }
+    return fixed
+  })
+}
+
+/** ข้อมูลทุกตารางในเครื่อง ณ ตอนนี้ */
+async function readTables(db: GongDongDB): Promise<Snapshot['tables']> {
+  const tables: Snapshot['tables'] = {}
+  for (const name of TABLES) tables[name] = await db.table<Row, string>(name).toArray()
+  return tables
 }
 
 /** sync สองทางกับที่เก็บกลาง */
@@ -107,7 +274,9 @@ export async function syncAll(
   onProgress: (done: number, total: number) => void = () => {},
 ): Promise<SyncResult> {
   const names = await store.names()
-  const file = names.has(DATA_FILE) ? await store.get(DATA_FILE) : null
+  const got = names.has(DATA_FILE) ? await store.get(DATA_FILE) : null
+  // ไฟล์ว่าง = สร้างไว้แต่ส่งเนื้อหาไม่สำเร็จ (เน็ตหลุดกลางทาง) ถือว่ายังไม่มีไฟล์ แล้วเขียนใหม่
+  const file = got && got.size > 0 ? got : null
   const remote = file ? parseSnapshot(await file.text()) : empty()
   const merged = await mergeTables(db, remote)
   let { pushed, pulled } = merged
@@ -142,15 +311,16 @@ export async function syncAll(
   for (const meta of down) {
     onProgress(++done, total)
     const blob = meta.deletedAt === null ? await store.get(coverFile(meta.id)) : null
-    // รายการบอกว่ามีรูปแต่ไฟล์หาย: ข้ามไป ไม่ทับรูปในเครื่อง
-    if (meta.deletedAt === null && !blob) continue
+    // รายการบอกว่ามีรูปแต่ไฟล์หายหรือไม่ใช่รูป: ข้ามไป ไม่ทับรูปในเครื่อง
+    if (meta.deletedAt === null && (!blob || !IMAGE.test(blob.type))) continue
     await db.covers.put({ ...meta, blob, thumb: null })
     pulled++
   }
 
   // เขียนไฟล์ข้อมูลหลังรูปขึ้นครบ รายการรูปจะไม่ชี้ไปยังไฟล์ที่ยังไม่มี
   if (pushed > 0 || !file) {
-    const snapshot: Snapshot = { version: 1, savedAt: Date.now(), tables: merged.tables, covers: [...manifest.values()] }
+    // อ่านจากเครื่องอีกครั้งตอนจะเขียน รวมสิ่งที่แก้ระหว่างรับส่งรูปด้วย
+    const snapshot: Snapshot = { version: 1, savedAt: Date.now(), tables: await readTables(db), covers: [...manifest.values()] }
     await store.put(DATA_FILE, new Blob([JSON.stringify(snapshot)], { type: 'application/json' }))
   }
   return { pushed, pulled }
@@ -158,7 +328,8 @@ export async function syncAll(
 
 /** ลบสำเนาทั้งหมดในที่เก็บกลาง คืนจำนวนไฟล์ที่ลบ */
 export async function wipeRemote(store: RemoteStore): Promise<number> {
-  const names = [...(await store.names())]
+  // ลบไฟล์ข้อมูลก่อน ถ้าหยุดกลางทางจะไม่เหลือรายการที่ชี้ไปยังรูปที่ถูกลบแล้ว
+  const names = [...(await store.names())].sort((a, b) => Number(b === DATA_FILE) - Number(a === DATA_FILE))
   for (const name of names) await store.del(name)
   return names.length
 }
@@ -194,8 +365,7 @@ interface BackupFile extends Snapshot {
 
 /** สำรองข้อมูลทั้งหมดเป็นไฟล์ JSON ไฟล์เดียว */
 export async function exportBackup(db: GongDongDB, withCovers: boolean): Promise<Blob> {
-  const tables: Snapshot['tables'] = {}
-  for (const name of TABLES) tables[name] = await db.table<Row, string>(name).toArray()
+  const tables = await readTables(db)
   const covers: CoverMeta[] = []
   const images: NonNullable<BackupFile['images']> = {}
   for (const c of await db.covers.toArray()) {
@@ -208,19 +378,36 @@ export async function exportBackup(db: GongDongDB, withCovers: boolean): Promise
   return new Blob([JSON.stringify(file)], { type: 'application/json' })
 }
 
+/** ไฟล์สำรองใหญ่สุดที่รับ (กันไฟล์ผิดประเภททำให้แอปค้าง) */
+const MAX_BACKUP = 300 * 1024 * 1024
+
 /** กู้คืนจากไฟล์สำรอง: รวมเข้ากับข้อมูลในเครื่อง (รายการที่แก้ล่าสุดชนะ) ไม่ลบข้อมูลที่มีอยู่ */
 export async function importBackup(db: GongDongDB, file: Blob): Promise<number> {
-  const text = await file.text()
-  const snapshot = parseSnapshot(text)
-  const images = ((JSON.parse(text) as BackupFile).images ?? {}) as NonNullable<BackupFile['images']>
+  if (file.size > MAX_BACKUP) throw new Error('bad-file')
+  let raw: unknown
+  try {
+    raw = JSON.parse(await file.text())
+  } catch {
+    throw new Error('bad-file')
+  }
+  const snapshot = readSnapshot(raw, Date.now())
+  const given = (raw as BackupFile).images
+  const images: NonNullable<BackupFile['images']> = typeof given === 'object' && given !== null ? given : {}
   let { pulled } = await mergeTables(db, snapshot)
   for (const meta of snapshot.covers) {
     const mine = await db.covers.get(meta.id)
     if (mine && mine.updatedAt >= meta.updatedAt) continue
-    const img = images[meta.id]
-    const ok = img && typeof img.data === 'string' && /^image\//.test(String(img.type))
-    if (meta.deletedAt === null && !ok) continue
-    await db.covers.put({ ...meta, blob: meta.deletedAt === null ? fromBase64(img.data, img.type) : null, thumb: null })
+    let blob: Blob | null = null
+    if (meta.deletedAt === null) {
+      const img = Object.hasOwn(images, meta.id) ? images[meta.id] : undefined
+      if (!img || typeof img.data !== 'string' || !IMAGE.test(String(img.type))) continue
+      try {
+        blob = fromBase64(img.data, img.type)
+      } catch {
+        continue // รูปนี้เสีย ข้ามไป รูปอื่นยังกู้ได้
+      }
+    }
+    await db.covers.put({ ...meta, blob, thumb: null })
     pulled++
   }
   return pulled

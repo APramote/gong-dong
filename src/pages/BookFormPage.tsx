@@ -8,6 +8,8 @@ import { CategorySelect } from '../components/CategorySelect'
 import { SeriesSelect } from '../components/SeriesSelect'
 import { QuoteSection } from '../components/QuoteSection'
 import { ReturnForm } from '../components/ReturnForm'
+import { CheckInForm } from '../components/CheckInForm'
+import { timerTotal } from '../lib/stats'
 import { SessionList } from '../components/SessionList'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { timeAgo } from '../lib/stats'
@@ -70,6 +72,7 @@ export function BookFormPage() {
   const places = useLiveQuery(() => repo.listPlaces(), []) ?? []
   const bookcases = useLiveQuery(() => repo.listBookcases(), []) ?? []
   const [returning, setReturning] = useState(false)
+  const [checkingIn, setCheckingIn] = useState(false)
   const coverUrl = useBlobUrl(newCover === undefined ? savedCover : newCover)
   const titleRef = useRef<HTMLInputElement>(null)
 
@@ -256,10 +259,24 @@ export function BookFormPage() {
       {live && (
         <div className="hand-bar">
           {live.takenAt ? (
-            returning ? (
+            checkingIn ? (
+              <CheckInForm
+                book={live}
+                timerMinutes={(() => {
+                  const open = sessions.find((x) => x.endedAt === null)
+                  const ms = open ? timerTotal(open) : 0
+                  return ms > 0 ? Math.max(1, Math.round(ms / 60000)) : 0
+                })()}
+                onDone={() => {
+                  setCheckingIn(false)
+                  // หน้าที่อ่านและสถานะเปลี่ยนแล้ว ให้ฟอร์มตามทัน
+                  repo.getBook(live.id).then((b) => b && setForm((f) => ({ ...f, status: b.status, currentPage: b.currentPage })))
+                }}
+                onCancel={() => setCheckingIn(false)}
+              />
+            ) : returning ? (
               <ReturnForm
                 book={live}
-                session={sessions.find((x) => x.endedAt === null)}
                 placeExists={(pid) => places.some((p) => p.id === pid)}
                 onDone={() => {
                   setReturning(false)
@@ -279,7 +296,10 @@ export function BookFormPage() {
             ) : (
               <>
                 <span className="muted">{t.reading.inHandBanner(timeAgo(live.takenAt))}</span>
-                <button type="button" className="btn primary" onClick={() => setReturning(true)}>
+                <button type="button" className="btn primary" onClick={() => setCheckingIn(true)}>
+                  {t.reading.checkIn}
+                </button>
+                <button type="button" className="btn" onClick={() => setReturning(true)}>
                   {t.reading.return}
                 </button>
               </>

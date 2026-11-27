@@ -65,7 +65,7 @@ export function yearReview(
   const hours = Array<number>(24).fill(0)
   const months = Array<number>(12).fill(0)
   for (const s of done) {
-    hours[new Date(s.startedAt).getHours()] += s.minutes ?? 0
+    hours[new Date(s.kind === 'read' ? s.endedAt! : s.startedAt).getHours()] += s.minutes ?? 0
     months[new Date(s.endedAt!).getMonth()] += s.minutes ?? 0
   }
   const peak = (arr: number[]) => (Math.max(...arr) > 0 ? arr.indexOf(Math.max(...arr)) : null)

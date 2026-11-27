@@ -30,8 +30,9 @@ export function WipeCard() {
       if (drive) {
         // ลบใน Drive ก่อน ถ้าไม่สำเร็จจะยังไม่แตะข้อมูลในเครื่อง
         const s = loadSettings()
-        const { signIn, driveStore } = await import('../lib/drive')
-        const token = await signIn(s.googleClientId || DEFAULT_GOOGLE_CLIENT_ID, s.googleAccount)
+        const { connect, driveStore } = await import('../lib/drive')
+        // ต้องเป็นบัญชีเดียวกับที่แสดงว่าเชื่อมอยู่ ไม่อย่างนั้นไม่ลบ
+        const { token } = await connect(s.googleClientId || DEFAULT_GOOGLE_CLIENT_ID, s.googleAccount)
         files = await wipeRemote(driveStore(token))
       }
       await wipeLocal(db)
@@ -41,7 +42,13 @@ export function WipeCard() {
       setWord('')
     } catch (e) {
       const kind = (e as { kind?: string })?.kind ?? 'other'
-      setMsg({ ok: false, text: t.sync.errors[kind as keyof typeof t.sync.errors] ?? t.sync.errors.other })
+      setMsg({
+        ok: false,
+        text:
+          kind === 'wrong-account'
+            ? t.sync.wrongAccount((e as Error).message)
+            : (t.sync.errors[kind as keyof typeof t.sync.errors] ?? t.sync.errors.other),
+      })
     }
     setBusy(false)
   }
@@ -66,7 +73,13 @@ export function WipeCard() {
             {t.wipe.all}
           </button>
         ) : (
-          <div className="form inline-form">
+          <form
+            className="form inline-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              wipeAll()
+            }}
+          >
             <strong>{t.wipe.all}</strong>
             <p className="muted">{t.wipe.allHint}</p>
             {signedIn && (
@@ -80,10 +93,10 @@ export function WipeCard() {
             )}
             <label className="narrow">
               {t.wipe.typeToConfirm}
-              <input value={word} autoCapitalize="off" autoCorrect="off" onChange={(e) => setWord(e.target.value)} />
+              <input value={word} autoFocus autoCapitalize="off" autoCorrect="off" onChange={(e) => setWord(e.target.value)} />
             </label>
             <div className="actions">
-              <button type="button" className="btn danger" disabled={word.trim() !== t.wipe.word || busy} onClick={wipeAll}>
+              <button type="submit" className="btn danger" disabled={word.trim() !== t.wipe.word || busy}>
                 {busy ? t.wipe.wiping : t.wipe.confirmAll}
               </button>
               <button
@@ -97,7 +110,7 @@ export function WipeCard() {
                 {t.common.cancel}
               </button>
             </div>
-          </div>
+          </form>
         )}
         {!open && <p className="muted">{t.wipe.allHint}</p>}
       </div>

@@ -28,7 +28,8 @@ export function ReturnForm({
   const [placeId, setPlaceId] = useState<string | null>(
     book.takenFrom && placeExists(book.takenFrom) ? book.takenFrom : null,
   )
-  const [finished, setFinished] = useState(false)
+  // คั่นไว้ถึงหน้าสุดท้ายแล้ว ถือว่าอ่านจบ (แก้ได้)
+  const [finished, setFinished] = useState(Boolean(book.pages && book.currentPage && book.currentPage >= book.pages))
 
   function onPage(v: string) {
     setPage(v)

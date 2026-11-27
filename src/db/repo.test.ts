@@ -392,3 +392,44 @@ test('คั่นหน้า: ใช้เวลาที่จับไว้
   expect(read.estimated).toBeUndefined() // เวลาจริง ไม่ใช่ค่าประมาณ
   expect((await repo.openSession(id))!).toMatchObject({ timerMs: 0, timerStartedAt: null })
 })
+
+test('ผลจากการตรวจ: คั่นหน้าโดยไม่มีอะไรเปลี่ยนไม่สร้างรายการเปล่า และค่าประมาณมีเพดาน', async () => {
+  const id = await repo.addBook({ ...emptyBook, title: 'เล่มหนา', pages: 900 })
+  await repo.takeBook(id)
+  await repo.checkIn(id, { page: 500, minutes: null }) // คั่นครั้งแรกกลางเล่ม
+  const [first] = (await repo.sessionsFor(id)).filter((r) => r.kind === 'read')
+  expect(first.minutes).toBe(180) // ไม่ใช่ 750 นาที
+  await repo.checkIn(id, { page: 500, minutes: null }) // กดบันทึกโดยไม่เปลี่ยนอะไร
+  expect((await repo.sessionsFor(id)).filter((r) => r.kind === 'read')).toHaveLength(1)
+  await repo.checkIn(id, { page: 480, minutes: null }) // แก้เลขหน้าย้อนกลับ = แค่แก้ที่คั่น
+  expect((await repo.sessionsFor(id)).filter((r) => r.kind === 'read')).toHaveLength(1)
+  expect((await repo.getBook(id))!.currentPage).toBe(480)
+})
+
+test('ผลจากการตรวจ: อ่านซ้ำเล่มที่จบแล้วนับหน้าใหม่ และหยิบมาเปิดดูเฉย ๆ ไม่เปลี่ยนวันที่อ่านจบ', async () => {
+  const id = await repo.addBook({ ...emptyBook, title: 'เล่มโปรด', pages: 300, currentPage: 300, status: 'done' })
+  const finishedAt = (await repo.getBook(id))!.finishedAt
+  await repo.takeBook(id)
+  await repo.returnBook(id, { placeId: null, page: 300, minutes: null, finished: true }) // แค่หยิบมาเปิดดู
+  expect((await repo.getBook(id))!).toMatchObject({ status: 'done', finishedAt })
+  await repo.takeBook(id)
+  await repo.checkIn(id, { page: 40, minutes: 30 }) // เริ่มอ่านรอบใหม่
+  const read = (await repo.sessionsFor(id)).find((r) => r.kind === 'read')!
+  expect(read).toMatchObject({ startPage: null, endPage: 40 })
+  expect((await repo.getBook(id))!).toMatchObject({ status: 'reading', currentPage: 40, finishedAt: null })
+})
+
+test('ผลจากการตรวจ: ตำแหน่งซ้ำกันหลังซิงก์ ยังเลื่อนลำดับได้', async () => {
+  const db = new GongDongDB(`tie-${n++}`)
+  const r = createRepo(db)
+  const pile = await r.addPlace('pile', { name: 'กอง', location: '', label: '' })
+  const ids: string[] = []
+  for (const title of ['ก', 'ข', 'ค']) ids.push(await r.addBook({ ...emptyBook, title, placeId: pile }))
+  // จำลองสองเครื่องเพิ่มเล่มลงกองเดียวกัน: ตำแหน่งซ้ำกัน
+  await db.books.update(ids[1], { position: 0 })
+  const before = (await r.booksIn(pile)).map((x) => x.id)
+  await r.shiftBook(before[0], 1)
+  const after = await r.booksIn(pile)
+  expect(after.map((x) => x.id)).toEqual([before[1], before[0], before[2]])
+  expect(after.map((x) => x.position)).toEqual([0, 1, 2])
+})

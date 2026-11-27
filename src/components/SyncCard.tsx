@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { db } from '../db/db'
 import { download } from '../lib/download'
 import { DEFAULT_GOOGLE_CLIENT_ID, loadSettings, saveSettings } from '../lib/settings'
@@ -11,6 +11,7 @@ type Msg = { ok: boolean; text: string } | null
 function errorText(e: unknown): string {
   const message = (e as Error)?.message ?? ''
   const kind = (e as { kind?: string })?.kind ?? (message === 'bad-file' ? 'bad-file' : 'other')
+  if (kind === 'wrong-account') return t.sync.wrongAccount(message)
   const text = t.sync.errors[kind as keyof typeof t.sync.errors] ?? t.sync.errors.other
   // สาเหตุที่ไม่รู้จัก: แนบรายละเอียดจาก Google ไว้ให้ส่งมาถามได้ (ไม่มีโทเคนหรือข้อมูลส่วนตัวในข้อความนี้)
   return kind === 'other' && message && message !== 'other' ? `${text} (${message})` : text
@@ -21,6 +22,15 @@ export function SyncCard() {
   const [s, setS] = useState(loadSettings)
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState<Msg>(null)
+  /** งานที่กำลังทำเป็นของส่วนไหน ข้อความจะแสดงใต้ปุ่มของส่วนนั้น */
+  const [area, setArea] = useState<'drive' | 'backup'>('drive')
+  // เปิดส่วน Client ID ไว้ถ้าผู้ใช้เคยใส่ค่าเอง (คิดครั้งเดียว ไม่พับเองระหว่างพิมพ์)
+  const [advanced] = useState(() => Boolean(loadSettings().googleClientId))
+  // โหลดโค้ดซิงก์ไว้ล่วงหน้า ตอนกดปุ่มจะได้เปิดหน้าต่างของ Google ทันที (ช้าไปเบราว์เซอร์จะบล็อก)
+  useEffect(() => {
+    void import('../lib/drive')
+    void import('../lib/sync')
+  }, [])
   const [withCovers, setWithCovers] = useState(true)
   const picker = useRef<HTMLInputElement>(null)
   const update = (patch: Partial<typeof s>) => {
@@ -31,14 +41,14 @@ export function SyncCard() {
 
   /** เข้าสู่ระบบ (ถ้ายังไม่เข้า) แล้วซิงก์ทันที */
   async function sync() {
+    setArea('drive')
     setMsg(null)
     setBusy(s.googleAccount ? t.sync.syncing : t.sync.signingIn)
     try {
       // โหลดโค้ด sync เฉพาะเมื่อใช้ และขอสิทธิ์จาก Google ในจังหวะกดปุ่ม (ไม่งั้นหน้าต่างถูกบล็อก)
-      const [{ signIn, driveStore, account }, { syncAll }] = await Promise.all([import('../lib/drive'), import('../lib/sync')])
-      const token = await signIn(s.googleClientId || DEFAULT_GOOGLE_CLIENT_ID, s.googleAccount)
-      const who = await account(token)
-      update({ googleAccount: who.email })
+      const [{ connect, driveStore }, { syncAll }] = await Promise.all([import('../lib/drive'), import('../lib/sync')])
+      const { token, email } = await connect(s.googleClientId || DEFAULT_GOOGLE_CLIENT_ID, s.googleAccount)
+      update({ googleAccount: email })
       setBusy(t.sync.syncing)
       const r = await syncAll(db, driveStore(token), (done, total) => setBusy(t.sync.covers(done, total)))
       update({ lastSyncAt: Date.now() })
@@ -51,12 +61,14 @@ export function SyncCard() {
 
   async function logout() {
     const { signOut } = await import('../lib/drive')
-    signOut()
+    setArea('drive')
+    const revoked = signOut()
     update({ googleAccount: '' })
-    setMsg({ ok: true, text: t.sync.signedOut })
+    setMsg({ ok: true, text: revoked ? t.sync.signedOut : t.sync.signedOutLocal })
   }
 
   async function exportFile() {
+    setArea('backup')
     setMsg(null)
     setBusy(t.sync.exporting)
     try {
@@ -70,8 +82,9 @@ export function SyncCard() {
 
   async function importFile(file: File | undefined) {
     if (!file) return
+    setArea('backup')
     setMsg(null)
-    setBusy(t.sync.syncing)
+    setBusy(t.sync.importing)
     try {
       const { importBackup } = await import('../lib/sync')
       setMsg({ ok: true, text: t.sync.imported(await importBackup(db, file)) })
@@ -80,6 +93,14 @@ export function SyncCard() {
     }
     setBusy('')
   }
+
+  /** ผลและความคืบหน้าของแต่ละส่วน อยู่ใต้ปุ่มที่กด (กล่องสถานะอยู่ในหน้าเสมอ โปรแกรมอ่านหน้าจอจึงประกาศได้) */
+  const status = (where: 'drive' | 'backup') => (
+    <div role="status" aria-live="polite">
+      {area === where && busy && <p className="muted">{busy}</p>}
+      {area === where && msg && <p className={msg.ok ? 'ok' : 'error'}>{msg.text}</p>}
+    </div>
+  )
 
   return (
     <section className="form card" id="sync">
@@ -112,7 +133,8 @@ export function SyncCard() {
         </div>
       )}
       <p className="muted">{t.sync.privacy}</p>
-      <details className="more" open={Boolean(s.googleClientId)}>
+      {status('drive')}
+      <details className="more" open={advanced || undefined}>
         <summary>{t.sync.advanced}</summary>
         <label>
           {t.sync.clientId}
@@ -155,16 +177,7 @@ export function SyncCard() {
       </div>
       <p className="muted">{t.sync.importHint}</p>
 
-      {busy && (
-        <p className="muted" role="status">
-          {busy}
-        </p>
-      )}
-      {msg && (
-        <p className={msg.ok ? 'ok' : 'error'} role={msg.ok ? 'status' : 'alert'}>
-          {msg.text}
-        </p>
-      )}
+      {status('backup')}
     </section>
   )
 }

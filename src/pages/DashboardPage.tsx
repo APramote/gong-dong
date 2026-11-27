@@ -116,24 +116,36 @@ export function DashboardPage() {
               {t.dash.dailyPagesGoal}
               <input
                 inputMode="numeric"
-                value={settings.dailyGoalPages}
-                onChange={(e) => setGoal({ dailyGoalPages: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                defaultValue={settings.dailyGoalPages}
+                onBlur={(e) => {
+                  const n = Math.max(1, parseInt(e.target.value, 10) || 1)
+                  e.target.value = String(n)
+                  setGoal({ dailyGoalPages: n })
+                }}
               />
             </label>
             <label>
               {t.dash.dailyGoal}
               <input
                 inputMode="numeric"
-                value={settings.dailyGoalMinutes}
-                onChange={(e) => setGoal({ dailyGoalMinutes: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                defaultValue={settings.dailyGoalMinutes}
+                onBlur={(e) => {
+                  const n = Math.max(1, parseInt(e.target.value, 10) || 1)
+                  e.target.value = String(n)
+                  setGoal({ dailyGoalMinutes: n })
+                }}
               />
             </label>
             <label>
               {t.dash.yearGoal}
               <input
                 inputMode="numeric"
-                value={settings.yearGoalBooks}
-                onChange={(e) => setGoal({ yearGoalBooks: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                defaultValue={settings.yearGoalBooks}
+                onBlur={(e) => {
+                  const n = Math.max(1, parseInt(e.target.value, 10) || 1)
+                  e.target.value = String(n)
+                  setGoal({ yearGoalBooks: n })
+                }}
               />
             </label>
           </div>

@@ -90,7 +90,8 @@ export function dashboard(
   const byHour = Array<number>(24).fill(0)
   const byWeekday = Array<number>(7).fill(0)
   for (const s of done) {
-    const d = new Date(s.startedAt)
+    // การคั่นหน้าบันทึกตอนอ่านเสร็จ เวลาเริ่มเป็นค่าคำนวณย้อน จึงใช้เวลาที่บันทึก
+    const d = new Date(s.kind === 'read' ? s.endedAt! : s.startedAt)
     byHour[d.getHours()] += minutesOf(s)
     byWeekday[d.getDay()] += minutesOf(s)
   }

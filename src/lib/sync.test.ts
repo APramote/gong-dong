@@ -139,3 +139,82 @@ test('ล้างเฉพาะเครื่อง: ซิงก์อีก
   expect((await syncAll(a.db, drive)).pulled).toBe(1)
   expect((await a.repo.listBooks()).map((x) => x.title)).toEqual(['ยังอยู่ใน Drive'])
 })
+
+test('ผลจากการตรวจ: ไฟล์ข้อมูลว่างใน Drive ไม่ทำให้ซิงก์ค้าง', async () => {
+  const a = device()
+  const drive = memoryStore()
+  drive.files.set('data.json', new Blob([])) // สร้างไฟล์ไว้แต่ส่งเนื้อหาไม่สำเร็จ
+  await a.repo.addBook({ ...emptyBook, title: 'ยังซิงก์ได้' })
+  expect(await syncAll(a.db, drive)).toMatchObject({ pushed: 1 })
+  expect(drive.files.get('data.json')!.size).toBeGreaterThan(0)
+})
+
+test('ผลจากการตรวจ: ที่เก็บถูกลบในเครื่องหนึ่ง หนังสือที่อีกเครื่องเพิ่งวางไว้ไม่หาย', async () => {
+  const a = device()
+  const b = device()
+  const drive = memoryStore()
+  const box = await a.repo.addPlace('box', { name: 'กล่อง', location: '', label: '' })
+  const id = await a.repo.addBook({ ...emptyBook, title: 'เล่มในกล่อง' })
+  await syncAll(a.db, drive)
+  await syncAll(b.db, drive)
+  await tick()
+  await a.repo.deletePlace(box)
+  await tick()
+  await b.repo.moveBook(id, box) // B ยังไม่รู้ว่ากล่องถูกลบ
+  await syncAll(a.db, drive)
+  await syncAll(b.db, drive)
+  await syncAll(a.db, drive)
+  for (const d of [a, b]) {
+    expect((await d.repo.getBook(id))!.placeId).toBeNull()
+    expect((await d.repo.booksIn(null)).map((x) => x.title)).toEqual(['เล่มในกล่อง'])
+  }
+})
+
+test('ผลจากการตรวจ: หยิบเล่มเดียวกันสองเครื่อง ไม่เหลือการหยิบค้างซ้อน', async () => {
+  const a = device()
+  const b = device()
+  const drive = memoryStore()
+  const id = await a.repo.addBook({ ...emptyBook, title: 'สองเครื่อง', pages: 100 })
+  await syncAll(a.db, drive)
+  await syncAll(b.db, drive)
+  await tick()
+  await b.repo.takeBook(id) // B หยิบ (ยังไม่ซิงก์)
+  await tick()
+  await a.repo.takeBook(id)
+  await tick()
+  await a.repo.returnBook(id, { placeId: null, page: 10, minutes: 5, finished: false }) // A หยิบแล้ววางคืนทีหลัง = ชนะ
+  await syncAll(a.db, drive)
+  await syncAll(b.db, drive)
+  expect((await b.repo.getBook(id))!.takenAt).toBeNull()
+  expect((await b.repo.listSessions()).filter((s) => s.endedAt === null)).toEqual([])
+  await b.repo.takeBook(id)
+  expect((await b.repo.listSessions()).filter((s) => s.endedAt === null)).toHaveLength(1)
+})
+
+test('ผลจากการตรวจ: ข้อมูลนำเข้าที่ชนิดผิดหรือแปลกปลอมถูกทำให้ปลอดภัย', () => {
+  const now = 1_000_000_000_000
+  const snap = parseSnapshot(
+    JSON.stringify({
+      version: 1,
+      tables: {
+        books: [
+          { id: 'ok', updatedAt: 5, title: 'ดี', tags: null, links: [{ url: 'javascript:alert(1)' }, { url: 'https://a.example', title: 1 }], status: 'weird', evil: '<img>' },
+          { id: 'future', updatedAt: now + 10 * 86400000, title: 'อนาคต' },
+          { id: 'baddel', updatedAt: 5, deletedAt: 'yes' },
+          { id: 'obj', updatedAt: 6, title: { a: 1 } },
+        ],
+        places: [{ id: 'p', updatedAt: 1, kind: 'castle', name: 'x' }],
+        quotes: [{ id: 'q', updatedAt: 1, text: 't' }],
+      },
+      covers: [{ id: 'c', updatedAt: 3 }, { nope: 1 }],
+    }),
+    now,
+  )
+  expect(snap.tables.books!.map((b) => b.id)).toEqual(['ok', 'obj'])
+  expect(snap.tables.books![0]).toMatchObject({ title: 'ดี', tags: [], links: [{ title: '', url: 'https://a.example' }], status: 'dong', deletedAt: null, createdAt: 5 })
+  expect(snap.tables.books![0]).not.toHaveProperty('evil')
+  expect(snap.tables.books![1].title).toBe('')
+  expect(snap.tables.places).toEqual([])
+  expect(snap.tables.quotes).toEqual([])
+  expect(snap.covers).toEqual([{ id: 'c', createdAt: 3, updatedAt: 3, deletedAt: null }])
+})

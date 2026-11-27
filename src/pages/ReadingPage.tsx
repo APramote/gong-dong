@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
@@ -89,7 +89,16 @@ function Desk({
   // ความเร็วช่วง 7 วันล่าสุดของเล่มนี้ ใช้บอกว่าอีกกี่วันจบ
   const weekPages = reads.filter((r) => now - r.endedAt! < 7 * DAY).reduce((n, r) => n + pagesOf(r), 0)
   const left = book.pages && book.currentPage ? book.pages - book.currentPage : 0
-  const daysLeft = weekPages > 0 && left > 0 ? Math.ceil(left / (weekPages / 7)) : 0
+  const estimate = weekPages > 0 && left > 0 ? Math.ceil(left / (weekPages / 7)) : 0
+  // อ่านน้อยมากช่วงนี้ ตัวเลขจะเป็นปี ๆ ไม่ช่วยอะไร ไม่ต้องแสดง
+  const daysLeft = estimate <= 180 ? estimate : 0
+  const atEnd = Boolean(book.pages && book.currentPage && book.currentPage >= book.pages)
+  const checkInBtn = useRef<HTMLButtonElement>(null)
+  /** ปิดฟอร์มแล้วคืนโฟกัสไปที่ปุ่มคั่นหน้า (ผู้ใช้คีย์บอร์ดและโปรแกรมอ่านหน้าจอไม่หลุดตำแหน่ง) */
+  const close = () => {
+    setMode('idle')
+    setTimeout(() => checkInBtn.current?.focus(), 0)
+  }
   // พกมานานแต่ไม่ได้คั่นหน้าเลย ถามเบา ๆ
   const lastTouch = Math.max(book.takenAt ?? 0, reads[0]?.endedAt ?? 0)
   const staleDays = Math.floor((now - lastTouch) / DAY)
@@ -140,17 +149,18 @@ function Desk({
         <CheckInForm
           book={book}
           timerMinutes={timer > 0 ? Math.max(1, Math.round(timer / 60000)) : 0}
-          onDone={() => setMode('idle')}
-          onCancel={() => setMode('idle')}
+          onDone={close}
+          onCancel={close}
         />
       ) : mode === 'return' ? (
-        <ReturnForm book={book} placeExists={placeExists} onDone={() => setMode('idle')} onCancel={() => setMode('idle')} />
+        <ReturnForm book={book} placeExists={placeExists} onDone={() => setMode('idle')} onCancel={close} />
       ) : (
         <div className="actions">
-          <button className="btn primary" onClick={() => setMode('checkin')}>
+          {/* อ่านถึงหน้าสุดท้ายแล้ว ขั้นต่อไปคือวางคืน (ฟอร์มวางคืนติ๊กอ่านจบไว้ให้) */}
+          <button ref={checkInBtn} className={`btn ${atEnd ? '' : 'primary'}`} onClick={() => setMode('checkin')}>
             {t.reading.checkIn}
           </button>
-          <button className="btn" onClick={() => setMode('return')}>
+          <button className={`btn ${atEnd ? 'primary' : ''}`} onClick={() => setMode('return')}>
             {t.reading.return}
           </button>
           <button className="link-btn push" onClick={() => repo.toggleTimer(book.id)}>
@@ -273,7 +283,11 @@ export function ReadingPage() {
 
       <section>
         <h2>{t.reading.recent}</h2>
-        <SessionList sessions={sessions.slice(0, 5)} placeName={placeName} books={byId} />
+        <SessionList
+          sessions={sessions.filter((x) => x.endedAt !== null && x.kind !== 'carry').slice(0, 5)}
+          placeName={placeName}
+          books={byId}
+        />
         <p className="actions">
           {sessions.length > 0 && (
             <Link to="/stats" className="link">

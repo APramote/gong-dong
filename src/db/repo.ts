@@ -13,6 +13,10 @@ function stamp(): SyncFields {
 const latestFirst = (a: ReadingSession, b: ReadingSession) =>
   (b.endedAt ?? b.startedAt) - (a.endedAt ?? a.startedAt) || b.createdAt - a.createdAt
 
+/** เพดานเวลาอ่านต่อหนึ่งรายการ: จากนาฬิกา 12 ชม. จากการประมาณ 3 ชม. */
+const MAX_TIMER_MINUTES = 720
+const MAX_ESTIMATE_MINUTES = 180
+
 const alive = <T extends SyncFields>(rows: T[]) => rows.filter((r) => r.deletedAt === null)
 
 /** ฟิลด์ที่ระบบจัดการเอง ฟอร์มแก้ไขไม่ได้ */
@@ -82,6 +86,9 @@ const withDefaults = (b: Book): Book => ({
   seriesNo: b.seriesNo ?? null,
   price: b.price ?? null,
   signed: b.signed ?? false,
+  // ข้อมูลจากไฟล์หรือเครื่องอื่นอาจไม่ครบ รายการต้องเป็นอาร์เรย์เสมอ
+  tags: Array.isArray(b.tags) ? b.tags : [],
+  links: Array.isArray(b.links) ? b.links : [],
 })
 
 /** คำสั่งอ่าน/เขียนข้อมูลทั้งหมดของแอป รับ db เข้ามาเพื่อให้ทดสอบได้ */
@@ -99,9 +106,21 @@ export function createRepo(db: GongDongDB = defaultDb) {
   }
 
   /** การหยิบที่ยังไม่วางคืนของหนังสือเล่มนี้ */
-  async function openSession(bookId: string): Promise<ReadingSession | undefined> {
-    const rows = await db.sessions.where('bookId').equals(bookId).toArray()
-    return rows.find((r) => r.deletedAt === null && r.endedAt === null)
+  // สองฟังก์ชันนี้คืน Promise ของ Dexie โดยตรง (ไม่ห่อด้วย async) เพื่อให้ใช้ในธุรกรรมได้โดยธุรกรรมไม่ปิดก่อนเวลา
+  function openSession(bookId: string): PromiseLike<ReadingSession | undefined> {
+    return openSessions(bookId).then((rows) => rows[0])
+  }
+
+  /**
+   * การหยิบที่ยังไม่วางคืนทั้งหมดของเล่มนี้ ใหม่สุดก่อน
+   * ปกติมีได้อันเดียว แต่หลังซิงก์สองเครื่องที่หยิบเล่มเดียวกันอาจมีค้างมากกว่าหนึ่ง
+   */
+  function openSessions(bookId: string) {
+    return db.sessions
+      .where('bookId')
+      .equals(bookId)
+      .toArray()
+      .then((rows) => rows.filter((r) => r.deletedAt === null && r.endedAt === null).sort((a, b) => b.startedAt - a.startedAt))
   }
 
   async function placeAlive(placeId: string | null): Promise<boolean> {
@@ -122,23 +141,40 @@ export function createRepo(db: GongDongDB = defaultDb) {
 
   /**
    * บันทึกการอ่านหนึ่งครั้งของเล่มนี้ (ต้องเรียกในธุรกรรมที่มี books และ sessions)
-   * onlyIfRead = บันทึกเฉพาะเมื่อมีอะไรให้บันทึกจริง (หน้าเปลี่ยน ใส่เวลา หรือจับเวลาไว้) ใช้ตอนวางคืน
+   * บันทึกเฉพาะเมื่อมีอะไรให้บันทึกจริง (หน้าเพิ่ม ใส่เวลา หรือจับเวลาไว้)
    */
-  async function logReading(id: string, input: CheckInInput, onlyIfRead: boolean): Promise<void> {
+  async function logReading(id: string, input: CheckInInput): Promise<void> {
     const book = await db.books.get(id)
     if (!book || book.deletedAt !== null) return
     const now = Date.now()
     const carry = await openSession(id)
     const timer = carry ? timerTotal(carry, now) : 0
     const page = input.page
-    const pages = page !== null ? Math.max(0, page - (book.currentPage ?? 0)) : 0
-    if (onlyIfRead && pages === 0 && !input.minutes && timer === 0) return
+    // อ่านซ้ำเล่มที่จบแล้ว: หน้าที่น้อยกว่าเดิมคือเริ่มรอบใหม่ นับจากหน้าแรก
+    const rereading = book.status === 'done' && page !== null && page < (book.currentPage ?? 0)
+    const startPage = rereading ? null : book.currentPage
+    const pages = page !== null ? Math.max(0, page - (startPage ?? 0)) : 0
+    const pageChanged = page !== null && page !== book.currentPage
+    // คืน Promise ของ Dexie โดยตรง (ไม่ห่อด้วย async) เพื่อไม่ให้ธุรกรรมปิดก่อนเวลา
+    const setPage = () =>
+      db.books.update(id, {
+        currentPage: page,
+        status: book.status === 'dong' || rereading ? 'reading' : book.status,
+        ...(rereading && { finishedAt: null }),
+        updatedAt: now,
+      })
+    // ไม่มีอะไรให้บันทึก (หน้าไม่เพิ่ม ไม่ใส่เวลา ไม่ได้จับเวลา): แค่แก้เลขหน้าถ้าเปลี่ยน ไม่สร้างรายการเปล่า
+    if (pages === 0 && !input.minutes && timer === 0) {
+      if (pageChanged) await setPage()
+      return
+    }
     let minutes = input.minutes
     let estimated = false
-    if (minutes === null && timer > 0) minutes = Math.max(1, Math.round(timer / 60000))
+    // ลืมหยุดนาฬิกาข้ามวัน หรือคั่นหน้าครั้งแรกกลางเล่ม ไม่ควรกลายเป็นเวลาอ่านมหาศาล
+    if (minutes === null && timer > 0) minutes = Math.min(MAX_TIMER_MINUTES, Math.max(1, Math.round(timer / 60000)))
     else if (minutes === null && pages > 0) {
       const all = await db.sessions.toArray()
-      minutes = Math.max(1, Math.round(pages * pace(all)))
+      minutes = Math.min(MAX_ESTIMATE_MINUTES, Math.max(1, Math.round(pages * pace(all))))
       estimated = true
     }
     await db.sessions.add({
@@ -150,7 +186,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
       toPlaceId: null,
       startedAt: now - (minutes ?? 0) * 60000,
       endedAt: now,
-      startPage: book.currentPage,
+      startPage,
       endPage: page,
       minutes,
       timerMs: 0,
@@ -158,12 +194,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
     })
     // เวลาที่จับไว้ถูกใช้ไปแล้ว เริ่มนับใหม่สำหรับการอ่านครั้งถัดไป
     if (carry && timer > 0) await db.sessions.update(carry.id, { timerMs: 0, timerStartedAt: null, updatedAt: now })
-    if (page !== null && page !== book.currentPage)
-      await db.books.update(id, {
-        currentPage: page,
-        status: book.status === 'dong' ? 'reading' : book.status,
-        updatedAt: now,
-      })
+    if (pageChanged) await setPage()
   }
 
   /** ตำแหน่งถัดไปต่อท้ายที่เก็บ */
@@ -429,9 +460,12 @@ export function createRepo(db: GongDongDB = defaultDb) {
       const j = i + dir
       if (i < 0 || j < 0 || j >= rows.length) return
       const now = Date.now()
+      // สลับสองเล่มแล้วเรียงเลขตำแหน่งใหม่ทั้งที่เก็บ (หลังซิงก์ตำแหน่งอาจซ้ำกัน สลับค่าเฉย ๆ จะไม่ขยับ)
+      const order = [...rows]
+      ;[order[i], order[j]] = [order[j], order[i]]
       await db.transaction('rw', db.books, async () => {
-        await db.books.update(rows[i].id, { position: rows[j].position, updatedAt: now })
-        await db.books.update(rows[j].id, { position: rows[i].position, updatedAt: now })
+        for (let k = 0; k < order.length; k++)
+          if (order[k].position !== k || k === i || k === j) await db.books.update(order[k].id, { position: k, updatedAt: now })
       })
     },
 
@@ -441,8 +475,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
         await db.books.update(id, { deletedAt: now, updatedAt: now })
         await db.quotes.where('bookId').equals(id).modify({ deletedAt: now, updatedAt: now })
         // การหยิบที่ค้างอยู่ของเล่มที่ถูกลบ ไม่ควรค้างเป็น "อยู่ในมือ" ตลอดไป
-        const open = await openSession(id)
-        if (open) await db.sessions.update(open.id, { deletedAt: now, updatedAt: now })
+        for (const open of await openSessions(id)) await db.sessions.update(open.id, { deletedAt: now, updatedAt: now })
         await putCover(db, id, null)
       })
     },
@@ -454,6 +487,9 @@ export function createRepo(db: GongDongDB = defaultDb) {
         const book = await db.books.get(id)
         if (!book || book.deletedAt !== null || book.takenAt) return
         const now = Date.now()
+        // การหยิบที่ค้างจากเครื่องอื่น (เล่มไม่ได้อยู่ในมือแล้ว) ปิดก่อนเริ่มการหยิบใหม่
+        for (const stale of await openSessions(id))
+          await db.sessions.update(stale.id, { kind: 'carry', endedAt: now, timerStartedAt: null, updatedAt: now })
         await db.sessions.add({
           ...stamp(),
           kind: 'carry',
@@ -483,7 +519,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
      * เวลาอ่าน: ที่ผู้ใช้ใส่ > เวลาที่จับไว้ > ประมาณจากจำนวนหน้ากับความเร็วอ่านของผู้ใช้
      */
     async checkIn(id: string, input: CheckInInput): Promise<void> {
-      await db.transaction('rw', db.books, db.sessions, () => logReading(id, input, false))
+      await db.transaction('rw', db.books, db.sessions, () => logReading(id, input))
     },
 
     /** วางคืนที่เดิมหรือที่ใหม่ ถ้าหน้าที่คั่นเปลี่ยนหรือมีเวลาที่จับไว้ บันทึกเป็นการอ่านอีกหนึ่งครั้ง */
@@ -492,14 +528,16 @@ export function createRepo(db: GongDongDB = defaultDb) {
         // ที่วางคืนถูกลบไประหว่างนั้น วางเป็น "ยังไม่ระบุที่เก็บ" แทน
         const placeId = (await placeAlive(input.placeId)) ? input.placeId : null
         const position = await nextPosition(placeId)
-        const book = await db.books.get(id)
-        if (!book || !book.takenAt) return
+        const before = await db.books.get(id)
+        if (!before || !before.takenAt) return
         const finished = input.finished
-        const page = finished && book.pages ? book.pages : input.page
-        await logReading(id, { page, minutes: input.minutes }, true)
+        const page = finished && before.pages ? before.pages : input.page
+        await logReading(id, { page, minutes: input.minutes })
+        // อ่านค่าล่าสุดหลังบันทึกการอ่าน (สถานะและหน้าอาจเปลี่ยนไปแล้ว)
+        const book = (await db.books.get(id))!
         const now = Date.now()
-        const session = await openSession(id)
-        if (session) {
+        // ปิดการหยิบที่ค้างทุกอัน (หลังซิงก์สองเครื่องอาจมีมากกว่าหนึ่ง)
+        for (const session of await openSessions(id))
           await db.sessions.update(session.id, {
             kind: 'carry',
             endedAt: now,
@@ -507,7 +545,8 @@ export function createRepo(db: GongDongDB = defaultDb) {
             timerStartedAt: null,
             updatedAt: now,
           })
-        }
+        // เล่มที่จบอยู่แล้วและแค่หยิบมาเปิดดู (ไม่ได้อ่านเพิ่ม) คงวันที่อ่านจบเดิมไว้
+        const untouched = before.status === 'done' && book.status === 'done' && before.finishedAt !== null
         await db.books.update(id, {
           placeId,
           position,
@@ -515,8 +554,8 @@ export function createRepo(db: GongDongDB = defaultDb) {
           takenFrom: null,
           currentPage: page ?? book.currentPage,
           status: finished ? 'done' : book.status === 'done' ? 'reading' : book.status,
-          // กฎเดียวกับฟอร์ม: อ่านจบ = วันที่วางคืน (อ่านซ้ำจบก็นับใหม่) ไม่จบ = ไม่มีวันที่อ่านจบ
-          finishedAt: finished ? now : null,
+          // อ่านจบ = วันที่วางคืน (อ่านซ้ำจบก็นับใหม่) ไม่จบ = ไม่มีวันที่อ่านจบ
+          finishedAt: finished ? (untouched ? before.finishedAt : now) : null,
           updatedAt: now,
         })
       })

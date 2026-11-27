@@ -11,7 +11,7 @@ const GIS = 'https://accounts.google.com/gsi/client'
 const API = 'https://www.googleapis.com/drive/v3/files'
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files'
 
-export type DriveErrorKind = 'no-client' | 'blocked' | 'denied' | 'scope' | 'api-off' | 'auth' | 'quota' | 'network' | 'other'
+export type DriveErrorKind = 'no-client' | 'blocked' | 'denied' | 'scope' | 'api-off' | 'wrong-account' | 'auth' | 'quota' | 'network' | 'other'
 export class DriveError extends Error {
   kind: DriveErrorKind
   constructor(kind: DriveErrorKind, detail = '') {
@@ -94,15 +94,36 @@ export async function signIn(clientId: string, hint = ''): Promise<string> {
   })
 }
 
-/** ออกจากระบบ: ยกเลิกสิทธิ์ของโทเคนที่ถืออยู่ (ถ้ามี) แล้วลืมโทเคน */
-export function signOut(): void {
+/**
+ * ออกจากระบบ: ยกเลิกสิทธิ์ของโทเคนที่ถืออยู่แล้วลืมโทเคน
+ * คืน true ถ้าได้สั่งยกเลิกสิทธิ์กับ Google (ไม่มีโทเคนในมือ เช่น เปิดแอปใหม่ = ไม่มีอะไรให้ยกเลิก)
+ */
+export function signOut(): boolean {
+  const had = Boolean(token && window.google)
   if (token) window.google?.accounts.oauth2.revoke(token.value)
   token = null
+  return had
 }
 
 export interface Account {
   email: string
   name: string
+}
+
+/**
+ * เข้าสู่ระบบแล้วตรวจว่าเป็นบัญชีที่คาดไว้
+ * (login_hint เป็นแค่คำแนะนำ ผู้ใช้เลือกบัญชีอื่นในหน้าต่างของ Google ได้
+ *  ถ้าไม่ตรวจ ข้อมูลอาจถูกรวมหรือถูกลบในบัญชีที่ไม่ได้ตั้งใจ)
+ */
+export async function connect(clientId: string, expectedEmail = ''): Promise<{ token: string; email: string }> {
+  const value = await signIn(clientId, expectedEmail)
+  const who = await account(value)
+  if (expectedEmail && who.email.toLowerCase() !== expectedEmail.toLowerCase()) {
+    // ไม่ใช้โทเคนของบัญชีที่ไม่ตรง และไม่เก็บไว้ให้ครั้งต่อไปหยิบไปใช้
+    token = null
+    throw new DriveError('wrong-account', who.email)
+  }
+  return { token: value, email: who.email }
 }
 
 /** บัญชี Google ที่อนุญาตไว้ (ถามจาก Drive ใช้สิทธิ์เดิม ไม่ต้องขอสิทธิ์อ่านโปรไฟล์เพิ่ม) */
@@ -147,20 +168,25 @@ async function call(accessToken: string, url: string, init: RequestInit = {}): P
 
 /** ที่เก็บไฟล์ใน appDataFolder ของบัญชีที่อนุญาต */
 export function driveStore(accessToken: string): RemoteStore {
-  let ids: Map<string, string> | null = null
-  async function list(): Promise<Map<string, string>> {
+  /** ชื่อไฟล์ → id ทุกตัวที่ใช้ชื่อนั้น (สองเครื่องสร้างพร้อมกันได้ชื่อซ้ำ ตัวแรกคือตัวที่ใช้) */
+  let ids: Map<string, string[]> | null = null
+  async function list(): Promise<Map<string, string[]>> {
     if (ids) return ids
-    const found = new Map<string, string>()
+    const found = new Map<string, string[]>()
     let pageToken = ''
     do {
-      const q = new URLSearchParams({ spaces: 'appDataFolder', fields: 'nextPageToken,files(id,name)', pageSize: '1000' })
+      const q = new URLSearchParams({
+        spaces: 'appDataFolder',
+        fields: 'nextPageToken,files(id,name)',
+        pageSize: '1000',
+        orderBy: 'createdTime',
+      })
       if (pageToken) q.set('pageToken', pageToken)
       const data = (await (await call(accessToken, `${API}?${q}`)).json()) as {
         nextPageToken?: string
         files?: { id: string; name: string }[]
       }
-      // ชื่อซ้ำ (เกิดได้ถ้าสองเครื่องสร้างพร้อมกัน) ใช้ไฟล์แรกที่เจอ
-      for (const f of data.files ?? []) if (!found.has(f.name)) found.set(f.name, f.id)
+      for (const f of data.files ?? []) found.set(f.name, [...(found.get(f.name) ?? []), f.id])
       pageToken = data.nextPageToken ?? ''
     } while (pageToken)
     ids = found
@@ -171,13 +197,13 @@ export function driveStore(accessToken: string): RemoteStore {
       return new Set((await list()).keys())
     },
     async get(name) {
-      const id = (await list()).get(name)
+      const id = (await list()).get(name)?.[0]
       if (!id) return null
       return (await call(accessToken, `${API}/${encodeURIComponent(id)}?alt=media`)).blob()
     },
     async put(name, blob) {
       const map = await list()
-      let id = map.get(name)
+      let id = map.get(name)?.[0]
       if (!id) {
         // สร้างไฟล์เปล่าก่อน แล้วค่อยส่งเนื้อหา (สองขั้นตอนตามเอกสารของ Drive)
         const made = (await (
@@ -188,7 +214,7 @@ export function driveStore(accessToken: string): RemoteStore {
           })
         ).json()) as { id: string }
         id = made.id
-        map.set(name, id)
+        map.set(name, [id])
       }
       await call(accessToken, `${UPLOAD}/${encodeURIComponent(id)}?uploadType=media`, {
         method: 'PATCH',
@@ -198,9 +224,8 @@ export function driveStore(accessToken: string): RemoteStore {
     },
     async del(name) {
       const map = await list()
-      const id = map.get(name)
-      if (!id) return
-      await call(accessToken, `${API}/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      // ลบทุกไฟล์ที่ใช้ชื่อนี้ ไม่เหลือสำเนาซ้ำที่จะโผล่กลับมา
+      for (const id of map.get(name) ?? []) await call(accessToken, `${API}/${encodeURIComponent(id)}`, { method: 'DELETE' })
       map.delete(name)
     },
   }
