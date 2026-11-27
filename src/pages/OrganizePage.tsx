@@ -5,10 +5,15 @@ import { repo } from '../db/repo'
 import type { Book } from '../db/types'
 import { aiOn, aiReady, askJson } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
+import { AiError } from '../lib/aiCommon'
 import {
-  buildOrganizePrompt,
-  organizeSchema,
-  readPlan,
+  batches,
+  buildCategoryPrompt,
+  buildLayoutPrompt,
+  categorySchema,
+  layoutSchema,
+  planMoves,
+  readCategories,
   ruleAdvice,
   type OrganizePlan,
 } from '../lib/organize'
@@ -126,7 +131,9 @@ export function OrganizePage() {
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
   const [plan, setPlan] = useState<OrganizePlan | null>(null)
-  const [skipped, setSkipped] = useState(0)
+  /** ความคืบหน้าระหว่าง AI ทำงาน และหมายเหตุเมื่อทำได้ไม่ครบ */
+  const [progress, setProgress] = useState('')
+  const [partial, setPartial] = useState('')
   // แผนจาก AI ยังไม่ได้ใช้ ออกจากหน้าแล้วต้องเรียก AI (และเสียค่าใช้จ่าย) ใหม่
   useLeaveGuard(Boolean(plan), t.organize.unsavedLeave)
   const [pickedCats, setPickedCats] = useState<Set<string>>(new Set())
@@ -146,22 +153,64 @@ export function OrganizePage() {
   const reachable = groups.filter((g) => g.title !== t.places.boxes)
   const quiet = !advice.toBox.length && !advice.outOfBox.length && !advice.unplaced.length
 
+  /** ข้อผิดพลาดที่ลองชุดถัดไปก็ไม่ช่วย (ปิด AI ไม่มี key โควตาหมด) หยุดเลย */
+  const fatal = (e: unknown) => e instanceof AiError && ['off', 'no-key', 'bad-key', 'quota', 'credit'].includes(e.kind)
+
   async function analyse() {
     setBusy(true)
     setError('')
     setDone('')
+    setPartial('')
+    const all = books!
+    let firstError: unknown = null
     try {
-      const input = buildOrganizePrompt(books!, places, bookcases, sessions, categories)
-      const result = readPlan(await askJson(input.prompt, organizeSchema), input, books!)
-      setSkipped(input.skipped)
-      setPlan(result)
-      // หมวด: เลือกไว้เฉพาะเล่มที่ยังไม่มีหมวด ส่วนเล่มที่มีหมวดอยู่แล้วให้ผู้ใช้ตัดสินใจเอง
-      setPickedCats(new Set(result.categories.filter((c) => !byId.get(c.bookId)?.categoryId).map((c) => c.bookId)))
-      setPickedMoves(new Set(result.moves.map((m) => m.bookId)))
+      // ขั้นที่ 1: จัดหมวดเล่มที่ยังไม่มีหมวด ทีละชุด (หมวดจากชุดก่อนส่งต่อให้ชุดถัดไปใช้ชื่อเดียวกัน)
+      const todo = all.filter((b) => !b.categoryId)
+      const known = categories.map((c) => c.name)
+      const suggestions: OrganizePlan['categories'] = []
+      let attempted = 0
+      for (const group of batches(todo)) {
+        setProgress(t.organize.progressCats(attempted, todo.length))
+        attempted += group.length
+        try {
+          const input = buildCategoryPrompt(group, known)
+          for (const c of readCategories(await askJson(input.prompt, categorySchema), input)) {
+            suggestions.push(c)
+            if (!known.some((k) => k.toLowerCase() === c.category.toLowerCase())) known.push(c.category)
+          }
+        } catch (e) {
+          firstError ??= e
+          if (fatal(e)) break
+        }
+      }
+
+      // ขั้นที่ 2: ให้ AI วางผังระดับหมวด แล้วแอปคิดการย้ายรายเล่มเอง
+      let layout: Pick<OrganizePlan, 'summary' | 'tips' | 'moves'> = { summary: '', tips: [], moves: [] }
+      if (places.length > 0 && !(firstError && fatal(firstError))) {
+        setProgress(t.organize.progressLayout)
+        const categoryOf = new Map<string, string>()
+        for (const b of all) if (b.categoryId) categoryOf.set(b.id, catName(b))
+        for (const c of suggestions) categoryOf.set(c.bookId, c.category)
+        try {
+          const input = buildLayoutPrompt(all, places, bookcases, categoryOf)
+          layout = planMoves(await askJson(input.prompt, layoutSchema), input, all, places, sessions, categoryOf)
+        } catch (e) {
+          firstError ??= e
+        }
+      }
+
+      const gotSomething = suggestions.length > 0 || layout.moves.length > 0 || Boolean(layout.summary)
+      // ไม่ได้อะไรเลยและมีข้อผิดพลาด = ล้มเหลว ส่วนได้บางส่วนให้ใช้ได้ พร้อมบอกว่าไม่ครบเพราะอะไร
+      if (firstError && !gotSomething) return setError(aiErrorText(firstError))
+      if (firstError) setPartial(t.organize.partial(suggestions.length, todo.length, aiErrorText(firstError)))
+      setPlan({ ...layout, categories: suggestions })
+      setPickedCats(new Set(suggestions.map((c) => c.bookId)))
+      setPickedMoves(new Set(layout.moves.map((m) => m.bookId)))
     } catch (e) {
       setError(aiErrorText(e))
     } finally {
       setBusy(false)
+      setProgress('')
     }
   }
 
@@ -228,7 +277,16 @@ export function OrganizePage() {
       <section>
         <h2>{t.organize.ai}</h2>
         <p className="muted">{t.organize.aiHint}</p>
-        {error && <p className="error">{error}</p>}
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        {busy && progress && (
+          <p className="muted" role="status">
+            {progress}
+          </p>
+        )}
         {done && <p className="ok">{done}</p>}
         {!plan && (
           <button className="btn primary" disabled={busy || !aiReady() || books.length === 0} onClick={analyse}>
@@ -246,7 +304,7 @@ export function OrganizePage() {
 
         {plan && (
           <div className="plan">
-            {skipped > 0 && <p className="muted">{t.organize.skipped(skipped)}</p>}
+            {partial && <p className="muted">{partial}</p>}
             {plan.summary && (
               <div className="card">
                 <h3>{t.organize.summary}</h3>

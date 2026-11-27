@@ -270,6 +270,8 @@ export async function generateJson(
     contents: [{ parts: [...image, { text: prompt }] }],
     generationConfig: { responseMimeType: 'application/json', responseSchema: toGeminiSchema(schema) },
   })
+  // คำตอบถูกตัดเพราะยาวเกินขีดจำกัดของรุ่น: บอกให้ชัด ไม่ใช่ "อ่านไม่ได้"
+  if (data?.candidates?.[0]?.finishReason === 'MAX_TOKENS') throw new AiError('other', 'response too long')
   const text: string = (data?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? '').join('')
   try {
     return JSON.parse(text)

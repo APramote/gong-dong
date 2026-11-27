@@ -8,6 +8,8 @@ export const redactKeys = (text: string) =>
 /** ข้อความภาษาไทยสำหรับข้อผิดพลาดของ AI พร้อมรายละเอียดจากผู้ให้บริการถ้ามี */
 export function aiErrorText(e: unknown): string {
   if (!(e instanceof AiError)) return t.ai.other
+  // คำตอบถูกตัดกลางทางหรืออ่านไม่ได้ ซึ่งมักเกิดจากคำตอบยาวเกินขีดจำกัดของรุ่น
+  if (e.kind === 'other' && /response too long|unreadable response/.test(e.message)) return t.ai.tooLong
   if (e.kind === 'other')
     return e.message && e.message !== 'other' ? `${t.ai.other}\n${t.ai.detail(redactKeys(e.message))}` : t.ai.other
   if (e.kind !== 'quota' || !e.quota) return t.ai[e.kind]
