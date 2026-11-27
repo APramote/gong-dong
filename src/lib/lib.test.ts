@@ -362,6 +362,9 @@ test('เช็กก่อนซื้อ: ชื่อที่แค่มี
   expect(findMatches({ title: 'ชุดมังกร เล่ม 10' }, books, []).owned).toHaveLength(0)
   expect(findMatches({ title: 'ชุดมังกร เล่ม 1 (ปกแข็ง)' }, books, []).owned).toHaveLength(1)
   expect(nearMatcher(books)({ title: 'บ้านเล็กในป่าใหญ่' }).map((b) => b.title)).toEqual(['บ้าน'])
+  // เล่มอื่นในชุดเดียวกันขึ้นเป็นชื่อคล้าย แต่ชื่อที่แค่ขึ้นต้นคล้ายกันนิดเดียวไม่ขึ้น
+  expect(nearMatcher(books)({ title: 'ชุดมังกร เล่ม 2' }).map((b) => b.title)).toEqual(['ชุดมังกร เล่ม 1'])
+  expect(nearMatcher(books)({ title: 'ชุดนกฮูกสีเทา' })).toEqual([])
   expect(dongFor(0, 30 * 86400000)).toBe('ดองมา 1 เดือน')
 })
 

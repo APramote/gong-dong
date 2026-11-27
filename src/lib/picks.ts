@@ -26,10 +26,15 @@ function sameKey(x: string, y: string): boolean {
   return !/[0-9๐-๙]/.test(long.slice(short.length))
 }
 
-/** ชื่อใกล้เคียง: มีคำค้นอยู่ในชื่อ (ใช้แสดงเป็น "เล่มชื่อคล้ายกัน" ไม่ใช่คำตัดสินว่ามีแล้ว) */
+/** ชื่อใกล้เคียง: มีคำค้นอยู่ในชื่อ หรือขึ้นต้นเหมือนกันเป็นส่วนใหญ่ (ใช้แสดงเป็น "เล่มชื่อคล้ายกัน" ไม่ใช่คำตัดสินว่ามีแล้ว) */
 function nearKey(x: string, y: string): boolean {
   if (x.length < 3 || y.length < 3) return false
-  return x.includes(y) || y.includes(x)
+  if (x.includes(y) || y.includes(x)) return true
+  // ขึ้นต้นเหมือนกันเกินครึ่ง เช่น เล่มอื่นในชุดเดียวกัน ("สี่แผ่นดิน เล่ม 1" กับ "สี่แผ่นดิน เล่ม 2")
+  const min = Math.min(x.length, y.length)
+  let same = 0
+  while (same < min && x[same] === y[same]) same++
+  return same >= Math.max(4, Math.ceil(min * 0.6))
 }
 
 export interface MatchQuery {
