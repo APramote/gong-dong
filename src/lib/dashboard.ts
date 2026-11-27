@@ -144,28 +144,28 @@ export const WEEKDAYS_SHORT = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', '�
 /** ข้อความให้กำลังใจจากสถิติจริง เรียงจากสำคัญที่สุด */
 export function motivation(d: Dashboard, goals: Goals): string[] {
   const out: string[] = []
-  if (d.todayMinutes >= goals.dailyMinutes) out.push(`วันนี้อ่านครบเป้า ${formatMinutes(goals.dailyMinutes)}แล้ว เก่งมาก`)
+  if (d.todayMinutes >= goals.dailyMinutes) out.push(`วันนี้อ่านครบเป้า ${formatMinutes(goals.dailyMinutes)}แล้ว เยี่ยมไปเลย ที่เหลือคือกำไร`)
   else if (d.todayMinutes > 0)
-    out.push(`วันนี้อ่านไปแล้ว ${formatMinutes(d.todayMinutes)} อีก ${formatMinutes(goals.dailyMinutes - d.todayMinutes)} ถึงเป้า`)
-  else out.push(`วันนี้ยังไม่ได้อ่าน แค่ ${formatMinutes(goals.dailyMinutes)} ก็ถึงเป้าแล้ว`)
+    out.push(`วันนี้อ่านไปแล้ว ${formatMinutes(d.todayMinutes)} อีกแค่ ${formatMinutes(goals.dailyMinutes - d.todayMinutes)} ก็แตะเป้า ไปต่อกัน`)
+  else out.push(`วันนี้หนังสือยังรออยู่นะ แวะอ่านสัก ${formatMinutes(goals.dailyMinutes)} ก็ถึงเป้าแล้ว`)
 
-  if (d.streak >= 2) out.push(`อ่านต่อเนื่อง ${d.streak} วันแล้ว${d.streak >= d.bestStreak ? ' เป็นสถิติดีที่สุดของคุณ' : ` (สถิติดีที่สุด ${d.bestStreak} วัน)`}`)
-  else if (d.bestStreak >= 3) out.push(`เคยอ่านต่อเนื่องได้ ${d.bestStreak} วัน เริ่มนับใหม่วันนี้ได้เลย`)
+  if (d.streak >= 2) out.push(`อ่านต่อเนื่อง ${d.streak} วันแล้ว${d.streak >= d.bestStreak ? ' ทุบสถิติตัวเองอยู่นะ ไฟกำลังมา' : ` ไล่ตามสถิติเดิม ${d.bestStreak} วันอยู่ สู้ ๆ`}`)
+  else if (d.bestStreak >= 3) out.push(`เคยอ่านติดกันได้ถึง ${d.bestStreak} วัน วันนี้เริ่มนับหนึ่งใหม่กันไหม`)
 
   const expected = goals.yearBooks * d.yearProgress
   if (goals.yearBooks > 0) {
-    if (d.finishedYear >= goals.yearBooks) out.push(`ปีนี้อ่านจบ ${d.finishedYear} เล่ม ครบเป้า ${goals.yearBooks} เล่มแล้ว`)
-    else if (d.finishedYear >= expected) out.push(`เป้าปีนี้นำหน้ากำหนด อ่านจบ ${d.finishedYear} จาก ${goals.yearBooks} เล่ม`)
-    else out.push(`เป้าปีนี้ช้ากว่ากำหนดประมาณ ${Math.ceil(expected - d.finishedYear)} เล่ม ลองเลือกเล่มบาง ๆ จากกองดองดู`)
+    if (d.finishedYear >= goals.yearBooks) out.push(`ปีนี้อ่านจบ ${d.finishedYear} เล่ม ทะลุเป้า ${goals.yearBooks} เล่มแล้ว ฉลองด้วยเล่มใหม่ได้เลย`)
+    else if (d.finishedYear >= expected) out.push(`เป้าปีนี้วิ่งนำอยู่ อ่านจบแล้ว ${d.finishedYear} จาก ${goals.yearBooks} เล่ม`)
+    else out.push(`เป้าปีนี้ยังตามอยู่ราว ${Math.ceil(expected - d.finishedYear)} เล่ม หยิบเล่มบาง ๆ จากกองดองมาเร่งเครื่องกัน`)
   }
 
   const month = d.monthly[d.monthly.length - 1]
-  if (month.finished > month.added) out.push(`เดือนนี้กองดองลดลง ${month.finished - month.added} เล่ม`)
+  if (month.finished > month.added) out.push(`เดือนนี้กองดองยุบลง ${month.finished - month.added} เล่ม กองเริ่มกลัวคุณแล้ว`)
   else if (month.added > month.finished)
-    out.push(`เดือนนี้เพิ่มเข้าคลังมากกว่าอ่านจบ ${month.added - month.finished} เล่ม ลองอ่านจากกองดองก่อนซื้อเพิ่ม`)
+    out.push(`เดือนนี้รับเล่มใหม่เข้าบ้านมากกว่าอ่านจบ ${month.added - month.finished} เล่ม กองดองยิ้มกว้างเลย`)
 
   const top = d.byHour.indexOf(Math.max(...d.byHour))
-  if (d.byHour[top] > 0) out.push(`ช่วงที่คุณอ่านมากที่สุดคือ ${hourRange(top)}`)
+  if (d.byHour[top] > 0) out.push(`ชั่วโมงทองของคุณคือ ${hourRange(top)} หนังสือรู้เวลานัดแล้ว`)
   return out
 }
 
