@@ -141,10 +141,14 @@ test('ทำความสะอาดผลอ่านรูปที่เ�
       { books: [] },
     ],
   }
-  expect(cleanStorage(raw, 'bookcase')).toEqual({
+  expect(cleanStorage({ ...raw, drawerRows: 1.2, drawersPerRow: 0, doors: 5, legs: true }, 'bookcase')).toEqual({
     color: '#8b5a2b',
     ratio: 0.8,
     label: 'นิยาย',
+    drawerRows: 1,
+    drawersPerRow: 2,
+    doors: 2,
+    legs: true,
     shelves: [
       { books: [{ title: 'ก', authors: '', publisher: '', color: '#aa0000' }, { title: 'ข', authors: '', publisher: '', color: '' }] },
       { books: [] },
@@ -155,5 +159,14 @@ test('ทำความสะอาดผลอ่านรูปที่เ�
   expect(pile.ratio).toBe(0)
   expect(pile.shelves).toHaveLength(1)
   expect(pile.shelves[0].books.map((b) => b.title)).toEqual(['ก', 'ข'])
-  expect(cleanStorage({}, 'box')).toEqual({ color: '', ratio: 0, label: '', shelves: [] })
+  expect(cleanStorage({ legs: true, doors: 2 }, 'box')).toEqual({
+    color: '',
+    ratio: 0,
+    label: '',
+    drawerRows: 0,
+    drawersPerRow: 0,
+    doors: 0,
+    legs: false,
+    shelves: [],
+  })
 })

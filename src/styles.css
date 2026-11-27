@@ -534,3 +534,13 @@ textarea {
   flex-direction: column;
   gap: 8px;
 }
+.shape-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  align-items: end;
+}
+.center-actions {
+  justify-content: center;
+  margin-top: 8px;
+}

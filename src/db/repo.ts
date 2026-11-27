@@ -260,7 +260,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
       return alive(await db.bookcases.toArray()).sort((a, b) => a.createdAt - b.createdAt)
     },
 
-    /** สร้างตู้พร้อมชั้นวางตามจำนวนที่ระบุ */
+    /** สร้างตู้พร้อมชั้นวางตามจำนวนที่ระบุ — ชั้นที่ 1 (order 0) อยู่ล่างสุด */
     async addBookcase(input: BookcaseInput, shelfCount: number): Promise<string> {
       const bookcase: Bookcase = { ...stamp(), ...input }
       const shelves: Place[] = Array.from({ length: shelfCount }, (_, i) => ({
@@ -280,7 +280,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
     },
 
     /**
-     * สร้างตู้จากรูป: ชั้นตามจำนวนที่ส่งมา (บนลงล่าง) พร้อมหนังสือแต่ละชั้นเรียงซ้ายไปขวา
+     * สร้างตู้จากรูป: ชั้นตามจำนวนที่ส่งมา (ล่างขึ้นบน) พร้อมหนังสือแต่ละชั้นเรียงซ้ายไปขวา
      * คืน id ของตู้
      */
     async addBookcaseWithBooks(
@@ -315,6 +315,10 @@ export function createRepo(db: GongDongDB = defaultDb) {
     async getBookcase(id: string): Promise<Bookcase | undefined> {
       const b = await db.bookcases.get(id)
       return b && b.deletedAt === null ? b : undefined
+    },
+
+    async updateBookcaseLook(id: string, look: Look): Promise<void> {
+      await db.bookcases.update(id, { look, updatedAt: Date.now() })
     },
 
     async updateBookcase(id: string, input: BookcaseInput): Promise<void> {

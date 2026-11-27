@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import type { Book, Bookcase, Cover, Place, ReadingSession } from './types'
+import { flipShelfOrder } from './migrations'
 
 export class GongDongDB extends Dexie {
   books!: Table<Book, string>
@@ -17,6 +18,13 @@ export class GongDongDB extends Dexie {
     })
     this.version(2).stores({ covers: 'id, updatedAt' })
     this.version(3).stores({ sessions: 'id, bookId, updatedAt' })
+    // นับชั้นจากล่างขึ้นบน
+    this.version(4)
+      .stores({})
+      .upgrade(async (tx) => {
+        const places = tx.table<Place, string>('places')
+        await places.bulkPut(flipShelfOrder(await places.toArray()))
+      })
   }
 }
 

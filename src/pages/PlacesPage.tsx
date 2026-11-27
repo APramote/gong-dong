@@ -75,7 +75,8 @@ export function PlacesPage() {
           <p className="empty">{t.places.emptyBookcases}</p>
         ) : (
           bookcases.map((bc) => {
-            const shelves = places.filter((p) => p.kind === 'shelf' && p.bookcaseId === bc.id)
+            // แสดงชั้นบนสุดก่อนให้ตรงกับตู้จริง (ชั้นที่ 1 อยู่ล่างสุด)
+            const shelves = places.filter((p) => p.kind === 'shelf' && p.bookcaseId === bc.id).reverse()
             return (
               <div className="card" key={bc.id}>
                 <div className="section-head">

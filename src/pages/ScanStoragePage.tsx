@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { emptyBook, repo, type BookInput } from '../db/repo'
 import type { Look } from '../db/types'
 import { BookRowsEditor, chosen, toRows, type EditRow } from '../components/BookRowsEditor'
+import { ShapeFields } from '../components/ShapeFields'
 import { aiReady, scan } from '../lib/ai'
 import { useBlobUrl } from '../components/Cover'
 import type { StorageKind } from '../lib/aiCommon'
@@ -26,7 +27,7 @@ export function ScanStoragePage() {
   const [location, setLocation] = useState('')
   const [label, setLabel] = useState('')
   const [look, setLook] = useState<Look>({ color: '', ratio: 0 })
-  /** ตู้: หลายชั้นบนลงล่าง / กอง: ชั้นเดียวบนลงล่าง / กล่อง: ชั้นเดียว */
+  /** ตู้: หลายชั้นเรียงบนลงล่างตามรูป / กอง: ชั้นเดียวบนลงล่าง / กล่อง: ชั้นเดียว */
   const [shelves, setShelves] = useState<EditRow[][]>([])
   const [photo, setPhoto] = useState<Blob | null>(null)
   const camera = useRef<Record<StorageKind, HTMLInputElement | null>>({ bookcase: null, pile: null, box: null })
@@ -47,7 +48,16 @@ export function ScanStoragePage() {
       const result = await scan(await blobToBase64(image), k)
       const titles = existing.map((b) => b.title)
       setPhoto(image)
-      setLook({ color: result.color || DEFAULT_COLOR[k], ratio: result.ratio })
+      setLook({
+        color: result.color || DEFAULT_COLOR[k],
+        ratio: result.ratio,
+        ...(k === 'bookcase' && {
+          drawerRows: result.drawerRows,
+          drawersPerRow: result.drawersPerRow,
+          doors: result.doors,
+          legs: result.legs,
+        }),
+      })
       setName(k === 'box' && result.label ? result.label : t.scan.defaultName[k])
       setLabel(result.label)
       setLocation('')
@@ -77,7 +87,8 @@ export function ScanStoragePage() {
       id = await repo.addBookcaseWithBooks(
         { name: finalName, room: location.trim() },
         look,
-        shelves.map((rows) => chosen(rows).map(toBook)),
+        // รายการเรียงบนลงล่างตามรูป แต่ชั้นที่ 1 คือชั้นล่างสุด
+        [...shelves].reverse().map((rows) => chosen(rows).map(toBook)),
       )
       to = `/view/bookcase/${id}`
     } else {
@@ -107,7 +118,7 @@ export function ScanStoragePage() {
         {kind === 'bookcase' ? (
           <div className="view3d-wrap small">
             <Suspense fallback={null}>
-              <Storage3D model={{ shelves: shelves.map(preview), look }} />
+              <Storage3D model={{ shelves: [...shelves].reverse().map(preview), look }} />
             </Suspense>
           </div>
         ) : (
@@ -127,36 +138,32 @@ export function ScanStoragePage() {
           {kind === 'bookcase' ? t.places.room : kind === 'pile' ? t.places.pileLocation : t.places.boxLocation}
           <input value={location} onChange={(e) => setLocation(e.target.value)} />
         </label>
-        {kind === 'bookcase' && (
-          <label className="color-field">
-            {t.scan.color}
-            <input
-              type="color"
-              value={look.color}
-              onChange={(e) => setLook((l) => ({ ...l, color: e.target.value }))}
-            />
-          </label>
-        )}
+        {kind === 'bookcase' && <ShapeFields look={look} onChange={setLook} />}
 
         {total === 0 && shelves.every((r) => r.length === 0) && <p className="muted">{t.scan.noBooks}</p>}
         {kind === 'bookcase' ? (
           <>
+            <p className="muted">{t.scan.shelvesOrder}</p>
+            <button type="button" className="btn" onClick={() => setShelves((s) => [[], ...s])}>
+              {t.scan.addShelf}
+            </button>
             {shelves.map((rows, i) => (
               <section key={i} className="shelf-edit">
-                <h2>{t.scan.shelf(i + 1, i === shelves.length - 1 && shelves.length > 1)}</h2>
+                <div className="section-head">
+                  <h2>{t.scan.shelf(shelves.length - i, shelves.length)}</h2>
+                  {shelves.length > 1 && (
+                    <button
+                      type="button"
+                      className="btn small danger"
+                      onClick={() => setShelves((s) => s.filter((_, j) => j !== i))}
+                    >
+                      {t.scan.removeShelf}
+                    </button>
+                  )}
+                </div>
                 <BookRowsEditor rows={rows} onChange={(r) => setRows(i, r)} />
               </section>
             ))}
-            <div className="actions">
-              <button type="button" className="btn" onClick={() => setShelves((s) => [...s, []])}>
-                {t.scan.addShelf}
-              </button>
-              {shelves.length > 1 && (
-                <button type="button" className="btn danger" onClick={() => setShelves((s) => s.slice(0, -1))}>
-                  {t.scan.removeShelf}
-                </button>
-              )}
-            </div>
           </>
         ) : (
           <section className="shelf-edit">

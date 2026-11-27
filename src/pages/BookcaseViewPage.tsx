@@ -2,8 +2,10 @@ import { lazy, Suspense, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
+import type { Look } from '../db/types'
 import { CoverThumb } from '../components/Cover'
 import { StoragePhoto } from '../components/StoragePhoto'
+import { ShapeFields } from '../components/ShapeFields'
 import { t } from '../th'
 
 const Storage3D = lazy(() => import('../three/Storage3D'))
@@ -16,11 +18,16 @@ export function BookcaseViewPage() {
   const places = useLiveQuery(() => repo.listPlaces(), []) ?? []
   const books = useLiveQuery(() => repo.listBooks(), []) ?? []
   const [selected, setSelected] = useState<string | null>(null)
+  const [doorsOpen, setDoorsOpen] = useState(false)
+  /** ค่าที่กำลังแก้ ใช้แสดงทันทีระหว่างรอบันทึกลงฐานข้อมูล — null = ไม่ได้แก้อยู่ */
+  const [draft, setDraft] = useState<Look | null>(null)
 
   if (bookcase === undefined) return null
   if (!bookcase) return <p className="empty">{t.view.notFound}</p>
 
+  // listPlaces เรียงตาม order อยู่แล้ว: ชั้นที่ 1 (ล่างสุด) มาก่อน
   const shelves = places.filter((p) => p.kind === 'shelf' && p.bookcaseId === id)
+  const look = draft ?? bookcase.look ?? { color: '', ratio: 0 }
   // หนังสือที่อยู่ในมือไม่อยู่บนชั้น
   const onShelf = shelves.map((s) =>
     books.filter((b) => b.placeId === s.id && !b.takenAt).sort((a, b) => a.position - b.position),
@@ -44,7 +51,8 @@ export function BookcaseViewPage() {
           <Storage3D
             model={{
               shelves: onShelf.map((row) => row.map((b) => ({ id: b.id, title: b.title, pages: b.pages, spineColor: b.spineColor }))),
-              look: bookcase.look,
+              look,
+              doorsOpen,
             }}
             selectedId={pick?.id ?? null}
             onSelect={setSelected}
@@ -52,6 +60,27 @@ export function BookcaseViewPage() {
         </Suspense>
       </div>
       <p className="muted center">{t.view.hint}</p>
+      <div className="actions center-actions">
+        {(look.doors ?? 0) > 0 && (
+          <button className="btn small" onClick={() => setDoorsOpen((o) => !o)}>
+            {doorsOpen ? t.shape.closeDoors : t.shape.openDoors}
+          </button>
+        )}
+        <button className="btn small" onClick={() => setDraft((d) => (d ? null : look))}>
+          {draft ? t.shape.done : t.shape.edit}
+        </button>
+      </div>
+      {draft && (
+        <div className="inline-form form">
+          <ShapeFields
+            look={draft}
+            onChange={(l) => {
+              setDraft(l)
+              repo.updateBookcaseLook(id, l)
+            }}
+          />
+        </div>
+      )}
 
       {pick && (
         <div className="card picked">

@@ -53,6 +53,14 @@ export interface Look {
   color: string
   /** สัดส่วนกว้าง/สูงของตู้หรือกล่อง (0 = ไม่ทราบ) */
   ratio: number
+  /** ตู้: จำนวนแถวลิ้นชักใต้ชั้นวาง */
+  drawerRows?: number
+  /** ตู้: จำนวนลิ้นชักต่อแถว */
+  drawersPerRow?: number
+  /** ตู้: จำนวนบานกระจกปิดหน้าชั้น (0, 1, 2) */
+  doors?: number
+  /** ตู้: มีขาตู้ */
+  legs?: boolean
 }
 
 /** การหยิบไปอ่านหนึ่งครั้ง ตั้งแต่หยิบจนวางคืน */
@@ -84,7 +92,7 @@ export type PlaceKind = 'shelf' | 'pile' | 'box'
 
 /**
  * ที่เก็บหนังสือหนึ่งจุด
- * - shelf: ชั้นวางในตู้ (ใช้ bookcaseId, order)
+ * - shelf: ชั้นวางในตู้ (ใช้ bookcaseId, order — order 0 คือชั้นล่างสุด)
  * - pile:  วางกอง (ใช้ location = ตำแหน่งในห้อง/บ้าน)
  * - box:   กล่อง (ใช้ label = ป้ายหน้ากล่อง, location = ที่จัดเก็บกล่อง)
  */

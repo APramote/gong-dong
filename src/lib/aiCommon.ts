@@ -177,6 +177,14 @@ export interface StorageScan {
   ratio: number
   /** ข้อความบนป้ายกล่อง */
   label: string
+  /** ตู้: แถวลิ้นชักใต้ชั้นวาง */
+  drawerRows: number
+  /** ตู้: ลิ้นชักต่อแถว */
+  drawersPerRow: number
+  /** ตู้: บานปิดหน้าชั้น (0, 1, 2) */
+  doors: number
+  /** ตู้: มีขาตู้ */
+  legs: boolean
   /**
    * ตู้: แต่ละชั้นจากบนลงล่าง หนังสือในชั้นเรียงซ้ายไปขวา
    * กอง: หนึ่งรายการ หนังสือเรียงจากบนลงล่าง
@@ -187,16 +195,21 @@ export interface StorageScan {
 
 const STORAGE_PROMPTS: Record<StorageKind, string> = {
   bookcase:
-    'This photo shows a bookcase. Count every shelf level from top to bottom, including empty ones, ' +
-    'and return one entry per shelf in that order. For each shelf list every book whose spine is at least partly ' +
-    'readable, left to right. Also return the main colour of the bookcase itself and its visible width divided by height.',
+    'This photo shows a bookcase. Count every open shelf level that can hold books, from top to bottom, including ' +
+    'empty ones, and return one entry per shelf in that order. Do not count drawers as shelves. For each shelf list ' +
+    'every book whose spine is at least partly readable, left to right. Also return the main colour of the bookcase, ' +
+    'its visible width divided by height, "drawerRows" (rows of drawers below the shelves, 0 if none), ' +
+    '"drawersPerRow" (drawers side by side in one row, 0 if none), "doors" (number of glass or other doors covering ' +
+    'the shelves: 0, 1 or 2) and "legs" (true if it stands on visible legs).',
   pile:
     'This photo shows a pile of books lying on top of each other. Return exactly one shelf entry whose books are ' +
-    'listed from the top of the pile to the bottom. Also return the colour of the surface they rest on and 0 for ratio.',
+    'listed from the top of the pile to the bottom. Also return the colour of the surface they rest on, 0 for ratio, ' +
+    'drawerRows, drawersPerRow and doors, and false for legs.',
   box:
     'This photo shows a storage box. Read any text written or printed on the box (its label) exactly as written. ' +
     'Return the main colour of the box and its visible width divided by height. If the box is open and book spines ' +
-    'or covers are readable, return them as one shelf entry; otherwise return an empty list of shelves.',
+    'or covers are readable, return them as one shelf entry; otherwise return an empty list of shelves. ' +
+    'Return 0 for drawerRows, drawersPerRow and doors, and false for legs.',
 }
 
 export const storagePrompt = (kind: StorageKind) =>
@@ -212,6 +225,10 @@ export const storageSchema = {
     color: { type: 'string' },
     ratio: { type: 'number' },
     label: { type: 'string' },
+    drawerRows: { type: 'integer' },
+    drawersPerRow: { type: 'integer' },
+    doors: { type: 'integer' },
+    legs: { type: 'boolean' },
     shelves: {
       type: 'array',
       items: {
@@ -237,7 +254,7 @@ export const storageSchema = {
       },
     },
   },
-  required: ['color', 'ratio', 'label', 'shelves'],
+  required: ['color', 'ratio', 'label', 'drawerRows', 'drawersPerRow', 'doors', 'legs', 'shelves'],
   additionalProperties: false,
 } as const
 
@@ -254,10 +271,21 @@ export function cleanStorage(raw: any, kind: StorageKind): StorageScan {
   }))
   // กองมีได้ชั้นเดียว รวมทุกรายการเข้าด้วยกัน
   if (kind !== 'bookcase') shelves = shelves.length ? [{ books: shelves.flatMap((s: { books: ScannedBook[] }) => s.books) }] : []
+  const int = (v: unknown, max: number) => {
+    const n = Math.round(Number(v))
+    return Number.isFinite(n) ? Math.min(max, Math.max(0, n)) : 0
+  }
+  const isCase = kind === 'bookcase'
+  const drawerRows = isCase ? int(raw?.drawerRows, 4) : 0
   return {
     color: hex(raw?.color),
     ratio: Number.isFinite(ratio) && ratio > 0.1 && ratio < 10 ? ratio : 0,
     label: str(raw?.label),
+    drawerRows,
+    // มีแถวลิ้นชักแต่ไม่บอกจำนวนต่อแถว ถือว่าแถวละ 2
+    drawersPerRow: drawerRows ? int(raw?.drawersPerRow, 6) || 2 : 0,
+    doors: isCase ? int(raw?.doors, 2) : 0,
+    legs: isCase && raw?.legs === true,
     shelves,
   }
 }

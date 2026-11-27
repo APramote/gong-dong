@@ -107,3 +107,49 @@ test('วางคืนแบบอ่านจบ ตั้งสถานะ�
   expect(book).toMatchObject({ status: 'done', currentPage: 120 })
   expect(book.finishedAt).not.toBeNull()
 })
+
+test('ย้ายเลขชั้นจากนับบนลงล่างเป็นล่างขึ้นบน คงชื่อที่ตั้งเอง', async () => {
+  const { flipShelfOrder } = await import('./migrations')
+  const shelf = (id: string, order: number, name: string, bookcaseId = 'bc') =>
+    ({ id, kind: 'shelf', bookcaseId, order, name, deletedAt: null, createdAt: 0, updatedAt: 0, location: '', label: '' }) as any
+  const changed = flipShelfOrder(
+    [
+      shelf('top', 0, 'ชั้นที่ 1'),
+      shelf('mid', 1, 'ชั้นการ์ตูน'),
+      shelf('low', 2, 'ชั้นที่ 3'),
+      shelf('only', 0, 'ชั้นที่ 1', 'other'), // ตู้ชั้นเดียว ไม่เปลี่ยน
+      { ...shelf('gone', 3, 'ชั้นที่ 4'), deletedAt: 1 },
+    ],
+    5,
+  )
+  expect(changed.map((p) => [p.id, p.order, p.name])).toEqual([
+    ['top', 2, 'ชั้นที่ 3'],
+    ['low', 0, 'ชั้นที่ 1'],
+  ])
+  expect(changed[0].updatedAt).toBe(5)
+})
+
+test('เปิดฐานข้อมูลเวอร์ชันเก่าแล้วเลขชั้นถูกเปลี่ยนเป็นล่างขึ้นบน', async () => {
+  const Dexie = (await import('dexie')).default
+  const name = 'upgrade-test'
+  const old = new Dexie(name)
+  old.version(3).stores({
+    books: 'id, placeId, status, updatedAt',
+    bookcases: 'id, updatedAt',
+    places: 'id, kind, bookcaseId, updatedAt',
+    covers: 'id, updatedAt',
+    sessions: 'id, bookId, updatedAt',
+  })
+  const base = { kind: 'shelf', bookcaseId: 'bc', deletedAt: null, createdAt: 0, updatedAt: 0, location: '', label: '' }
+  await old.table('places').bulkAdd([
+    { ...base, id: 'top', order: 0, name: 'ชั้นที่ 1' },
+    { ...base, id: 'low', order: 1, name: 'ชั้นที่ 2' },
+  ])
+  old.close()
+  const fresh = createRepo(new GongDongDB(name))
+  const shelves = await fresh.listPlaces()
+  expect(shelves.map((s) => [s.id, s.order, s.name])).toEqual([
+    ['low', 0, 'ชั้นที่ 1'],
+    ['top', 1, 'ชั้นที่ 2'],
+  ])
+})
