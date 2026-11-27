@@ -244,8 +244,9 @@ export const t = {
     lead: 'ข้อมูลอยู่ในเครื่องนี้ ซิงก์กับ Google Drive ของคุณเพื่อใช้ได้ทุกเครื่อง และกันข้อมูลหาย',
     driveTitle: 'Google Drive',
     clientId: 'Client ID ของ Google',
-    clientIdHint: 'ลงท้ายด้วย .apps.googleusercontent.com ใส่ครั้งเดียวต่อเครื่อง ค่านี้ไม่ใช่รหัสลับ',
-    syncNow: 'ซิงก์ตอนนี้',
+    clientIdHint: 'ปกติไม่ต้องใส่ แอปมีค่าของตัวเองแล้ว ใส่เฉพาะเมื่อโฮสต์แอปเองที่อื่น',
+    advanced: 'ใช้ Client ID ของตัวเอง',
+    syncNow: 'ซิงก์กับ Google Drive',
     syncing: 'กำลังซิงก์…',
     covers: (done: number, total: number) => `กำลังรับส่งรูป ${done} จาก ${total}`,
     done: (up: number, down: number) =>

@@ -61,7 +61,7 @@
 1. console.cloud.google.com → สร้างโปรเจกต์ → เปิดใช้ **Google Drive API**
 2. **OAuth consent screen**: External ใส่อีเมลของตัวเองเป็น Test user
 3. **Credentials → OAuth client ID → Web application** ใส่ที่อยู่ของแอปใน Authorized JavaScript origins (เช่น `https://<ชื่อผู้ใช้>.github.io`)
-4. วาง Client ID ในหน้าตั้งค่าของแอป (ค่านี้ไม่ใช่รหัสลับ) ทำซ้ำข้อนี้ในทุกเครื่องที่ใช้
+4. ใส่ Client ID เป็นค่า `DEFAULT_GOOGLE_CLIENT_ID` ใน `src/lib/settings.ts` (ค่านี้ไม่ใช่รหัสลับ) หรือวางในหน้าตั้งค่า หัวข้อ "ใช้ Client ID ของตัวเอง"
 
 ## คำสั่ง
 

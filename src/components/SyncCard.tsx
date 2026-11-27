@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { db } from '../db/db'
 import { download } from '../lib/ics'
-import { loadSettings, saveSettings } from '../lib/settings'
+import { DEFAULT_GOOGLE_CLIENT_ID, loadSettings, saveSettings } from '../lib/settings'
 import { dayKey, timeAgo } from '../lib/stats'
 import { t } from '../th'
 
@@ -32,7 +32,7 @@ export function SyncCard() {
     try {
       // โหลดโค้ด sync เฉพาะเมื่อใช้ และขอสิทธิ์จาก Google ในจังหวะกดปุ่ม (ไม่งั้นหน้าต่างถูกบล็อก)
       const [{ signIn, driveStore }, { syncAll }] = await Promise.all([import('../lib/drive'), import('../lib/sync')])
-      const token = await signIn(s.googleClientId)
+      const token = await signIn(s.googleClientId || DEFAULT_GOOGLE_CLIENT_ID)
       const r = await syncAll(db, driveStore(token), (done, total) => setBusy(t.sync.covers(done, total)))
       update({ lastSyncAt: Date.now() })
       setMsg({ ok: true, text: t.sync.done(r.pushed, r.pulled) })
@@ -73,25 +73,28 @@ export function SyncCard() {
       <p className="muted">{t.sync.lead}</p>
 
       <h3>{t.sync.driveTitle}</h3>
-      <label>
-        {t.sync.clientId}
-        <input
-          value={s.googleClientId}
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          placeholder="…apps.googleusercontent.com"
-          onChange={(e) => update({ googleClientId: e.target.value.trim() })}
-        />
-        <span className="muted">{t.sync.clientIdHint}</span>
-      </label>
       <div className="actions">
-        <button type="button" className="btn primary" disabled={Boolean(busy) || !s.googleClientId} onClick={sync}>
+        <button type="button" className="btn primary" disabled={Boolean(busy)} onClick={sync}>
           {t.sync.syncNow}
         </button>
         <span className="muted">{s.lastSyncAt ? t.sync.last(timeAgo(s.lastSyncAt)) : t.sync.never}</span>
       </div>
       <p className="muted">{t.sync.privacy}</p>
+      <details className="more" open={Boolean(s.googleClientId)}>
+        <summary>{t.sync.advanced}</summary>
+        <label>
+          {t.sync.clientId}
+          <input
+            value={s.googleClientId}
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="…apps.googleusercontent.com"
+            onChange={(e) => update({ googleClientId: e.target.value.trim() })}
+          />
+          <span className="muted">{t.sync.clientIdHint}</span>
+        </label>
+      </details>
 
       <h3>{t.sync.backupTitle}</h3>
       <p className="muted">{t.sync.backupLead}</p>

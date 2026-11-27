@@ -8,6 +8,9 @@ const KEY = 'gong-dong.settings'
 
 export type Provider = 'gemini' | 'claude'
 
+/** OAuth Client ID ของแอปนี้ (ค่าสาธารณะ ไม่ใช่รหัสลับ) ใช้เมื่อผู้ใช้ไม่ได้ใส่ค่าของตัวเอง */
+export const DEFAULT_GOOGLE_CLIENT_ID = '671313942998-kui8lp7ujc4r2kmtf62ucm7dk9ldmg46.apps.googleusercontent.com'
+
 export interface Settings {
   /** ปิดแล้วแอปไม่ส่งข้อมูลหรือรูปให้ AI เลย (key ที่บันทึกไว้ยังอยู่) */
   aiEnabled: boolean
@@ -25,7 +28,7 @@ export interface Settings {
   /** เตือนเวลาอ่าน: วันในสัปดาห์ (0 = อาทิตย์) และเวลา HH:MM */
   reminderDays: number[]
   reminderTime: string
-  /** OAuth Client ID ของ Google (ไม่ใช่รหัสลับ) ใช้ sync กับ Google Drive */
+  /** OAuth Client ID ที่ผู้ใช้ใส่เอง (ว่าง = ใช้ค่าของแอป) */
   googleClientId: string
   /** เวลาที่ sync สำเร็จล่าสุด (0 = ยังไม่เคย) */
   lastSyncAt: number
