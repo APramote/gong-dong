@@ -39,6 +39,8 @@ export interface Dashboard {
   yearProgress: number
   oldestDong: Book | null
   shortestDong: Book | null
+  /** ของสะสม: มูลค่ารวมจากราคาที่บันทึกไว้ */
+  collection: { value: number; priced: number; signed: number }
 }
 
 /** นาทีของการอ่านหนึ่งครั้ง (ที่วางคืนแล้ว) */
@@ -133,6 +135,11 @@ export function dashboard(
     yearProgress: (now - yearStart) / (yearEnd - yearStart),
     oldestDong: dong.length ? dong.reduce((a, b) => (b.createdAt < a.createdAt ? b : a)) : null,
     shortestDong: dong.filter((b) => b.pages).reduce<Book | null>((a, b) => (!a || b.pages! < a.pages! ? b : a), null),
+    collection: {
+      value: books.reduce((n, b) => n + (b.price ?? 0), 0),
+      priced: books.filter((b) => b.price !== null && b.price !== undefined).length,
+      signed: books.filter((b) => b.signed).length,
+    },
   }
 }
 

@@ -5,6 +5,8 @@ import type { ReadingStatus } from '../db/types'
 import { useBlobUrl } from '../components/Cover'
 import { PlaceSelect } from '../components/PlaceSelect'
 import { CategorySelect } from '../components/CategorySelect'
+import { SeriesSelect } from '../components/SeriesSelect'
+import { QuoteSection } from '../components/QuoteSection'
 import { ReturnForm } from '../components/ReturnForm'
 import { SessionList } from '../components/SessionList'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -18,6 +20,10 @@ import { t } from '../th'
 
 const toNumber = (v: string) => {
   const n = parseInt(v, 10)
+  return Number.isFinite(n) && n >= 0 ? n : null
+}
+const toPrice = (v: string) => {
+  const n = parseFloat(v.replace(/[,฿\s]/g, ''))
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
@@ -42,6 +48,9 @@ export function BookFormPage() {
   /** ชื่อหมวดที่แหล่งข้อมูลแนะนำ ผู้ใช้กดใช้เองถ้าเห็นด้วย */
   const [catSuggestion, setCatSuggestion] = useState(prefillCategory ?? '')
   const [tagsText, setTagsText] = useState('')
+  // ช่องราคาเก็บข้อความที่พิมพ์ไว้ (เช่น "250." ระหว่างพิมพ์) แยกจากตัวเลขในฟอร์ม
+  const [priceText, setPriceText] = useState('')
+  const [collectorOpen, setCollectorOpen] = useState(false)
   const [state, setState] = useState<'loading' | 'ready' | 'missing'>(id ? 'loading' : 'ready')
   const [error, setError] = useState('')
   const [isbnMsg, setIsbnMsg] = useState(
@@ -112,6 +121,8 @@ export function BookFormPage() {
       } = b
       setForm(input)
       setTagsText(b.tags.join(', '))
+      setPriceText(b.price === null ? '' : String(b.price))
+      setCollectorOpen(Boolean(b.edition || b.condition || b.price !== null || b.boughtAt || b.boughtFrom || b.signed))
       setBaseline(JSON.stringify({ form: input, tagsText: b.tags.join(', ') }))
       setSavedCover(cover ?? null)
       setState('ready')
@@ -383,6 +394,22 @@ export function BookFormPage() {
           <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} />
         </label>
       </div>
+      <div className="cols">
+        <SeriesSelect
+          value={form.seriesId}
+          onChange={(v) => setForm((f) => ({ ...f, seriesId: v, seriesNo: v ? f.seriesNo : null }))}
+        />
+        {form.seriesId && (
+          <label>
+            {t.book.seriesNo}
+            <input
+              inputMode="numeric"
+              value={form.seriesNo ?? ''}
+              onChange={(e) => set('seriesNo', toNumber(e.target.value) || null)}
+            />
+          </label>
+        )}
+      </div>
 
       {live?.takenAt ? (
         <label>
@@ -472,6 +499,50 @@ export function BookFormPage() {
         <textarea rows={3} value={form.note} onChange={(e) => set('note', e.target.value)} />
       </label>
 
+      <details className="more" open={collectorOpen}>
+        <summary>{t.book.collector}</summary>
+        <label>
+          {t.book.edition}
+          <input placeholder={t.book.editionHint} value={form.edition} onChange={(e) => set('edition', e.target.value)} />
+        </label>
+        <div className="cols">
+          <label>
+            {t.book.condition}
+            <input list="conditions" value={form.condition} onChange={(e) => set('condition', e.target.value)} />
+            <datalist id="conditions">
+              {t.book.conditions.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </label>
+          <label>
+            {t.book.price}
+            <input
+              inputMode="decimal"
+              value={priceText}
+              onChange={(e) => {
+                setPriceText(e.target.value)
+                set('price', toPrice(e.target.value))
+              }}
+            />
+          </label>
+        </div>
+        <div className="cols">
+          <label>
+            {t.book.boughtAt}
+            <input type="date" value={form.boughtAt} onChange={(e) => set('boughtAt', e.target.value)} />
+          </label>
+          <label>
+            {t.book.boughtFrom}
+            <input value={form.boughtFrom} onChange={(e) => set('boughtFrom', e.target.value)} />
+          </label>
+        </div>
+        <label className="check">
+          <input type="checkbox" checked={form.signed} onChange={(e) => set('signed', e.target.checked)} />
+          {t.book.signed}
+        </label>
+      </details>
+
       <div className="actions">
         <button type="submit" className="btn primary">
           {t.common.save}
@@ -486,6 +557,7 @@ export function BookFormPage() {
         )}
       </div>
     </form>
+      {id && live && <QuoteSection bookId={id} />}
       {id && (
         <section>
           <h2>{t.reading.history}</h2>

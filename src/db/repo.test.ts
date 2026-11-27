@@ -315,3 +315,22 @@ test('หนังสือเก่าที่ไม่มีฟิลด์�
   const b = await repo.getBook(id)
   expect(b).toMatchObject({ seriesId: null, seriesNo: null, price: null, signed: false, edition: '' })
 })
+
+test('ชุดหนังสือ: ใช้ชื่อเดิมได้ชุดเดิม ลบชุดแล้วหนังสือยังอยู่', async () => {
+  const a = await repo.ensureSeries('  แฮร์รี่  พอตเตอร์ ')
+  expect(await repo.ensureSeries('แฮร์รี่ พอตเตอร์')).toBe(a)
+  const id = await repo.addBook({ ...emptyBook, title: 'เล่ม 1', seriesId: a, seriesNo: 1 })
+  await repo.deleteSeries(a)
+  expect(await repo.listSeries()).toEqual([])
+  expect(await repo.getBook(id)).toMatchObject({ title: 'เล่ม 1', seriesId: null, seriesNo: null })
+})
+
+test('ประโยคที่ชอบ: ลบหนังสือแล้วประโยคของเล่มนั้นหายไปด้วย', async () => {
+  const id = await repo.addBook({ ...emptyBook, title: 'ข้างหลังภาพ' })
+  const other = await repo.addBook({ ...emptyBook, title: 'อื่น' })
+  await repo.addQuote({ bookId: id, text: ' ฉันตายโดยปราศจากคนที่รักฉัน ', page: 120, note: '' })
+  await repo.addQuote({ bookId: other, text: 'อีกเล่ม', page: null, note: '' })
+  expect((await repo.listQuotes(id)).map((q) => q.text)).toEqual(['ฉันตายโดยปราศจากคนที่รักฉัน'])
+  await repo.deleteBook(id)
+  expect((await repo.listQuotes()).map((q) => q.text)).toEqual(['อีกเล่ม'])
+})

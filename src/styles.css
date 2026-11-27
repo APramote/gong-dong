@@ -1522,3 +1522,104 @@ input[type='color'] {
   background: var(--surface);
   border: 1px solid var(--line);
 }
+
+/* ---------- ข้อมูลเพิ่มเติมแบบพับได้ ---------- */
+details.more {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 4px 0;
+}
+details.more > summary {
+  padding: 10px 0;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+}
+details.more[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 14px;
+}
+.narrow {
+  max-width: 140px;
+}
+.link-btn.danger-text {
+  color: var(--danger);
+}
+
+/* ---------- ประโยคที่ชอบ ---------- */
+.quotes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.quote {
+  margin: 0;
+  padding: 4px 0 4px 18px;
+  border-left: 3px solid var(--accent);
+}
+.quote blockquote {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 1.08rem;
+  line-height: 1.75;
+  white-space: pre-line;
+}
+.quote figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px 12px;
+}
+.quote-actions {
+  display: flex;
+  gap: 14px;
+}
+.quote-actions .link-btn {
+  padding: 4px 0;
+}
+.quote-note {
+  font-style: italic;
+}
+.para-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  overflow: auto;
+}
+.para-pick button {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-family: var(--serif);
+  text-align: left;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.para-pick button.on {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* ---------- ชุดหนังสือ ---------- */
+.missing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.missing-no {
+  min-width: 36px;
+  padding: 6px 10px;
+  border: 1px dashed var(--muted);
+  border-radius: 6px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}

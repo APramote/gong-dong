@@ -92,6 +92,8 @@ export function LibraryPage() {
         {dong > 0 && <Link to="/random">{t.tools.random}</Link>}
         <Link to="/check">{t.tools.check}</Link>
         <Link to="/wishlist">{t.tools.wishlist}</Link>
+        <Link to="/series">{t.tools.series}</Link>
+        <Link to="/quotes">{t.tools.quotes}</Link>
       </nav>
 
       {/* หนังสือที่อยู่ในมือ: ทางลัดกลับไปอ่านต่อ */}

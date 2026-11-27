@@ -131,6 +131,13 @@ export function DashboardPage() {
         <StatTile label={t.dash.dong} value={t.dash.books(d.status.dong)} />
         <StatTile label={t.dash.streak} value={t.dash.days(d.streak)} sub={d.bestStreak > 0 ? t.dash.best(d.bestStreak) : undefined} />
         <StatTile label={t.dash.week} value={formatMinutes(d.weekMinutes)} />
+        {d.collection.priced > 0 && (
+          <StatTile
+            label={t.dash.value}
+            value={t.dash.baht(d.collection.value)}
+            sub={t.dash.valueSub(d.collection.priced, d.collection.signed)}
+          />
+        )}
       </div>
 
       <section className="goals">

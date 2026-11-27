@@ -92,6 +92,20 @@ export const t = {
     isbnNotFound: 'ไม่พบข้อมูลของ ISBN นี้ กรอกเองได้เลย',
     isbnFilled: 'เติมข้อมูลจาก ISBN แล้ว ตรวจสอบก่อนบันทึก',
     searching: 'กำลังค้นหา…',
+    collector: 'ข้อมูลนักสะสม',
+    edition: 'พิมพ์ครั้งที่ / ฉบับ',
+    editionHint: 'เช่น พิมพ์ครั้งแรก, ปกแข็ง, ฉบับครบรอบ',
+    condition: 'สภาพ',
+    conditions: ['ใหม่ในซีล', 'ใหม่', 'ดีมาก', 'ดี', 'พอใช้', 'มีตำหนิ'],
+    price: 'ราคาที่ซื้อ (บาท)',
+    boughtAt: 'วันที่ซื้อ',
+    boughtFrom: 'ซื้อจาก',
+    signed: 'มีลายเซ็นผู้แต่ง',
+    series: 'ชุด',
+    seriesNone: 'ไม่อยู่ในชุด',
+    seriesNew: '＋ ชุดใหม่…',
+    seriesName: 'ชื่อชุดใหม่',
+    seriesNo: 'เล่มที่',
   },
 
   add: {
@@ -386,6 +400,10 @@ export const t = {
     weekday: 'วัน',
     count: 'จำนวน',
     empty: 'ยังไม่มีสถิติ หยิบหนังสือไปอ่านแล้ววางคืน ตัวเลขจะเริ่มขึ้นที่นี่',
+    value: 'มูลค่าคลัง',
+    baht: (n: number) => `฿${n.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`,
+    valueSub: (priced: number, signed: number) =>
+      [`จาก ${priced} เล่มที่ใส่ราคา`, signed ? `ลายเซ็น ${signed} เล่ม` : ''].filter(Boolean).join(' · '),
   },
 
   categories: {
@@ -412,6 +430,8 @@ export const t = {
     random: 'สุ่มจากกองดอง',
     check: 'เช็กก่อนซื้อ',
     wishlist: 'อยากได้',
+    series: 'ชุดหนังสือ',
+    quotes: 'ประโยคที่ชอบ',
   },
 
   random: {
@@ -466,6 +486,46 @@ export const t = {
     owned: 'มีในคลังแล้ว',
     confirmDelete: (title: string) => `ลบ "${title}" ออกจากรายการอยากได้?`,
     check: 'เช็กก่อนซื้อ',
+  },
+
+  series: {
+    title: 'ชุดหนังสือ',
+    lead: 'ตามเก็บให้ครบชุด',
+    empty: 'ยังไม่มีชุดหนังสือ ตั้งชุดได้ในหน้าแก้ไขหนังสือ ช่อง "ชุด"',
+    have: (n: number, total: number) => `มี ${n} จาก ${total} เล่ม`,
+    complete: 'ครบชุดแล้ว',
+    missing: (r: string) => `ขาดเล่ม ${r}`,
+    done: (n: number) => `อ่านจบ ${n} เล่ม`,
+    notFound: 'ไม่พบชุดนี้',
+    total: 'จำนวนเล่มทั้งชุด',
+    totalHint: 'ใส่เพื่อให้รู้ว่ายังขาดเล่มไหน',
+    name: 'ชื่อชุด',
+    no: (n: number | null) => (n ? `เล่ม ${n}` : 'ไม่ระบุเล่ม'),
+    missingTitle: 'เล่มที่ยังขาด',
+    wishMissing: (n: number) => `เพิ่ม ${n} เล่มที่ขาดในรายการอยากได้`,
+    wished: 'เพิ่มในรายการอยากได้แล้ว',
+    wishTitle: (name: string, n: number) => `${name} เล่ม ${n}`,
+    confirmDelete: (name: string) => `ลบชุด "${name}"? หนังสือในชุดไม่ถูกลบ`,
+  },
+
+  quotes: {
+    title: 'ประโยคที่ชอบ',
+    lead: 'ถ้อยคำที่อยากจำ จากทุกเล่มที่อ่าน',
+    empty: 'ยังไม่มีประโยคที่ชอบ เก็บได้จากหน้าหนังสือแต่ละเล่ม',
+    bookEmpty: 'เจอประโยคโดนใจ เก็บไว้ตรงนี้',
+    add: 'เพิ่มประโยค',
+    photo: 'ถ่ายหน้าหนังสือ',
+    reading: 'AI กำลังอ่านหน้าหนังสือ…',
+    pickHint: 'แตะย่อหน้าที่ชอบ แล้วตัดให้เหลือเฉพาะประโยคที่ต้องการ',
+    noText: 'AI อ่านตัวหนังสือจากรูปไม่ได้ ลองถ่ายให้ตรงและสว่างขึ้น',
+    text: 'ประโยค',
+    page: 'หน้า',
+    note: 'โน้ต',
+    onPage: (n: number) => `หน้า ${n}`,
+    confirmDelete: 'ลบประโยคนี้?',
+    copy: 'คัดลอก',
+    copied: 'คัดลอกแล้ว',
+    search: 'ค้นหาประโยคหรือชื่อเรื่อง',
   },
 
   place: {

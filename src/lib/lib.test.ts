@@ -2,6 +2,8 @@ import { expect, test } from 'vitest'
 import { GeminiError, parseBooks, pickDefaultModel } from './gemini'
 import { normalizeIsbn } from './isbn'
 import { dongFor, dongPool, findMatches, pickOne } from './picks'
+import { ranges, summarize } from './series'
+import { dashboard } from './dashboard'
 import { emptyBook } from '../db/repo'
 import type { Book } from '../db/types'
 
@@ -317,4 +319,20 @@ test('สุ่มจากกองดอง: กรองเล่มบาง
   expect(pickOne([pool[0]], 'a')!.id).toBe('a')
   expect(pickOne([])).toBeNull()
   expect(dongFor(0, 400 * 86400000)).toBe('ดองมา 1 ปี 1 เดือน')
+})
+
+test('ชุดหนังสือ: หาเล่มที่ขาด เล่มที่ไม่ใส่เลขนับแทนช่องว่าง', () => {
+  const series = { id: 's', name: 'ชุด', total: 7, createdAt: 0, updatedAt: 0, deletedAt: null }
+  const books = [1, 3, 6].map((n) => pbook({ seriesId: 's', seriesNo: n, title: `เล่ม ${n}` }))
+  expect(summarize(series, books).missing).toEqual([2, 4, 5, 7])
+  expect(ranges([2, 4, 5, 7])).toBe('2, 4–5, 7')
+  const withLoose = [...books, pbook({ seriesId: 's', seriesNo: null })]
+  expect(summarize(series, withLoose).missing).toEqual([4, 5, 7])
+  // ไม่รู้จำนวนทั้งชุด ใช้เลขสูงสุดที่มี
+  expect(summarize({ ...series, total: null }, books)).toMatchObject({ total: 6, missing: [2, 4, 5] })
+})
+
+test('มูลค่าคลังรวมจากราคาที่ใส่ไว้', () => {
+  const d = dashboard([pbook({ price: 250 }), pbook({ price: 99.5, signed: true }), pbook({})], [], 0)
+  expect(d.collection).toEqual({ value: 349.5, priced: 2, signed: 1 })
 })

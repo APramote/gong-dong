@@ -213,15 +213,31 @@ export async function recognizeCoversClaude(key: string, model: string, imageBas
   }
 }
 
-/** ส่งคำสั่งข้อความแล้วรับ JSON ตาม schema กลับมา */
-export async function generateJsonClaude(key: string, model: string, prompt: string, schema: object): Promise<any> {
+/** ส่งคำสั่งข้อความ (และรูปถ้ามี) แล้วรับ JSON ตาม schema กลับมา */
+export async function generateJsonClaude(
+  key: string,
+  model: string,
+  prompt: string,
+  schema: object,
+  imageBase64?: string,
+): Promise<any> {
   try {
     const res = await client(key).beta.messages.create({
       model,
       max_tokens: 16000,
       ...fallback(model),
       output_config: { format: { type: 'json_schema', schema: schema as never } },
-      messages: [{ role: 'user', content: prompt }],
+      messages: [
+        {
+          role: 'user',
+          content: imageBase64
+            ? [
+                { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 } },
+                { type: 'text', text: prompt },
+              ]
+            : prompt,
+        },
+      ],
     })
     if (res.stop_reason === 'refusal') throw new AiError('refusal')
     if (res.stop_reason === 'max_tokens') throw new AiError('other', 'response too long')

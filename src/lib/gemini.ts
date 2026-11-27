@@ -257,10 +257,17 @@ export function toGeminiSchema(schema: any): any {
   return out
 }
 
-/** ส่งคำสั่งข้อความแล้วรับ JSON ตาม schema กลับมา */
-export async function generateJson(key: string, model: string, prompt: string, schema: object): Promise<any> {
+/** ส่งคำสั่งข้อความ (และรูปถ้ามี) แล้วรับ JSON ตาม schema กลับมา */
+export async function generateJson(
+  key: string,
+  model: string,
+  prompt: string,
+  schema: object,
+  imageBase64?: string,
+): Promise<any> {
+  const image = imageBase64 ? [{ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } }] : []
   const data = await call(`models/${model}:generateContent`, key, {
-    contents: [{ parts: [{ text: prompt }] }],
+    contents: [{ parts: [...image, { text: prompt }] }],
     generationConfig: { responseMimeType: 'application/json', responseSchema: toGeminiSchema(schema) },
   })
   const text: string = (data?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? '').join('')

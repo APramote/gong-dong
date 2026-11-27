@@ -1,5 +1,5 @@
 import { db as defaultDb, type GongDongDB } from './db'
-import type { Book, Bookcase, Category, Look, Place, PlaceKind, ReadingSession, SyncFields, Wish } from './types'
+import type { Book, Bookcase, Category, Look, Place, PlaceKind, Quote, ReadingSession, Series, SyncFields, Wish } from './types'
 
 const newId = () => crypto.randomUUID()
 
@@ -23,6 +23,7 @@ export interface ReturnInput {
 export type BookcaseInput = Pick<Bookcase, 'name' | 'room'>
 export type PlaceInput = Pick<Place, 'name' | 'location' | 'label'>
 export type WishInput = Pick<Wish, 'title' | 'authors' | 'isbn' | 'note'>
+export type QuoteInput = Pick<Quote, 'bookId' | 'text' | 'page' | 'note'>
 
 export const emptyBook: BookInput = {
   title: '',
@@ -116,6 +117,64 @@ export function createRepo(db: GongDongDB = defaultDb) {
   }
 
   return {
+    // ---------- ชุดหนังสือ ----------
+    async listSeries(): Promise<Series[]> {
+      return alive(await db.series.toArray()).sort((a, b) => a.name.localeCompare(b.name, 'th'))
+    },
+
+    async getSeries(id: string): Promise<Series | undefined> {
+      const s = await db.series.get(id)
+      return s && s.deletedAt === null ? s : undefined
+    },
+
+    /** หาชุดจากชื่อ ไม่มีก็สร้างใหม่ คืน id */
+    async ensureSeries(name: string): Promise<string> {
+      const clean = normName(name)
+      if (!clean) throw new Error('empty series name')
+      return db.transaction('rw', db.series, async () => {
+        const found = alive(await db.series.toArray()).find((x) => x.name.toLowerCase() === clean.toLowerCase())
+        if (found) return found.id
+        const row: Series = { ...stamp(), name: clean, total: null }
+        await db.series.add(row)
+        return row.id
+      })
+    },
+
+    async updateSeries(id: string, input: Partial<Pick<Series, 'name' | 'total'>>): Promise<void> {
+      const patch = input.name !== undefined ? { ...input, name: normName(input.name) } : input
+      await db.series.update(id, { ...patch, updatedAt: Date.now() })
+    },
+
+    /** ลบชุด หนังสือในชุดไม่ถูกลบ แค่ไม่อยู่ในชุดแล้ว */
+    async deleteSeries(id: string): Promise<void> {
+      const now = Date.now()
+      await db.transaction('rw', db.series, db.books, async () => {
+        await db.books.where('seriesId').equals(id).modify({ seriesId: null, seriesNo: null, updatedAt: now })
+        await db.series.update(id, { deletedAt: now, updatedAt: now })
+      })
+    },
+
+    // ---------- ประโยคที่ชอบ ----------
+    async listQuotes(bookId?: string): Promise<Quote[]> {
+      const rows = bookId ? await db.quotes.where('bookId').equals(bookId).toArray() : await db.quotes.toArray()
+      return alive(rows).sort((a, b) => b.createdAt - a.createdAt)
+    },
+
+    async addQuote(input: QuoteInput): Promise<string> {
+      const q: Quote = { ...stamp(), ...input, text: input.text.trim() }
+      await db.quotes.add(q)
+      return q.id
+    },
+
+    async updateQuote(id: string, input: Partial<Omit<QuoteInput, 'bookId'>>): Promise<void> {
+      await db.quotes.update(id, { ...input, updatedAt: Date.now() })
+    },
+
+    async deleteQuote(id: string): Promise<void> {
+      const now = Date.now()
+      await db.quotes.update(id, { deletedAt: now, updatedAt: now })
+    },
+
     // ---------- รายการอยากได้ ----------
     async listWishes(): Promise<Wish[]> {
       return alive(await db.wishes.toArray()).sort((a, b) => b.createdAt - a.createdAt)
@@ -295,8 +354,9 @@ export function createRepo(db: GongDongDB = defaultDb) {
 
     async deleteBook(id: string): Promise<void> {
       const now = Date.now()
-      await db.transaction('rw', db.books, db.sessions, db.covers, async () => {
+      await db.transaction('rw', [db.books, db.sessions, db.covers, db.quotes], async () => {
         await db.books.update(id, { deletedAt: now, updatedAt: now })
+        await db.quotes.where('bookId').equals(id).modify({ deletedAt: now, updatedAt: now })
         // การหยิบที่ค้างอยู่ของเล่มที่ถูกลบ ไม่ควรค้างเป็น "อยู่ในมือ" ตลอดไป
         const open = await openSession(id)
         if (open) await db.sessions.update(open.id, { deletedAt: now, updatedAt: now })
