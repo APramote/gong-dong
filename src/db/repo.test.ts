@@ -178,3 +178,50 @@ test('ลิ้นชักเป็นที่เก็บ: สร้างต
   await repo.updateBookcaseLook(id, { ...look, drawerRows: 2, drawersPerRow: 2 })
   expect((await repo.drawersOf(id)).map((d) => d.name)).toEqual(['ลิ้นชัก 1', 'ลิ้นชัก 2', 'ลิ้นชัก 3', 'ลิ้นชัก 4'])
 })
+
+test('หมวดหนังสือ: สร้างไม่ซ้ำ เปลี่ยนชื่อ รวมหมวด และลบโดยหนังสือไม่หาย', async () => {
+  const novel = await repo.ensureCategory('  นิยาย ')
+  expect(await repo.ensureCategory('นิยาย')).toBe(novel)
+  const fiction = await repo.ensureCategory('Fiction')
+  expect(await repo.ensureCategory('fiction')).toBe(fiction)
+  const a = await repo.addBook({ ...emptyBook, title: 'ก', categoryId: novel })
+  const b = await repo.addBook({ ...emptyBook, title: 'ข', categoryId: fiction })
+  await repo.setCategoryByName(a, 'นิยาย')
+  expect((await repo.getBook(a))!.categoryId).toBe(novel)
+
+  // เปลี่ยนชื่อเฉย ๆ
+  expect(await repo.renameCategory(fiction, 'นิยายแปล')).toBe(fiction)
+  // เปลี่ยนชื่อให้ตรงกับหมวดที่มีอยู่ = รวมหมวด
+  expect(await repo.renameCategory(fiction, 'นิยาย')).toBe(novel)
+  expect((await repo.getBook(b))!.categoryId).toBe(novel)
+  expect((await repo.listCategories()).map((c) => c.name)).toEqual(['นิยาย'])
+
+  await repo.deleteCategory(novel)
+  expect(await repo.listCategories()).toEqual([])
+  expect((await repo.getBook(a))!.categoryId).toBeNull()
+  expect(await titles(null)).toEqual(['ก', 'ข'])
+})
+
+test('เปิดฐานข้อมูลเวอร์ชันที่หมวดเป็นข้อความ แล้วหมวดย้ายเข้าตารางหมวด', async () => {
+  const Dexie = (await import('dexie')).default
+  const name = 'category-upgrade'
+  const old = new Dexie(name)
+  old.version(4).stores({
+    books: 'id, placeId, status, updatedAt',
+    bookcases: 'id, updatedAt',
+    places: 'id, kind, bookcaseId, updatedAt',
+    covers: 'id, updatedAt',
+    sessions: 'id, bookId, updatedAt',
+  })
+  const book = (id: string, category: string) => ({ ...emptyBook, id, title: id, category, createdAt: 0, updatedAt: 0, deletedAt: null, position: 0, placeId: null })
+  await old.table('books').bulkAdd([book('x', 'นิยาย'), book('y', ' นิยาย  '), book('z', 'Fiction'), book('w', 'fiction'), book('v', '')])
+  old.close()
+  const fresh = createRepo(new GongDongDB(name))
+  const cats = await fresh.listCategories()
+  // ชื่อที่ต่างกันแค่ตัวพิมพ์รวมเป็นหมวดเดียว ใช้ตัวสะกดที่พบก่อน
+  expect(cats.map((c) => c.name.toLowerCase()).sort()).toEqual(['fiction', 'นิยาย'])
+  const id = (n: string) => cats.find((c) => c.name.toLowerCase() === n.toLowerCase())!.id
+  const got = Object.fromEntries((await fresh.listBooks()).map((b) => [b.id, b.categoryId]))
+  expect(got).toEqual({ x: id('นิยาย'), y: id('นิยาย'), z: id('Fiction'), w: id('Fiction'), v: null })
+  expect('category' in (await fresh.getBook('x'))!).toBe(false)
+})

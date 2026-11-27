@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie'
-import type { Book, Bookcase, Cover, Place, ReadingSession } from './types'
-import { flipShelfOrder } from './migrations'
+import type { Book, Bookcase, Category, Cover, Place, ReadingSession } from './types'
+import { categoriesFromText, flipShelfOrder } from './migrations'
 
 export class GongDongDB extends Dexie {
   books!: Table<Book, string>
@@ -8,6 +8,7 @@ export class GongDongDB extends Dexie {
   places!: Table<Place, string>
   covers!: Table<Cover, string>
   sessions!: Table<ReadingSession, string>
+  categories!: Table<Category, string>
 
   constructor(name = 'gong-dong') {
     super(name)
@@ -24,6 +25,22 @@ export class GongDongDB extends Dexie {
       .upgrade(async (tx) => {
         const places = tx.table<Place, string>('places')
         await places.bulkPut(flipShelfOrder(await places.toArray()))
+      })
+    // หมวดหนังสือเป็นตารางของตัวเอง
+    this.version(5)
+      .stores({ categories: 'id, name, updatedAt', books: 'id, placeId, status, categoryId, updatedAt' })
+      .upgrade(async (tx) => {
+        const books = tx.table('books')
+        const rows = await books.toArray()
+        const { categories, assign } = categoriesFromText(rows, () => crypto.randomUUID())
+        await tx.table('categories').bulkAdd(categories)
+        const now = Date.now()
+        await books.toCollection().modify((b: Record<string, unknown>) => {
+          const id = assign.get(b.id as string) ?? null
+          if (id !== (b.categoryId ?? null)) b.updatedAt = now
+          b.categoryId = id
+          delete b.category
+        })
       })
   }
 }

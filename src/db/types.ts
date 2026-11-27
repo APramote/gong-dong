@@ -21,7 +21,8 @@ export interface Book extends SyncFields {
   year: string
   pages: number | null
   isbn: string
-  category: string
+  /** หมวดหนังสือ (ตาราง categories) — null คือยังไม่มีหมวด */
+  categoryId: string | null
   tags: string[]
   synopsis: string
   /** คำโปรยบนปกหลัง */
@@ -79,6 +80,11 @@ export interface ReadingSession extends SyncFields {
   timerMs: number
   /** เวลาที่เริ่มจับรอบปัจจุบัน — null = ไม่ได้จับเวลาอยู่ */
   timerStartedAt: number | null
+}
+
+/** หมวดหนังสือ เปลี่ยนชื่อครั้งเดียวมีผลกับทุกเล่มในหมวด */
+export interface Category extends SyncFields {
+  name: string
 }
 
 /** ตู้หนังสือ — หนึ่งตู้มีหลายชั้นวาง */

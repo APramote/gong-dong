@@ -14,6 +14,7 @@ import { ScanStoragePage } from './pages/ScanStoragePage'
 import { BookcaseViewPage } from './pages/BookcaseViewPage'
 import { OrganizePage } from './pages/OrganizePage'
 import { DashboardPage } from './pages/DashboardPage'
+import { CategoriesPage } from './pages/CategoriesPage'
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
           <Route path="/scan" element={<ScanStoragePage />} />
           <Route path="/organize" element={<OrganizePage />} />
           <Route path="/stats" element={<DashboardPage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/view/bookcase/:id" element={<BookcaseViewPage />} />
           <Route path="/book/new" element={<BookFormPage />} />
           <Route path="/book/:id" element={<BookFormPage />} />

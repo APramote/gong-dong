@@ -1,4 +1,4 @@
-import type { Book, ReadingSession } from '../db/types'
+import type { Book, Category, ReadingSession } from '../db/types'
 import { formatMinutes } from './stats'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -47,7 +47,13 @@ export interface Dashboard {
 /** นาทีของการอ่านหนึ่งครั้ง (ที่วางคืนแล้ว) */
 const minutesOf = (s: ReadingSession) => s.minutes ?? 0
 
-export function dashboard(books: Book[], sessions: ReadingSession[], now = Date.now()): Dashboard {
+export function dashboard(
+  books: Book[],
+  sessions: ReadingSession[],
+  now = Date.now(),
+  categoryList: Category[] = [],
+): Dashboard {
+  const catName = new Map(categoryList.map((c) => [c.id, c.name]))
   const done = sessions.filter((s) => s.endedAt !== null && s.deletedAt === null)
   const perDay = new Map<string, number>()
   for (const s of done) perDay.set(dayKey(s.endedAt!), (perDay.get(dayKey(s.endedAt!)) ?? 0) + minutesOf(s))
@@ -95,7 +101,7 @@ export function dashboard(books: Book[], sessions: ReadingSession[], now = Date.
 
   const counts = new Map<string, number>()
   for (const b of books) {
-    const name = b.category.trim() || 'ไม่ระบุหมวด'
+    const name = (b.categoryId && catName.get(b.categoryId)) || 'ไม่ระบุหมวด'
     counts.set(name, (counts.get(name) ?? 0) + 1)
   }
   const ranked = [...counts].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
@@ -167,11 +173,17 @@ export function motivation(d: Dashboard, goals: Goals): string[] {
 }
 
 /** สรุปสถิติเป็นข้อความสั้น ส่งให้ AI โค้ชการอ่าน */
-export function coachPrompt(d: Dashboard, goals: Goals, dongBooks: Book[]): { prompt: string; codes: Map<string, string> } {
+export function coachPrompt(
+  d: Dashboard,
+  goals: Goals,
+  dongBooks: Book[],
+  categoryList: Category[] = [],
+): { prompt: string; codes: Map<string, string> } {
+  const catName = new Map(categoryList.map((c) => [c.id, c.name]))
   const codes = new Map<string, string>()
   const lines = dongBooks.slice(0, 60).map((b, i) => {
     codes.set(`b${i + 1}`, b.id)
-    return `b${i + 1} | ${b.title} | ${b.authors || '-'} | ${b.category || '-'} | ${b.pages ?? '?'} pages | added ${dayKey(b.createdAt)}`
+    return `b${i + 1} | ${b.title} | ${b.authors || '-'} | ${(b.categoryId && catName.get(b.categoryId)) || '-'} | ${b.pages ?? '?'} pages | added ${dayKey(b.createdAt)}`
   })
   const top = d.byHour.indexOf(Math.max(...d.byHour))
   const prompt =

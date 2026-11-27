@@ -1,5 +1,5 @@
 import { db as defaultDb, type GongDongDB } from './db'
-import type { Book, Bookcase, Look, Place, PlaceKind, ReadingSession, SyncFields } from './types'
+import type { Book, Bookcase, Category, Look, Place, PlaceKind, ReadingSession, SyncFields } from './types'
 
 const newId = () => crypto.randomUUID()
 
@@ -30,7 +30,7 @@ export const emptyBook: BookInput = {
   year: '',
   pages: null,
   isbn: '',
-  category: '',
+  categoryId: null,
   tags: [],
   synopsis: '',
   blurb: '',
@@ -43,6 +43,9 @@ export const emptyBook: BookInput = {
   placeId: null,
 }
 
+/** ชื่อหมวดแบบเรียบร้อย: ตัดช่องว่างหัวท้ายและช่องว่างซ้ำ */
+export const normName = (name: string) => name.trim().replace(/\s+/g, ' ')
+
 /** จำนวนลิ้นชักตามรูปทรงตู้ */
 export const drawerCount = (look?: Look) =>
   look?.drawerRows ? look.drawerRows * Math.max(1, look.drawersPerRow ?? 2) : 0
@@ -51,6 +54,7 @@ export const drawerCount = (look?: Look) =>
 const withDefaults = (b: Book): Book => ({
   ...emptyBook,
   ...b,
+  categoryId: b.categoryId ?? null,
   takenAt: b.takenAt ?? null,
   takenFrom: b.takenFrom ?? null,
   finishedAt: b.finishedAt ?? null,
@@ -68,6 +72,11 @@ export function createRepo(db: GongDongDB = defaultDb) {
   async function openSession(bookId: string): Promise<ReadingSession | undefined> {
     const rows = await db.sessions.where('bookId').equals(bookId).toArray()
     return rows.find((r) => r.deletedAt === null && r.endedAt === null)
+  }
+
+  async function findCategory(name: string): Promise<Category | undefined> {
+    const key = normName(name).toLowerCase()
+    return alive(await db.categories.toArray()).find((c) => c.name.toLowerCase() === key)
   }
 
   async function drawers(bookcaseId: string): Promise<Place[]> {
@@ -128,8 +137,57 @@ export function createRepo(db: GongDongDB = defaultDb) {
       })
     },
 
-    async setCategory(id: string, category: string): Promise<void> {
-      await db.books.update(id, { category, updatedAt: Date.now() })
+    // ---------- หมวดหนังสือ ----------
+    async listCategories(): Promise<Category[]> {
+      return alive(await db.categories.toArray()).sort((a, b) => a.name.localeCompare(b.name, 'th'))
+    },
+
+    /** หาหมวดตามชื่อ (ไม่สนตัวพิมพ์และช่องว่างซ้ำ) ไม่มีก็สร้างใหม่ คืน id */
+    async ensureCategory(name: string): Promise<string> {
+      const clean = normName(name)
+      if (!clean) throw new Error('empty category name')
+      const found = await findCategory(clean)
+      if (found) return found.id
+      const cat: Category = { ...stamp(), name: clean }
+      await db.categories.add(cat)
+      return cat.id
+    },
+
+    async setCategory(bookId: string, categoryId: string | null): Promise<void> {
+      await db.books.update(bookId, { categoryId, updatedAt: Date.now() })
+    },
+
+    async setCategoryByName(bookId: string, name: string): Promise<void> {
+      await this.setCategory(bookId, await this.ensureCategory(name))
+    },
+
+    /**
+     * เปลี่ยนชื่อหมวด ถ้าชื่อใหม่ตรงกับหมวดอื่นที่มีอยู่ ให้รวมเข้าด้วยกัน (ย้ายหนังสือแล้วลบหมวดนี้)
+     * คืน id ของหมวดที่เหลืออยู่
+     */
+    async renameCategory(id: string, name: string): Promise<string> {
+      const clean = normName(name)
+      if (!clean) return id
+      const other = await findCategory(clean)
+      const now = Date.now()
+      if (other && other.id !== id) {
+        await db.transaction('rw', db.books, db.categories, async () => {
+          await db.books.where('categoryId').equals(id).modify({ categoryId: other.id, updatedAt: now })
+          await db.categories.update(id, { deletedAt: now, updatedAt: now })
+        })
+        return other.id
+      }
+      await db.categories.update(id, { name: clean, updatedAt: now })
+      return id
+    },
+
+    /** ลบหมวด หนังสือในหมวดกลายเป็นไม่มีหมวด (ไม่ถูกลบ) */
+    async deleteCategory(id: string): Promise<void> {
+      const now = Date.now()
+      await db.transaction('rw', db.books, db.categories, async () => {
+        await db.books.where('categoryId').equals(id).modify({ categoryId: null, updatedAt: now })
+        await db.categories.update(id, { deletedAt: now, updatedAt: now })
+      })
     },
 
     async moveBook(id: string, placeId: string | null): Promise<void> {

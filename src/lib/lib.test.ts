@@ -186,7 +186,7 @@ test('คำแนะนำการจัดเก็บจากกฎ แล�
   const now = new Date(2026, 10, 27).getTime()
   const old = now - 400 * 86400000
   const book = (id: string, o: object) =>
-    ({ id, title: id, authors: '', category: '', status: 'dong', placeId: 'shelf', takenAt: null, finishedAt: null, createdAt: old, ...o }) as any
+    ({ id, title: id, authors: '', categoryId: null, status: 'dong', placeId: 'shelf', takenAt: null, finishedAt: null, createdAt: old, ...o }) as any
   const places = [
     { id: 'shelf', kind: 'shelf', name: 'ชั้นที่ 1', bookcaseId: null, label: '', location: '' },
     { id: 'box', kind: 'box', name: 'กล่อง 1', bookcaseId: null, label: 'เก่า', location: 'ใต้เตียง' },
@@ -195,7 +195,7 @@ test('คำแนะนำการจัดเก็บจากกฎ แล�
     book('doneOld', { status: 'done', finishedAt: old }),
     book('doneRecent', { status: 'done', finishedAt: now - 10 * 86400000 }),
     book('dongInBox', { placeId: 'box' }),
-    book('loose', { placeId: null, category: 'นิยาย' }),
+    book('loose', { placeId: null, categoryId: 'c1' }),
     book('inHand', { placeId: null, takenAt: now }),
   ]
   // เล่มที่อ่านจบนานแล้วแต่เพิ่งหยิบอ่านซ้ำ ไม่ควรถูกแนะนำให้เก็บ
@@ -206,7 +206,9 @@ test('คำแนะนำการจัดเก็บจากกฎ แล�
   expect(advice.unplaced.map((b) => b.id)).toEqual(['loose'])
   expect(advice.noCategory.map((b) => b.id)).toEqual(['doneOld', 'doneRecent', 'dongInBox', 'inHand'])
 
-  const input = buildOrganizePrompt(books, places, [], sessions)
+  const input = buildOrganizePrompt(books, places, [], sessions, [{ id: 'c1', name: 'นิยาย' }] as any)
+  expect(input.prompt).toContain('Existing categories: นิยาย.')
+  expect(input.prompt).toMatch(/\| loose \| - \| นิยาย \|/)
   expect(input.prompt).toContain('p2 | box | กล่อง 1 | 1 books | label "เก่า", at ใต้เตียง')
   expect([...input.bookIds.values()]).not.toContain('inHand') // หนังสือในมือไม่ส่ง
   const code = (id: string) => [...input.bookIds].find(([, v]) => v === id)![0]
@@ -250,14 +252,14 @@ test('สถิติ dashboard: วันต่อเนื่อง ช่ว�
   const sessions = [s(0, 21, 30, 10, 40), s(1, 21, 20), s(2, 7, 10)]
   for (let i = 10; i <= 14; i++) sessions.push(s(i, 21, 15))
   sessions.push({ ...s(3, 21, 99), endedAt: null }) // ยังไม่วางคืน ไม่นับ
-  const book = (o: object) => ({ status: 'dong', category: '', takenAt: null, finishedAt: null, createdAt: at(40, 12), pages: null, ...o }) as any
+  const book = (o: object) => ({ status: 'dong', categoryId: null, takenAt: null, finishedAt: null, createdAt: at(40, 12), pages: null, ...o }) as any
   const books = [
-    book({ id: 'a', status: 'done', finishedAt: at(3, 12), category: 'นิยาย' }),
-    book({ id: 'b', category: 'นิยาย', pages: 500 }),
+    book({ id: 'a', status: 'done', finishedAt: at(3, 12), categoryId: 'n' }),
+    book({ id: 'b', categoryId: 'n', pages: 500 }),
     book({ id: 'c', pages: 120, createdAt: at(1, 12) }),
-    book({ id: 'd', status: 'reading', category: 'ธุรกิจ' }),
+    book({ id: 'd', status: 'reading', categoryId: 'g' }),
   ]
-  const d = dashboard(books, sessions, now)
+  const d = dashboard(books, sessions, now, [{ id: 'n', name: 'นิยาย' }, { id: 'g', name: 'ธุรกิจ' }] as any)
   expect(d.daily).toHaveLength(30)
   expect(d.todayMinutes).toBe(30)
   expect(d.weekMinutes).toBe(60)

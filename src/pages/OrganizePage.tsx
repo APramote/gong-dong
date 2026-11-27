@@ -120,6 +120,7 @@ export function OrganizePage() {
   const places = useLiveQuery(() => repo.listPlaces(), []) ?? []
   const bookcases = useLiveQuery(() => repo.listBookcases(), []) ?? []
   const sessions = useLiveQuery(() => repo.listSessions(), []) ?? []
+  const categories = useLiveQuery(() => repo.listCategories(), []) ?? []
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
@@ -129,6 +130,7 @@ export function OrganizePage() {
   const [pickedMoves, setPickedMoves] = useState<Set<string>>(new Set())
 
   const byId = useMemo(() => new Map((books ?? []).map((b) => [b.id, b])), [books])
+  const catName = (b?: Book) => (b?.categoryId && categories.find((c) => c.id === b.categoryId)?.name) || ''
   const label = (placeId: string | null) => {
     const p = placeId ? places.find((x) => x.id === placeId) : undefined
     return p ? placeLabel(p, bookcases) : '—'
@@ -146,12 +148,12 @@ export function OrganizePage() {
     setError('')
     setDone('')
     try {
-      const input = buildOrganizePrompt(books!, places, bookcases, sessions)
+      const input = buildOrganizePrompt(books!, places, bookcases, sessions, categories)
       const result = readPlan(await askJson(input.prompt, organizeSchema), input, books!)
       setSkipped(input.skipped)
       setPlan(result)
       // หมวด: เลือกไว้เฉพาะเล่มที่ยังไม่มีหมวด ส่วนเล่มที่มีหมวดอยู่แล้วให้ผู้ใช้ตัดสินใจเอง
-      setPickedCats(new Set(result.categories.filter((c) => !byId.get(c.bookId)?.category).map((c) => c.bookId)))
+      setPickedCats(new Set(result.categories.filter((c) => !byId.get(c.bookId)?.categoryId).map((c) => c.bookId)))
       setPickedMoves(new Set(result.moves.map((m) => m.bookId)))
     } catch (e) {
       setError(aiErrorText(e))
@@ -164,7 +166,7 @@ export function OrganizePage() {
     if (!plan) return
     const cats = plan.categories.filter((c) => pickedCats.has(c.bookId))
     const moves = plan.moves.filter((m) => pickedMoves.has(m.bookId) && !byId.get(m.bookId)?.takenAt)
-    for (const c of cats) await repo.setCategory(c.bookId, c.category)
+    for (const c of cats) await repo.setCategoryByName(c.bookId, c.category)
     for (const m of moves) await repo.moveBook(m.bookId, m.toPlaceId)
     setDone(t.organize.applied(cats.length, moves.length))
     setPlan(null)
@@ -277,7 +279,8 @@ export function OrganizePage() {
                   onToggle={(id) => setPickedCats((s) => toggle(s, id))}
                   sub={(b) => {
                     const next = plan.categories.find((c) => c.bookId === b.id)!.category
-                    return b.category && b.category !== next ? `${b.category} → ${next}` : next
+                    const now = catName(b)
+                    return now && now !== next ? `${now} → ${next}` : next
                   }}
                 />
               </div>

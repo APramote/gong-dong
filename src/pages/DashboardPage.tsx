@@ -77,13 +77,14 @@ function NextBook({ book, note }: { book: Book; note: string }) {
 export function DashboardPage() {
   const books = useLiveQuery(() => repo.listBooks(), [])
   const sessions = useLiveQuery(() => repo.listSessions(), []) ?? []
+  const categories = useLiveQuery(() => repo.listCategories(), []) ?? []
   const [settings, setSettings] = useState(loadSettings)
   const [editing, setEditing] = useState(false)
   const [coach, setCoach] = useState<Coach | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  const d = useMemo(() => dashboard(books ?? [], sessions), [books, sessions])
+  const d = useMemo(() => dashboard(books ?? [], sessions, Date.now(), categories), [books, sessions, categories])
   if (!books) return null
   const goals = { dailyMinutes: settings.dailyGoalMinutes, yearBooks: settings.yearGoalBooks }
   const byId = new Map(books.map((b) => [b.id, b]))
@@ -98,7 +99,7 @@ export function DashboardPage() {
     setError('')
     try {
       const dong = books!.filter((b) => b.status === 'dong' && !b.takenAt)
-      const { prompt, codes } = coachPrompt(d, goals, dong)
+      const { prompt, codes } = coachPrompt(d, goals, dong, categories)
       setCoach(readCoach(await askJson(prompt, coachSchema), codes))
     } catch (e) {
       setError(aiErrorText(e))

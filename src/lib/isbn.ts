@@ -1,8 +1,11 @@
 import type { BookInput } from '../db/repo'
 
 export type IsbnResult = Partial<
-  Pick<BookInput, 'title' | 'authors' | 'publisher' | 'year' | 'pages' | 'isbn' | 'synopsis' | 'category'>
->
+  Pick<BookInput, 'title' | 'authors' | 'publisher' | 'year' | 'pages' | 'isbn' | 'synopsis'>
+> & {
+  /** ชื่อหมวดจากแหล่งข้อมูล ใช้เป็นคำแนะนำ ไม่สร้างหมวดให้เอง */
+  category?: string
+}
 
 /** คืน ISBN-10/13 ที่ตัดขีดและช่องว่างแล้ว หรือ null ถ้ารูปแบบไม่ถูก */
 export function normalizeIsbn(raw: string): string | null {

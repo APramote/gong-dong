@@ -4,6 +4,7 @@ import { emptyBook, repo, type BookInput } from '../db/repo'
 import type { ReadingStatus } from '../db/types'
 import { useBlobUrl } from '../components/Cover'
 import { PlaceSelect } from '../components/PlaceSelect'
+import { CategorySelect } from '../components/CategorySelect'
 import { ReturnForm } from '../components/ReturnForm'
 import { SessionList } from '../components/SessionList'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -21,7 +22,7 @@ const toNumber = (v: string) => {
 }
 
 interface Prefill {
-  prefill?: Partial<BookInput>
+  prefill?: Partial<BookInput> & { category?: string }
   isbnFound?: boolean
 }
 
@@ -31,11 +32,14 @@ export function BookFormPage() {
   const navigate = useNavigate()
   const { prefill, isbnFound } = (useLocation().state ?? {}) as Prefill
 
+  const { category: prefillCategory, ...prefillFields } = prefill ?? {}
   const [form, setForm] = useState<BookInput>({
     ...emptyBook,
     placeId: params.get('place'),
-    ...prefill,
+    ...prefillFields,
   })
+  /** ชื่อหมวดที่แหล่งข้อมูลแนะนำ ผู้ใช้กดใช้เองถ้าเห็นด้วย */
+  const [catSuggestion, setCatSuggestion] = useState(prefillCategory ?? '')
   const [tagsText, setTagsText] = useState('')
   const [state, setState] = useState<'loading' | 'ready' | 'missing'>(id ? 'loading' : 'ready')
   const [error, setError] = useState('')
@@ -140,7 +144,8 @@ export function BookFormPage() {
     try {
       const r = await enrich(form)
       if (!r.found) return setAiMsg({ ok: false, text: t.book.aiNotFound })
-      const { found: _f, isbn, ...rest } = r
+      const { found: _f, isbn, category, ...rest } = r
+      if (category && !form.categoryId) setCatSuggestion(category)
       const n = fillEmpty({ ...rest, isbn: normalizeIsbn(isbn) ?? '' })
       setAiMsg({ ok: true, text: n ? t.book.aiFilled(n) : t.book.aiNothingNew })
     } catch (e) {
@@ -158,12 +163,14 @@ export function BookFormPage() {
     const hit = await lookupIsbn(isbn)
     setLooking(false)
     if (!hit) return setIsbnMsg(t.book.isbnNotFound)
-    fillEmpty({ ...hit, isbn })
+    const { category, ...fields } = hit
+    if (category && !form.categoryId) setCatSuggestion(category)
+    fillEmpty({ ...fields, isbn })
     set('isbn', isbn)
     setIsbnMsg(t.book.isbnFilled)
   }
 
-  const text = (key: 'title' | 'authors' | 'publisher' | 'year' | 'category') => (
+  const text = (key: 'title' | 'authors' | 'publisher' | 'year') => (
     <label>
       {t.book[key]}
       <input value={form[key]} onChange={(e) => set(key, e.target.value)} />
@@ -289,7 +296,11 @@ export function BookFormPage() {
         {isbnMsg && <span className="muted">{isbnMsg}</span>}
       </div>
       <div className="cols">
-        {text('category')}
+        <CategorySelect
+          value={form.categoryId}
+          onChange={(v) => set('categoryId', v)}
+          suggestion={catSuggestion}
+        />
         <label>
           {t.book.tags}
           <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} />

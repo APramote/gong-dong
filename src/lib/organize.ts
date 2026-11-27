@@ -1,4 +1,4 @@
-import type { Book, Bookcase, Place, ReadingSession } from '../db/types'
+import type { Book, Bookcase, Category, Place, ReadingSession } from '../db/types'
 import { placeLabel } from '../placeLabel'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -39,7 +39,7 @@ export function ruleAdvice(
     ),
     outOfBox: atHome.filter((b) => inBox(b) && (b.status === 'dong' || b.status === 'reading')),
     unplaced: atHome.filter((b) => !b.placeId),
-    noCategory: books.filter((b) => !b.category.trim()),
+    noCategory: books.filter((b) => !b.categoryId),
   }
 }
 
@@ -66,7 +66,9 @@ export function buildOrganizePrompt(
   places: Place[],
   bookcases: Bookcase[],
   sessions: ReadingSession[],
+  categories: Category[] = [],
 ): OrganizeInput {
+  const catName = new Map(categories.map((c) => [c.id, c.name]))
   const counts = new Map<string, number>()
   for (const b of books) if (b.placeId) counts.set(b.placeId, (counts.get(b.placeId) ?? 0) + 1)
   const placeIds = new Map<string, string>()
@@ -81,7 +83,7 @@ export function buildOrganizePrompt(
   // ส่งเล่มที่ยังไม่มีหมวดหรือไม่มีที่เก็บก่อน ถ้าเกินขีดจำกัด
   const ordered = [...books]
     .filter((b) => !b.takenAt)
-    .sort((a, b) => Number(Boolean(a.category && a.placeId)) - Number(Boolean(b.category && b.placeId)))
+    .sort((a, b) => Number(Boolean(a.categoryId && a.placeId)) - Number(Boolean(b.categoryId && b.placeId)))
   const sent = ordered.slice(0, MAX_BOOKS)
   const bookIds = new Map<string, string>()
   const bookLines = sent.map((b, i) => {
@@ -91,7 +93,7 @@ export function buildOrganizePrompt(
       code,
       b.title,
       b.authors || '-',
-      b.category || '-',
+      (b.categoryId && catName.get(b.categoryId)) || '-',
       STATUS[b.status],
       b.placeId ? placeCode.get(b.placeId) : 'none',
       `last used ${month(lastActivity(b, sessions))}`,
@@ -104,7 +106,8 @@ export function buildOrganizePrompt(
     placeLines.join('\n') +
     '\n\nBooks (code | title | authors | category | status | place | last used):\n' +
     bookLines.join('\n') +
-    `\n\nToday is ${month(Date.now())}.\n` +
+    `\n\nExisting categories: ${categories.map((c) => c.name).join(', ') || '(none)'}.\n` +
+    `Today is ${month(Date.now())}.\n` +
     'Tasks:\n' +
     '1. "categories": give every book a short Thai category name (for example นิยาย, ประวัติศาสตร์, จิตวิทยา, ' +
     'ธุรกิจ, การ์ตูน). Reuse existing category names where they fit and keep the whole set to at most 12 ' +

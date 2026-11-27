@@ -155,7 +155,7 @@ section {
 }
 @media (min-width: 560px) {
   .filters {
-    grid-template-columns: 2fr 1fr 1fr;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
   }
 }
 input,
@@ -790,4 +790,21 @@ textarea {
 }
 .dash .stats {
   margin-top: 4px;
+}
+
+.cat-add {
+  display: flex;
+  gap: 6px;
+}
+.suggest {
+  font-size: 0.85rem;
+}
+.cat-row .row-main {
+  cursor: pointer;
+}
+.cat-add.grow {
+  flex: 1;
+}
+.cat-add input {
+  flex: 1;
 }

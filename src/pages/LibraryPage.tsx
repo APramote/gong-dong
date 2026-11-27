@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
 import type { ReadingStatus } from '../db/types'
@@ -9,11 +9,17 @@ import { t } from '../th'
 
 const NO_PLACE = '__none__'
 const IN_HAND = '__hand__'
+const NO_CATEGORY = '__none__'
 
 export function LibraryPage() {
   const books = useLiveQuery(() => repo.listBooks(), [])
   const places = useLiveQuery(() => repo.listPlaces(), []) ?? []
   const bookcases = useLiveQuery(() => repo.listBookcases(), []) ?? []
+  const categories = useLiveQuery(() => repo.listCategories(), []) ?? []
+  // ตัวกรองหมวดอยู่ใน URL (?cat=) เพื่อให้ลิงก์จากหน้าหมวดเปิดคลังที่กรองแล้วได้
+  const [params, setParams] = useSearchParams()
+  const categoryId = params.get('cat') ?? ''
+  const setCategoryId = (v: string) => setParams(v ? { cat: v } : {}, { replace: true })
 
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<ReadingStatus | ''>('')
@@ -24,9 +30,14 @@ export function LibraryPage() {
     [places, bookcases],
   )
 
+  const catName = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories])
+
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     return (books ?? [])
+      .filter((b) =>
+        !categoryId ? true : categoryId === NO_CATEGORY ? !b.categoryId : b.categoryId === categoryId,
+      )
       .filter((b) => !status || b.status === status)
       .filter((b) =>
         !placeId
@@ -40,13 +51,13 @@ export function LibraryPage() {
       .filter(
         (b) =>
           !q ||
-          [b.title, b.authors, b.publisher, b.category, b.isbn, ...b.tags]
+          [b.title, b.authors, b.publisher, (b.categoryId && catName.get(b.categoryId)) || '', b.isbn, ...b.tags]
             .join(' ')
             .toLowerCase()
             .includes(q),
       )
       .sort((a, b) => a.title.localeCompare(b.title, 'th'))
-  }, [books, query, status, placeId])
+  }, [books, query, status, placeId, categoryId, catName])
 
   if (!books) return null
   const dong = books.filter((b) => b.status === 'dong').length
@@ -58,9 +69,14 @@ export function LibraryPage() {
           <h1>{t.nav.library}</h1>
           <p className="muted">{t.library.summary(books.length, dong)}</p>
         </div>
-        <Link to="/add" className="btn primary">
-          {t.library.addBook}
-        </Link>
+        <div className="actions">
+          <Link to="/categories" className="btn">
+            {t.categories.title}
+          </Link>
+          <Link to="/add" className="btn primary">
+            {t.library.addBook}
+          </Link>
+        </div>
       </div>
 
       <div className="filters">
@@ -97,6 +113,15 @@ export function LibraryPage() {
             </optgroup>
           ))}
         </select>
+        <select aria-label={t.book.category} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+          <option value="">{t.categories.all}</option>
+          <option value={NO_CATEGORY}>{t.categories.none}</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {shown.length === 0 ? (
@@ -107,7 +132,12 @@ export function LibraryPage() {
             <BookRow
               key={b.id}
               book={b}
-              sub={b.takenAt ? t.library.inHand : b.placeId ? labels.get(b.placeId) : t.library.noPlace}
+              sub={[
+                b.takenAt ? t.library.inHand : b.placeId ? labels.get(b.placeId) : t.library.noPlace,
+                b.categoryId && catName.get(b.categoryId),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             />
           ))}
         </ul>
