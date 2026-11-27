@@ -12,21 +12,21 @@ const as3D = (b: Book) => ({ id: b.id, title: b.title, pages: b.pages, spineColo
 /** รูปตู้จาก 3D (วาดครั้งเดียวเป็นรูปนิ่ง) — โหลดโมดูล 3D เฉพาะเมื่อจำเป็น */
 function Snapshot({ model, alt }: { model: BookcaseModel; alt: string }) {
   const [url, setUrl] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
   const key = JSON.stringify(model)
   useEffect(() => {
     let stale = false
     import('../three/snapshot')
       .then((m) => m.snapshot(model))
       .then((u) => !stale && setUrl(u))
-      .catch(() => {
-        // เครื่องนี้วาด 3D ไม่ได้ ใช้พื้นเรียบแทน
-      })
+      // เครื่องนี้วาด 3D ไม่ได้ ใช้พื้นเรียบแทน
+      .catch(() => !stale && setFailed(true))
     return () => {
       stale = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
-  return url ? <img className="place-art snap" src={url} alt={alt} /> : <span className="place-art loading" aria-hidden />
+  return url ? <img className="place-art snap" src={url} alt={alt} /> : <span className={`place-art${failed ? '' : ' loading'}`} aria-hidden />
 }
 
 /** การ์ดตู้หนังสือ: รูปที่ถ่ายไว้ ถ้าไม่มีใช้รูปจาก 3D แตะแล้วเปิดหน้า 3D */

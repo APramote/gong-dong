@@ -9,6 +9,26 @@ const local = (d: Date) =>
 const utc = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
 const escape = (s: string) => s.replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\r?\n|\r/g, '\\n')
 
+/** ตัดบรรทัดไม่ให้เกิน 75 ไบต์ตาม RFC 5545 (บรรทัดต่อขึ้นต้นด้วยช่องว่าง) โดยไม่ตัดกลางตัวอักษร */
+export function fold(line: string): string {
+  const enc = new TextEncoder()
+  const out: string[] = []
+  let cur = ''
+  let size = 0
+  for (const ch of line) {
+    const n = enc.encode(ch).length
+    if (size + n > (out.length ? 74 : 75)) {
+      out.push(cur)
+      cur = ''
+      size = 0
+    }
+    cur += ch
+    size += n
+  }
+  out.push(cur)
+  return out.join('\r\n ')
+}
+
 export interface ReminderPlan {
   /** วันในสัปดาห์ 0 = อาทิตย์ */
   days: number[]
@@ -29,7 +49,8 @@ export function firstStart(plan: Pick<ReminderPlan, 'days' | 'time'>, now = new 
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), h || 0, m || 0)
 }
 
-export function buildIcs(plan: ReminderPlan, now = new Date(), uid: string = crypto.randomUUID()): string {
+/** uid คงที่: เพิ่มซ้ำหลังเปลี่ยนเวลาจะแทนนัดเดิม ไม่ซ้อนเป็นสองนัด */
+export function buildIcs(plan: ReminderPlan, now = new Date(), uid = 'reading-reminder'): string {
   const days = [...new Set(plan.days)].sort()
   const start = firstStart({ ...plan, days }, now)
   const end = new Date(start.getTime() + Math.max(5, plan.minutes) * 60000)
@@ -54,7 +75,9 @@ export function buildIcs(plan: ReminderPlan, now = new Date(), uid: string = cry
     'END:VEVENT',
     'END:VCALENDAR',
     '',
-  ].join('\r\n')
+  ]
+    .map(fold)
+    .join('\r\n')
 }
 
 /** ดาวน์โหลดไฟล์ (มือถือจะถามว่าจะเพิ่มลงปฏิทินไหม) */

@@ -16,6 +16,7 @@ import { resizeImage } from '../lib/image'
 import { lookupIsbn, normalizeIsbn } from '../lib/isbn'
 import { aiOn, aiReady, enrich } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
+import { MAX_VOLUMES } from '../lib/series'
 import { t } from '../th'
 
 const toNumber = (v: string) => {
@@ -405,7 +406,7 @@ export function BookFormPage() {
             <input
               inputMode="numeric"
               value={form.seriesNo ?? ''}
-              onChange={(e) => set('seriesNo', toNumber(e.target.value) || null)}
+              onChange={(e) => set('seriesNo', Math.min(toNumber(e.target.value) ?? 0, MAX_VOLUMES) || null)}
             />
           </label>
         )}

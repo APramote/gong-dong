@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
 import { BookRow } from '../components/BookRow'
-import { ranges, summarize, type SeriesSummary } from '../lib/series'
+import { MAX_VOLUMES, ranges, summarize, type SeriesSummary } from '../lib/series'
 import { t } from '../th'
 
 function Progress({ s }: { s: SeriesSummary }) {
@@ -66,6 +66,8 @@ export function SeriesPage() {
   const books = useLiveQuery(() => repo.listBooks(), []) ?? []
   const wishes = useLiveQuery(() => repo.listWishes(), []) ?? []
   const [wished, setWished] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [nameError, setNameError] = useState('')
 
   if (series === undefined) return <p className="empty">{t.common.loading}</p>
   if (series === null) return <p className="empty">{t.series.notFound}</p>
@@ -89,8 +91,23 @@ export function SeriesPage() {
           {t.series.name}
           <input
             defaultValue={series.name}
-            onBlur={(e) => e.target.value.trim() && e.target.value !== series.name && repo.updateSeries(id, { name: e.target.value })}
+            aria-invalid={Boolean(nameError)}
+            onBlur={async (e) => {
+              const el = e.target
+              const name = el.value.trim()
+              setNameError('')
+              if (!name || name === series.name) return void (el.value = series.name)
+              if (!(await repo.updateSeries(id, { name }))) {
+                setNameError(t.series.nameTaken)
+                el.value = series.name
+              }
+            }}
           />
+          {nameError && (
+            <span className="error" role="alert">
+              {nameError}
+            </span>
+          )}
         </label>
         <label>
           {t.series.total}
@@ -100,7 +117,10 @@ export function SeriesPage() {
             placeholder={t.series.totalHint}
             onBlur={(e) => {
               const n = parseInt(e.target.value, 10)
-              repo.updateSeries(id, { total: Number.isFinite(n) && n > 0 ? n : null })
+              const total = Number.isFinite(n) && n > 0 ? Math.min(n, MAX_VOLUMES) : null
+              e.target.value = total === null ? '' : String(total)
+              // เขียนเฉพาะเมื่อค่าเปลี่ยนจริง ไม่ขยับเวลาแก้ไขโดยไม่จำเป็น (สำคัญตอน sync)
+              if (total !== series.total) repo.updateSeries(id, { total })
             }}
           />
         </label>
@@ -120,9 +140,14 @@ export function SeriesPage() {
             <p className="actions">
               <button
                 className="btn"
+                disabled={busy}
                 onClick={async () => {
-                  for (const n of toWish)
-                    await repo.addWish({ title: t.series.wishTitle(series.name, n), authors: s.books[0]?.authors ?? '', isbn: '', note: '' })
+                  if (toWish.length > 10 && !confirm(t.series.confirmWish(toWish.length))) return
+                  setBusy(true)
+                  await repo.addWishes(
+                    toWish.map((n) => ({ title: t.series.wishTitle(series.name, n), authors: s.books[0]?.authors ?? '', isbn: '', note: '' })),
+                  )
+                  setBusy(false)
                   setWished(true)
                 }}
               >

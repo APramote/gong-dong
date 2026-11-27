@@ -24,6 +24,7 @@ export function QuoteCard({ quote, source }: { quote: Quote; source?: React.Reac
           <button
             type="button"
             className="link-btn"
+            aria-label={t.quotes.copyOf(quote.text.slice(0, 30))}
             onClick={async () => {
               try {
                 await navigator.clipboard.writeText(quote.text)
@@ -39,6 +40,7 @@ export function QuoteCard({ quote, source }: { quote: Quote; source?: React.Reac
           <button
             type="button"
             className="link-btn danger-text"
+            aria-label={t.quotes.deleteOf(quote.text.slice(0, 30))}
             onClick={() => confirm(t.quotes.confirmDelete) && repo.deleteQuote(quote.id)}
           >
             {t.common.delete}
@@ -59,6 +61,9 @@ export function QuoteSection({ bookId }: { bookId: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const camera = useRef<HTMLInputElement>(null)
+  // เลขรอบของคำขอ AI: ยกเลิกหรือถ่ายใหม่แล้ว ผลของรอบเก่าไม่ต้องใช้
+  const round = useRef(0)
+  const [saving, setSaving] = useState(false)
   const canPhoto = aiOn() && aiReady()
 
   const reset = () => {
@@ -66,6 +71,8 @@ export function QuoteSection({ bookId }: { bookId: string }) {
     setPage('')
     setParagraphs([])
     setError('')
+    setBusy(false)
+    round.current++
     setOpen(false)
   }
 
@@ -76,23 +83,29 @@ export function QuoteSection({ bookId }: { bookId: string }) {
     setOpen(true)
     setBusy(true)
     setError('')
+    const mine = ++round.current
     try {
       // ตัวหนังสือบนหน้ากระดาษเล็ก ต้องใช้รูปละเอียด
       const res = await readPage(await blobToBase64(await resizeImage(file, 2048)))
+      if (mine !== round.current) return
       if (res.paragraphs.length === 0) setError(t.quotes.noText)
       setParagraphs(res.paragraphs)
-      if (res.page && !page) setPage(String(res.page))
-      if (res.paragraphs.length === 1 && !text) setText(res.paragraphs[0])
+      // ไม่ทับสิ่งที่พิมพ์ไว้ระหว่างรอ AI
+      if (res.page) setPage((cur) => cur || String(res.page))
+      if (res.paragraphs.length === 1) setText((cur) => cur || res.paragraphs[0])
     } catch (err) {
+      if (mine !== round.current) return
       setError(aiErrorText(err))
     }
     setBusy(false)
   }
 
   async function save() {
-    if (!text.trim()) return
+    if (!text.trim() || saving) return
+    setSaving(true)
     const n = parseInt(page, 10)
     await repo.addQuote({ bookId, text, page: Number.isFinite(n) && n > 0 ? n : null, note: '' })
+    setSaving(false)
     reset()
   }
 
@@ -107,8 +120,16 @@ export function QuoteSection({ bookId }: { bookId: string }) {
 
       {open ? (
         <div className="form card">
-          {busy && <p className="muted">{t.quotes.reading}</p>}
-          {error && <p className="error">{error}</p>}
+          {busy && (
+            <p className="muted" role="status">
+              {t.quotes.reading}
+            </p>
+          )}
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
           {paragraphs.length > 1 && (
             <>
               <p className="muted">{t.quotes.pickHint}</p>
@@ -118,7 +139,11 @@ export function QuoteSection({ bookId }: { bookId: string }) {
                     type="button"
                     key={i}
                     className={text.includes(p) ? 'on' : ''}
-                    onClick={() => setText((cur) => (cur.includes(p) ? cur : cur ? `${cur}\n${p}` : p))}
+                    aria-pressed={text.includes(p)}
+                    onClick={() =>
+                      // แตะซ้ำเพื่อเลิกเลือก
+                      setText((cur) => (cur.includes(p) ? cur.replace(p, '').replace(/\n{2,}/g, '\n').trim() : cur ? `${cur}\n${p}` : p))
+                    }
                   >
                     {p}
                   </button>
@@ -135,7 +160,7 @@ export function QuoteSection({ bookId }: { bookId: string }) {
             <input inputMode="numeric" value={page} onChange={(e) => setPage(e.target.value)} />
           </label>
           <div className="actions">
-            <button type="button" className="btn primary" disabled={!text.trim()} onClick={save}>
+            <button type="button" className="btn primary" disabled={!text.trim() || saving} onClick={save}>
               {t.common.save}
             </button>
             {canPhoto && (

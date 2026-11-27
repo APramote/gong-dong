@@ -36,7 +36,7 @@ export function RandomPage() {
       </div>
 
       {!hasDong ? (
-        <p className="empty">{t.random.noDong}</p>
+        <p className="empty">{books.some((b) => b.status === 'dong') ? t.random.allInHand : t.random.noDong}</p>
       ) : (
         <>
           <div className="chips" role="group" aria-label={t.random.title}>

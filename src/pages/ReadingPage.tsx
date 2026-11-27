@@ -50,19 +50,24 @@ function WeekStrip({ sessions, now }: { sessions: ReadingSession[]; now: number 
 function Desk({
   book,
   session,
-  now,
   from,
   placeExists,
 }: {
   book: Book
   session: ReadingSession | undefined
-  now: number
   from: string
   placeExists: (id: string) => boolean
 }) {
   const [returning, setReturning] = useState(false)
-  const timer = session ? timerTotal(session, now) : 0
   const running = Boolean(session?.timerStartedAt)
+  // นาฬิกาเดินเฉพาะในการ์ดนี้ ทุกวินาทีตอนจับเวลา ส่วนอื่นของหน้าไม่ต้องวาดใหม่ตาม
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    setNow(Date.now())
+    const id = setInterval(() => setNow(Date.now()), running ? 1000 : 60000)
+    return () => clearInterval(id)
+  }, [running, session?.timerMs])
+  const timer = session ? timerTotal(session, now) : 0
   const pct = book.pages && book.currentPage ? Math.min(100, (book.currentPage / book.pages) * 100) : 0
 
   return (
@@ -109,7 +114,8 @@ function Desk({
       ) : (
         <div className="actions">
           <button className={`btn ${running ? '' : 'primary'}`} onClick={() => repo.toggleTimer(book.id)}>
-            {running ? `❚❚ ${t.reading.pause}` : `▶ ${t.reading.go}`}
+            <span aria-hidden>{running ? '❚❚ ' : '▶ '}</span>
+            {running ? t.reading.pause : t.reading.go}
           </button>
           <button className="btn" onClick={() => setReturning(true)}>
             {t.reading.return}
@@ -138,7 +144,12 @@ function Suggestions({ books }: { books: Book[] }) {
   return (
     <div className="empty-hand">
       <h2>{t.reading.emptyTitle}</h2>
-      <p className="muted">{dong.length ? t.reading.emptyLead : t.reading.empty}</p>
+      <p className="muted">{dong.length ? t.reading.emptyLead : t.reading.noDongLead}</p>
+      {dong.length === 0 && (
+        <Link to="/" className="btn">
+          {t.reading.goLibrary}
+        </Link>
+      )}
       {picks.length > 0 && (
         <div className="suggest-row">
           {picks.map(({ book, note }) => (
@@ -175,12 +186,11 @@ export function ReadingPage() {
   const [now, setNow] = useState(Date.now())
 
   const open = useMemo(() => new Map(sessions.filter((s) => s.endedAt === null).map((s) => [s.bookId, s])), [sessions])
-  const running = [...open.values()].some((s) => s.timerStartedAt)
-  // เดินนาฬิกาทุกวินาทีเมื่อมีการจับเวลา ไม่งั้นทุกนาทีพอ
+  // ทั้งหน้าอัปเดตทุกนาทีพอ (นาฬิกาจับเวลาเดินเองในการ์ดของแต่ละเล่ม)
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), running ? 1000 : 60000)
+    const id = setInterval(() => setNow(Date.now()), 60000)
     return () => clearInterval(id)
-  }, [running])
+  }, [])
 
   if (!books) return <p className="empty">{t.common.loading}</p>
   const byId = new Map(books.map((b) => [b.id, b]))
@@ -211,7 +221,6 @@ export function ReadingPage() {
             key={b.id}
             book={b}
             session={open.get(b.id)}
-            now={now}
             from={placeName(b.takenFrom)}
             placeExists={(id) => places.some((p) => p.id === id)}
           />

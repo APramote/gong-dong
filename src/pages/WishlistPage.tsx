@@ -12,6 +12,7 @@ export function WishlistPage() {
   const books = useLiveQuery(() => repo.listBooks(), []) ?? []
   const [draft, setDraft] = useState<WishInput>(blank)
   const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [done, setDone] = useState<{ id: string; title: string } | null>(null)
 
   // เล่มที่อยากได้แต่จริง ๆ มีในคลังแล้ว (เช่น ซื้อมาแล้วลืมติ๊ก)
@@ -23,8 +24,10 @@ export function WishlistPage() {
 
   async function add(e: FormEvent) {
     e.preventDefault()
-    if (!draft.title.trim()) return
+    if (!draft.title.trim() || saving) return
+    setSaving(true)
     await repo.addWish(draft)
+    setSaving(false)
     setDraft(blank)
     setOpen(false)
   }
@@ -73,7 +76,7 @@ export function WishlistPage() {
           {field('isbn', t.wish.isbn)}
           {field('note', t.wish.note)}
           <div className="actions">
-            <button className="btn primary" type="submit">
+            <button className="btn primary" type="submit" disabled={saving}>
               {t.common.save}
             </button>
             <button className="btn" type="button" onClick={() => setOpen(false)}>
@@ -98,6 +101,7 @@ export function WishlistPage() {
               <button
                 className="btn small primary"
                 onClick={async () => {
+                  if (owned.has(w.id) && !confirm(t.wish.confirmDup(w.title))) return
                   const id = await repo.wishToBook(w.id)
                   if (id) setDone({ id, title: w.title })
                 }}

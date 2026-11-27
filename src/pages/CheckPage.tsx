@@ -8,7 +8,7 @@ import { aiOn, aiReady, covers } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { blobToBase64, resizeImage } from '../lib/image'
 import { lookupIsbn, normalizeIsbn } from '../lib/isbn'
-import { matcher } from '../lib/picks'
+import { matcher, nearMatcher } from '../lib/picks'
 import { placeLabel } from '../placeLabel'
 import { t } from '../th'
 
@@ -33,6 +33,8 @@ export function CheckPage() {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [added, setAdded] = useState(false)
+  // กันกดซ้ำระหว่างบันทึก
+  const [saving, setSaving] = useState(false)
   const camera = useRef<HTMLInputElement>(null)
 
   const target: Target = useMemo(() => {
@@ -42,10 +44,13 @@ export function CheckPage() {
   // เตรียมกุญแจของทั้งคลังครั้งเดียว พิมพ์ค้นแต่ละตัวอักษรจึงเร็ว
   const findOwned = useMemo(() => matcher(books ?? []), [books])
   const findWished = useMemo(() => matcher(wishes), [wishes])
-  const result = useMemo(
-    () => (target.title || target.isbn ? { owned: findOwned(target), wished: findWished(target) } : null),
-    [target, findOwned, findWished],
-  )
+  const findNear = useMemo(() => nearMatcher(books ?? []), [books])
+  const result = useMemo(() => {
+    if (!target.title && !target.isbn) return null
+    const owned = findOwned(target)
+    // ชื่อคล้ายแต่ไม่ใช่เล่มเดียวกัน (เช่น เล่มอื่นในชุด) แสดงไว้ให้ตัดสินใจเอง
+    return { owned, wished: findWished(target), near: findNear(target, owned).slice(0, 5) }
+  }, [target, findOwned, findWished, findNear])
   if (!books) return <p className="empty">{t.common.loading}</p>
 
   const fill = (next: Target) => {
@@ -117,8 +122,16 @@ export function CheckPage() {
           </button>
         )}
       </div>
-      {busy && <p className="muted">{busy}</p>}
-      {error && <p className="error">{error}</p>}
+      {busy && (
+        <p className="muted" role="status">
+          {busy}
+        </p>
+      )}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
 
       {result && !busy && (
         <>
@@ -153,8 +166,11 @@ export function CheckPage() {
                 <span className="row-sub">{w.title}</span>
                 <button
                   className="btn primary small"
+                  disabled={saving}
                   onClick={async () => {
+                    setSaving(true)
                     const id = await repo.wishToBook(w.id)
+                    setSaving(false)
                     if (id) navigate(`/book/${id}`)
                   }}
                 >
@@ -172,8 +188,11 @@ export function CheckPage() {
               ) : (
                 <button
                   className="btn"
+                  disabled={saving}
                   onClick={async () => {
-                    await repo.addWish({ title: target.title || target.isbn, authors: target.authors, isbn: target.isbn, note: '' })
+                    setSaving(true)
+                    await repo.addWishes([{ title: target.title || target.isbn, authors: target.authors, isbn: target.isbn, note: '' }])
+                    setSaving(false)
                     setAdded(true)
                   }}
                 >
@@ -181,6 +200,17 @@ export function CheckPage() {
                 </button>
               )}
             </p>
+          )}
+
+          {result.near.length > 0 && (
+            <section>
+              <h2>{t.check.near}</h2>
+              <ul className="list">
+                {result.near.map((b) => (
+                  <BookRow key={b.id} book={b} sub={where(b.placeId, b.takenAt)} />
+                ))}
+              </ul>
+            </section>
           )}
         </>
       )}

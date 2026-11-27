@@ -140,9 +140,20 @@ export function createRepo(db: GongDongDB = defaultDb) {
       })
     },
 
-    async updateSeries(id: string, input: Partial<Pick<Series, 'name' | 'total'>>): Promise<void> {
-      const patch = input.name !== undefined ? { ...input, name: normName(input.name) } : input
-      await db.series.update(id, { ...patch, updatedAt: Date.now() })
+    /** แก้ชื่อหรือจำนวนเล่มของชุด — คืน false ถ้าชื่อใหม่ซ้ำกับชุดอื่น (ไม่แก้อะไร) */
+    async updateSeries(id: string, input: Partial<Pick<Series, 'name' | 'total'>>): Promise<boolean> {
+      return db.transaction('rw', db.series, async () => {
+        const patch: Partial<Pick<Series, 'name' | 'total'>> = { ...input }
+        if (patch.name !== undefined) {
+          const clean = normName(patch.name)
+          if (!clean) return false
+          const clash = alive(await db.series.toArray()).some((x) => x.id !== id && x.name.toLowerCase() === clean.toLowerCase())
+          if (clash) return false
+          patch.name = clean
+        }
+        await db.series.update(id, { ...patch, updatedAt: Date.now() })
+        return true
+      })
     },
 
     /** ลบชุด หนังสือในชุดไม่ถูกลบ แค่ไม่อยู่ในชุดแล้ว */
@@ -184,6 +195,22 @@ export function createRepo(db: GongDongDB = defaultDb) {
       const wish: Wish = { ...stamp(), ...input, title: input.title.trim() }
       await db.wishes.add(wish)
       return wish.id
+    },
+
+    /** เพิ่มหลายรายการในครั้งเดียว ข้ามชื่อที่มีอยู่แล้ว (กดซ้ำไม่ได้รายการซ้ำ) คืนจำนวนที่เพิ่มจริง */
+    async addWishes(inputs: WishInput[]): Promise<number> {
+      return db.transaction('rw', db.wishes, async () => {
+        const have = new Set(alive(await db.wishes.toArray()).map((w) => w.title))
+        const rows: Wish[] = []
+        for (const input of inputs) {
+          const title = input.title.trim()
+          if (!title || have.has(title)) continue
+          have.add(title)
+          rows.push({ ...stamp(), ...input, title })
+        }
+        await db.wishes.bulkAdd(rows)
+        return rows.length
+      })
     },
 
     async updateWish(id: string, input: Partial<WishInput>): Promise<void> {

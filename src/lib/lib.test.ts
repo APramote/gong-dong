@@ -1,10 +1,10 @@
 import { expect, test } from 'vitest'
 import { GeminiError, parseBooks, pickDefaultModel } from './gemini'
 import { normalizeIsbn } from './isbn'
-import { dongFor, dongPool, findMatches, pickOne } from './picks'
+import { dongFor, dongPool, findMatches, nearMatcher, pickOne } from './picks'
 import { ranges, summarize } from './series'
 import { dashboard } from './dashboard'
-import { buildIcs, firstStart } from './ics'
+import { buildIcs, firstStart, fold } from './ics'
 import { yearReview } from './yearReview'
 import { emptyBook } from '../db/repo'
 import type { Book } from '../db/types'
@@ -364,4 +364,30 @@ test('สรุปปี: นับเฉพาะปีที่เลือก
   expect(r).toMatchObject({ minutes: 100, pages: 40, daysRead: 4, bestStreak: 3, added: 1, bestHour: 21, bestMonth: 1 })
   expect(r.mostTime).toMatchObject({ book: { id: 'a' }, minutes: 90 })
   expect(r.longest?.id).toBe('a')
+})
+
+test('เช็กก่อนซื้อ: ชื่อที่แค่มีคำซ้ำกันไม่ถือว่ามีแล้ว แต่แสดงเป็นชื่อคล้าย', () => {
+  const books = [pbook({ title: 'บ้าน' }), pbook({ title: 'ชุดมังกร เล่ม 1' })]
+  expect(findMatches({ title: 'บ้านเล็กในป่าใหญ่' }, books, []).owned).toHaveLength(0)
+  expect(findMatches({ title: 'ชุดมังกร เล่ม 10' }, books, []).owned).toHaveLength(0)
+  expect(findMatches({ title: 'ชุดมังกร เล่ม 1 (ปกแข็ง)' }, books, []).owned).toHaveLength(1)
+  expect(nearMatcher(books)({ title: 'บ้านเล็กในป่าใหญ่' }).map((b) => b.title)).toEqual(['บ้าน'])
+  expect(dongFor(0, 30 * 86400000)).toBe('ดองมา 1 เดือน')
+})
+
+test('ชุดหนังสือ: เล่มซ้ำไม่ทำให้ชุดยาวขึ้น และเลขเล่มผิดปกติไม่ทำให้ค้าง', () => {
+  const series = { id: 's', name: 'ชุด', total: 3, createdAt: 0, updatedAt: 0, deletedAt: null }
+  const dup = [1, 1, 2, 3].map((n) => pbook({ seriesId: 's', seriesNo: n }))
+  expect(summarize(series, dup)).toMatchObject({ total: 3, missing: [] })
+  const wild = summarize(series, [pbook({ seriesId: 's', seriesNo: 9789740000000 })])
+  expect(wild.total).toBe(3)
+})
+
+test('ไฟล์ปฏิทิน: บรรทัดยาวถูกพับไม่เกิน 75 ไบต์ และ escape backslash', () => {
+  const lines = fold('DESCRIPTION:' + 'หนังสือ'.repeat(30)).split('\r\n')
+  expect(lines.length).toBeGreaterThan(1)
+  for (const l of lines) expect(new TextEncoder().encode(l).length).toBeLessThanOrEqual(75)
+  expect(lines.slice(1).every((l) => l.startsWith(' '))).toBe(true)
+  expect(lines.map((l, i) => (i ? l.slice(1) : l)).join('')).toBe('DESCRIPTION:' + 'หนังสือ'.repeat(30))
+  expect(buildIcs({ days: [1], time: '08:00', minutes: 20, title: 'a\\b', description: '' })).toContain('SUMMARY:a\\\\b')
 })

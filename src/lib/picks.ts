@@ -14,12 +14,22 @@ function isbnKey(raw: string): string {
   return s.startsWith('978') ? s.slice(3, 12) : s
 }
 
+/**
+ * ชื่อเดียวกันหรือไม่: ตรงกัน หรือชื่อหนึ่งคือชื่ออีกเล่มที่มีคำต่อท้ายสั้น ๆ เช่น "(ปกแข็ง)"
+ * ส่วนที่เกินต้องไม่มีตัวเลข ("เล่ม 1" กับ "เล่ม 10" เป็นคนละเล่ม) และต้องสั้นกว่าชื่อหลักมาก
+ */
 function sameKey(x: string, y: string): boolean {
   if (!x || !y) return false
   if (x === y) return true
-  // ชื่อสั้นกว่าอยู่ในชื่อยาว เช่น "แฮร์รี่ พอตเตอร์ กับศิลาอาถรรพ์" กับ "แฮร์รี่ พอตเตอร์ กับศิลาอาถรรพ์ (ปกแข็ง)"
   const [short, long] = x.length < y.length ? [x, y] : [y, x]
-  return short.length >= 4 && long.includes(short)
+  if (!long.startsWith(short) || short.length / long.length < 0.6) return false
+  return !/[0-9๐-๙]/.test(long.slice(short.length))
+}
+
+/** ชื่อใกล้เคียง: มีคำค้นอยู่ในชื่อ (ใช้แสดงเป็น "เล่มชื่อคล้ายกัน" ไม่ใช่คำตัดสินว่ามีแล้ว) */
+function nearKey(x: string, y: string): boolean {
+  if (x.length < 3 || y.length < 3) return false
+  return x.includes(y) || y.includes(x)
 }
 
 export interface MatchQuery {
@@ -38,6 +48,17 @@ export function matcher<T extends { isbn: string; title: string }>(rows: T[]) {
     const title = titleKey(query.title ?? '')
     if (!isbn && !title) return []
     return keyed.filter((k) => (isbn !== '' && k.isbn === isbn) || sameKey(k.title, title)).map((k) => k.row)
+  }
+}
+
+/** เล่มที่ชื่อคล้ายคำค้น แต่ยังไม่ถือว่าเป็นเล่มเดียวกัน */
+export function nearMatcher<T extends { isbn: string; title: string }>(rows: T[]) {
+  const keyed = rows.map((row) => ({ row, title: titleKey(row.title) }))
+  return (query: MatchQuery, exclude: T[] = []): T[] => {
+    const title = titleKey(query.title ?? '')
+    if (!title) return []
+    const skip = new Set(exclude)
+    return keyed.filter((k) => !skip.has(k.row) && nearKey(k.title, title)).map((k) => k.row)
   }
 }
 
@@ -77,7 +98,7 @@ export function dongFor(createdAt: number, now = Date.now()): string {
   const days = Math.max(0, Math.floor((now - createdAt) / DAY))
   if (days < 1) return 'เพิ่งเข้าคลังวันนี้'
   if (days < 30) return `ดองมา ${days} วัน`
-  const months = Math.floor(days / 30.44)
+  const months = Math.max(1, Math.floor(days / 30.44))
   if (months < 12) return `ดองมา ${months} เดือน`
   const y = Math.floor(months / 12)
   const m = months % 12

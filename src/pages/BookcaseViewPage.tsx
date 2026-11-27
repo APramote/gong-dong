@@ -6,6 +6,8 @@ import type { Look } from '../db/types'
 import { CoverThumb } from '../components/Cover'
 import { StoragePhoto } from '../components/StoragePhoto'
 import { ShapeFields } from '../components/ShapeFields'
+import { FieldsForm } from '../components/FieldsForm'
+import { bookcaseFields } from '../placeFields'
 import { BookRow } from '../components/BookRow'
 import type { Pick3D } from '../three/scene'
 import { t } from '../th'
@@ -23,6 +25,7 @@ export function BookcaseViewPage() {
   const [doorsOpen, setDoorsOpen] = useState(false)
   /** ค่าที่กำลังแก้ ใช้แสดงทันทีระหว่างรอบันทึกลงฐานข้อมูล — null = ไม่ได้แก้อยู่ */
   const [draft, setDraft] = useState<Look | null>(null)
+  const [renaming, setRenaming] = useState(false)
 
   if (bookcase === undefined) return <p className="empty">{t.common.loading}</p>
   if (!bookcase) return <p className="empty">{t.view.notFound}</p>
@@ -88,7 +91,34 @@ export function BookcaseViewPage() {
         <button className="btn small" onClick={() => setDraft((d) => (d ? null : look))}>
           {draft ? t.shape.done : t.shape.edit}
         </button>
+        <button className="btn small" onClick={() => setRenaming((r) => !r)}>
+          {t.view.rename}
+        </button>
+        <button className="btn small" onClick={() => repo.addShelf(id)}>
+          {t.places.addShelf}
+        </button>
+        <button
+          className="btn small danger"
+          onClick={async () => {
+            if (!confirm(t.places.confirmDeleteBookcase(bookcase.name))) return
+            await repo.deleteBookcase(id)
+            navigate('/places', { replace: true })
+          }}
+        >
+          {t.view.remove}
+        </button>
       </div>
+      {renaming && (
+        <FieldsForm
+          fields={bookcaseFields}
+          initial={{ name: bookcase.name, room: bookcase.room }}
+          onCancel={() => setRenaming(false)}
+          onSubmit={async (v) => {
+            await repo.updateBookcase(id, { name: v.name, room: v.room })
+            setRenaming(false)
+          }}
+        />
+      )}
       {draft && (
         <div className="inline-form form">
           <ShapeFields

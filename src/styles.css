@@ -1804,7 +1804,7 @@ details.more[open] {
   max-width: 22px;
   border-radius: 4px 4px 2px 2px;
   background: var(--accent);
-  opacity: 0.55;
+  opacity: 0.7;
 }
 .week-dot {
   width: 6px;
@@ -2018,7 +2018,7 @@ details.more[open] {
 }
 .place-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 14px;
 }
 .place-card {
@@ -2100,4 +2100,34 @@ details.more[open] {
 .year-quote blockquote,
 .para-pick button {
   overflow-wrap: anywhere;
+}
+
+/* ---------- ขนาดปุ่มแตะบนมือถือ (อย่างน้อย 40px) ---------- */
+.tools {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-right: -16px;
+  padding-right: 16px;
+}
+.tools::-webkit-scrollbar {
+  display: none;
+}
+.tools a {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  white-space: nowrap;
+}
+.chips.small button {
+  min-height: 40px;
+  padding: 4px 14px;
+}
+.quote-actions {
+  gap: 6px;
+}
+.quote-actions .link-btn {
+  min-height: 40px;
+  padding: 8px 8px;
 }

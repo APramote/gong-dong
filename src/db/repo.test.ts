@@ -334,3 +334,15 @@ test('ประโยคที่ชอบ: ลบหนังสือแล้
   await repo.deleteBook(id)
   expect((await repo.listQuotes()).map((q) => q.text)).toEqual(['อีกเล่ม'])
 })
+
+test('ชุดหนังสือ: เปลี่ยนชื่อซ้ำกับชุดอื่นไม่ได้ และเพิ่มรายการอยากได้ซ้ำไม่ได้', async () => {
+  const a = await repo.ensureSeries('ก')
+  await repo.ensureSeries('ข')
+  expect(await repo.updateSeries(a, { name: ' ข ' })).toBe(false)
+  expect(await repo.updateSeries(a, { name: 'ค', total: 5 })).toBe(true)
+  expect((await repo.getSeries(a))!).toMatchObject({ name: 'ค', total: 5 })
+  const w = { authors: '', isbn: '', note: '' }
+  expect(await repo.addWishes([{ ...w, title: 'ค เล่ม 1' }, { ...w, title: 'ค เล่ม 2' }])).toBe(2)
+  expect(await repo.addWishes([{ ...w, title: 'ค เล่ม 2' }, { ...w, title: 'ค เล่ม 3' }])).toBe(1)
+  expect((await repo.listWishes()).length).toBe(3)
+})
