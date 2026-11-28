@@ -35,7 +35,7 @@ export function boxable(b: Book, last: Map<string, number>, now: number): boolea
 }
 
 export interface RuleAdvice {
-  /** อ่านจบ/เลิกอ่าน และไม่ได้แตะนานกว่า 1 ปี แต่ยังอยู่นอกกล่อง */
+  /** ควรลงกล่องแต่ยังอยู่นอกกล่อง: อ่านจบ/เลิกอ่านและไม่ได้แตะนานกว่า 1 ปี หรือได้มะเขือ 3 ลูกขึ้นไป (ไม่รวมเล่ม 4 ดาวขึ้นไป) */
   toBox: Book[]
   /** ยังดองหรือกำลังอ่าน แต่อยู่ในกล่อง หยิบยาก */
   outOfBox: Book[]
@@ -325,7 +325,7 @@ export function buildLayoutPrompt(
     const name = categoryOf.get(b.id) || NO_CATEGORY
     const g = groups.get(name) ?? { total: 0, active: 0, where: new Map() }
     g.total++
-    if (b.status === 'dong' || b.status === 'reading') g.active++
+    if ((b.status === 'dong' || b.status === 'reading') && !disliked(b)) g.active++
     const code = b.placeId ? placeCode.get(b.placeId) : undefined
     if (code) g.where.set(code, (g.where.get(code) ?? 0) + 1)
     groups.set(name, g)
@@ -401,6 +401,7 @@ const SHELF_ROOM = 40
 export const R = {
   series: (name: string) => `ชุด ${name} อยู่ด้วยกัน`,
   seriesToBox: (name: string) => `ชุด ${name} อ่านจบนานแล้ว เก็บลงกล่องด้วยกัน`,
+  seriesDisliked: (name: string) => `ชุด ${name} ให้มะเขือไว้ เก็บลงกล่องด้วยกัน`,
   toBox: 'อ่านจบนานแล้ว เก็บลงกล่อง เปิดที่บนชั้น',
   disliked: 'ให้มะเขือไว้ เก็บลงกล่อง เปิดที่บนชั้น',
   outOfBox: (category: string) => `ยังไม่ได้อ่านจบ ย้ายออกจากกล่องมาอยู่กับหมวด ${category}`,
@@ -517,7 +518,7 @@ export function planMoves(
     const boxes = u.books.filter(inBox).map((b) => b.placeId!)
     const target = boxes.length ? mostCommon(boxes) : box
     for (const b of u.books)
-      if (!inBox(b) || (u.series && b.placeId !== target)) send(b, target, u.series ? R.seriesToBox(u.series) : disliked(b) ? R.disliked : R.toBox)
+      if (!inBox(b) || (u.series && b.placeId !== target)) send(b, target, u.series ? (u.books.some(disliked) ? R.seriesDisliked(u.series) : R.seriesToBox(u.series)) : disliked(b) ? R.disliked : R.toBox)
   }
 
   // หน่วยที่มีผังของหมวดรองรับ กับหน่วยที่ไม่มี (ยังไม่มีหมวด หรือ AI ไม่ได้ให้ผังของหมวดนั้น)

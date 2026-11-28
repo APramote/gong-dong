@@ -642,3 +642,10 @@ test('ดาวและมะเขือกับการเก็บลง�
   expect(moves.map((m) => [m.bookId, m.toPlaceId]).sort()).toEqual([['dongInBox', 'A'], ['hate', 'BOX'], ['plainOld', 'BOX']])
   expect(moves.find((m) => m.bookId === 'hate')!.reason).toBe(R.disliked)
 })
+
+test('สุ่มจากกองดอง: ไม่ชวนอ่านเล่มที่ให้มะเขือ 3 ลูกขึ้นไป', async () => {
+  const { dongPool } = await import('./picks')
+  const mk = (id: string, rating?: number) => ({ id, status: 'dong', takenAt: null, categoryId: null, pages: 100, createdAt: 0, rating }) as any
+  const pool = dongPool([mk('a'), mk('b', 5), mk('c', -2), mk('d', -3), mk('e', -5)], 'any' as any)
+  expect(pool.map((b) => b.id)).toEqual(['a', 'b', 'c'])
+})

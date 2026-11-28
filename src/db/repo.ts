@@ -377,6 +377,8 @@ export function createRepo(db: GongDongDB = defaultDb) {
         position,
         // ย้ายที่เก็บแล้วเริ่มที่แถวหน้า (แถวหน้า/หลังเป็นของชั้นเดิม)
         row: old.placeId === placeId ? (old.row ?? 0) : 0,
+        // คะแนนให้ผ่านปุ่มดาว/มะเขือเท่านั้น ฟอร์มที่ถือค่าเก่าอยู่ต้องไม่เขียนทับ
+        ...(old.rating !== undefined && { rating: old.rating }),
         finishedAt,
         // ฟอร์มอาจถือค่าเก่าอยู่ ใช้ค่าในฐานข้อมูลเสมอ
         takenAt: old.takenAt ?? null,

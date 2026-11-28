@@ -14,8 +14,15 @@ type TableName = (typeof TABLES)[number]
 type Row = SyncFields & Record<string, unknown>
 type CoverMeta = Pick<Cover, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>
 
+/**
+ * รุ่นของไฟล์ข้อมูลกลางใน Drive
+ * รุ่น 2 เพิ่มฟิลด์ใหม่ (คะแนน ความกว้างชั้น แถวหน้า/หลัง): แอปรุ่นเก่าที่ไม่รู้จักฟิลด์เหล่านี้จะอ่านไฟล์รุ่น 2 ไม่ได้
+ * และหยุดซิงก์จนกว่าจะอัปเดต ดีกว่าปล่อยให้เขียนทับไฟล์กลางด้วยข้อมูลที่ฟิลด์ใหม่หายไป
+ */
+export const SNAPSHOT_VERSION = 2
+
 export interface Snapshot {
-  version: 1
+  version: 1 | 2
   savedAt: number
   tables: Partial<Record<TableName, Row[]>>
   /** รายการรูปปก (ตัวรูปอยู่ในไฟล์ cover-<id>) */
@@ -181,7 +188,7 @@ export function parseSnapshot(text: string, now = Date.now()): Snapshot {
 
 function readSnapshot(raw: unknown, now: number): Snapshot {
   const o = raw as Partial<Snapshot> | null
-  if (!o || typeof o !== 'object' || o.version !== 1 || typeof o.tables !== 'object' || o.tables === null) throw new Error('bad-file')
+  if (!o || typeof o !== 'object' || (o.version !== 1 && o.version !== SNAPSHOT_VERSION) || typeof o.tables !== 'object' || o.tables === null) throw new Error('bad-file')
   const tables: Snapshot['tables'] = {}
   for (const name of TABLES) tables[name] = cleanRows(name, (o.tables as Record<string, unknown>)[name], now)
   const covers: CoverMeta[] = []
@@ -351,7 +358,7 @@ export async function syncAll(
   // เขียนไฟล์ข้อมูลหลังรูปขึ้นครบ รายการรูปจะไม่ชี้ไปยังไฟล์ที่ยังไม่มี
   if (pushed > 0 || !file) {
     // อ่านจากเครื่องอีกครั้งตอนจะเขียน รวมสิ่งที่แก้ระหว่างรับส่งรูปด้วย
-    const snapshot: Snapshot = { version: 1, savedAt: Date.now(), tables: await readTables(db), covers: [...manifest.values()] }
+    const snapshot: Snapshot = { version: SNAPSHOT_VERSION, savedAt: Date.now(), tables: await readTables(db), covers: [...manifest.values()] }
     // ล้างข้อมูลหรือออกจากระบบไปแล้วระหว่างนี้: อย่าเขียนทับสำเนากลางด้วยข้อมูลที่ถูกล้าง
     stop()
     await store.put(DATA_FILE, new Blob([JSON.stringify(snapshot)], { type: 'application/json' }))

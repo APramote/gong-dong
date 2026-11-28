@@ -123,6 +123,9 @@ export function BookFormPage() {
         takenAt: _ta,
         takenFrom: _tf,
         finishedAt: _f,
+        // คะแนนและแถวบนชั้นบันทึกแยกจากฟอร์ม ไม่ถือค่าเก่าไว้ในฟอร์ม
+        rating: _r,
+        row: _row,
         ...input
       } = b
       setForm(input)

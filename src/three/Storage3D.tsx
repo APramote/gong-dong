@@ -139,6 +139,7 @@ export default function Storage3D({
   // สร้างฉากใหม่เมื่อข้อมูลเปลี่ยน
   const key = JSON.stringify(model)
   const firstBuild = useRef(true)
+  const lastHeight = useRef(0)
   useEffect(() => {
     const s = state.current
     if (!s) return
@@ -157,7 +158,10 @@ export default function Storage3D({
       }),
     )
     // ตั้งกล้องให้เห็นทั้งหมดเฉพาะครั้งแรก ครั้งต่อไปคงมุมที่ผู้ใช้หมุนไว้
-    if (firstBuild.current) {
+    // (กองหนังสือ: ขนาดเปลี่ยนมากเมื่อเพิ่มหรือนำเล่มออก จัดกล้องใหม่เมื่อความสูงเปลี่ยน)
+    const grew = 'pile' in model && Math.abs(built.size.y - lastHeight.current) > 1
+    lastHeight.current = built.size.y
+    if (firstBuild.current || grew) {
       firstBuild.current = false
       const fov = (s.camera.fov * Math.PI) / 180
       const fitH = built.size.y / 2 / Math.tan(fov / 2)
@@ -167,6 +171,9 @@ export default function Storage3D({
       s.controls.target.set(0, 0, 0)
       s.controls.minDistance = dist * 0.35
       s.controls.maxDistance = dist * 2.5
+      // กองสูงมากกล้องต้องถอยไกล ระยะมองเห็นต้องตามให้ทัน
+      s.camera.far = Math.max(2000, dist * 4)
+      s.camera.updateProjectionMatrix()
       s.controls.update()
     }
     s.render()

@@ -67,6 +67,11 @@ export function LibraryPage() {
       // จำไม่ได้ก็ใช้ได้ตามปกติ
     }
   }, [query, status, placeId, rating])
+  // ที่เก็บที่จำไว้ถูกลบไปแล้ว: กลับเป็นทุกที่เก็บ
+  const placeKnown = !placeId || placeId === IN_HAND || placeId === NO_PLACE || places.length === 0 || places.some((x) => x.id === placeId)
+  useEffect(() => {
+    if (!placeKnown) setPlaceId('')
+  }, [placeKnown])
   // หมวดใน URL ถูกลบหรือรวมไปแล้ว: กลับเป็นทุกหมวด ไม่ค้างเป็นรายการว่าง
   const catKnown = categoryId === '' || categoryId === NO_CATEGORY || categories.length === 0 || categories.some((c) => c.id === categoryId)
   useEffect(() => {

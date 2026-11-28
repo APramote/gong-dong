@@ -181,7 +181,8 @@ function Desk({
 /** มือว่าง: เสนอเล่มจากกองดองให้หยิบ */
 function Suggestions({ books }: { books: Book[] }) {
   const navigate = useNavigate()
-  const dong = books.filter((b) => b.status === 'dong' && !b.takenAt)
+  // เล่มที่ให้มะเขือ 3 ลูกขึ้นไปไม่นำมาแนะนำ
+  const dong = books.filter((b) => b.status === 'dong' && !b.takenAt && (b.rating ?? 0) > -3)
   const picks: { book: Book; note: string }[] = []
   const add = (b: Book | undefined, note: string) => b && !picks.some((p) => p.book.id === b.id) && picks.push({ book: b, note })
   add(

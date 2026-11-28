@@ -244,3 +244,11 @@ test('ซิงก์ความกว้างชั้น จำนวนแ�
   expect(snap.tables.places![0]).not.toHaveProperty('rows')
   expect(snap.tables.books![0]).not.toHaveProperty('row')
 })
+
+test('ไฟล์กลางรุ่น 2: เขียนเป็นรุ่น 2 อ่านได้ทั้งรุ่น 1 และ 2 รุ่นที่ไม่รู้จักถูกปฏิเสธ', async () => {
+  const { SNAPSHOT_VERSION } = await import('./sync')
+  expect(SNAPSHOT_VERSION).toBe(2)
+  expect(parseSnapshot('{"version":2,"tables":{"books":[{"id":"1","updatedAt":5,"rating":-4}]}}').tables.books![0]).toMatchObject({ rating: -4 })
+  expect(parseSnapshot('{"version":1,"tables":{}}').version).toBe(1)
+  expect(() => parseSnapshot('{"version":3,"tables":{}}')).toThrow('bad-file')
+})

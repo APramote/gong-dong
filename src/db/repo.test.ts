@@ -564,3 +564,14 @@ test('ให้คะแนน: ดาวและมะเขือเก็บ
   await r.setRating(id, 0)
   expect((await r.getBook(id))!.rating).toBe(0)
 })
+
+test('ฟอร์มที่ถือคะแนนเก่าไว้ บันทึกแล้วไม่เขียนทับคะแนนที่เพิ่งให้', async () => {
+  const db = new GongDongDB(`rating-form-${n++}`)
+  const r = createRepo(db)
+  const id = await r.addBook({ ...emptyBook, title: 'ก' })
+  await r.setRating(id, 4)
+  const stale = { ...emptyBook, title: 'ก', rating: 4 } as typeof emptyBook
+  await r.setRating(id, 2)
+  await r.updateBook(id, { ...stale, note: 'แก้โน้ต' })
+  expect((await r.getBook(id))!).toMatchObject({ rating: 2, note: 'แก้โน้ต' })
+})

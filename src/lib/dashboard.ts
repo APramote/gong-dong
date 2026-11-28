@@ -119,7 +119,8 @@ export function dashboard(
 
   const yearStart = new Date(new Date(now).getFullYear(), 0, 1).getTime()
   const yearEnd = new Date(new Date(now).getFullYear() + 1, 0, 1).getTime()
-  const dong = books.filter((b) => b.status === 'dong' && !b.takenAt)
+  // เล่มที่จะชวนอ่าน: ไม่รวมเล่มที่ให้มะเขือ 3 ลูกขึ้นไป
+  const dong = books.filter((b) => b.status === 'dong' && !b.takenAt && (b.rating ?? 0) > -3)
 
   return {
     daily,

@@ -81,7 +81,8 @@ export const OLD_DAYS = 180
 /** เล่มดองที่สุ่มได้ (ไม่รวมเล่มที่อยู่ในมือ) */
 export function dongPool(books: Book[], filter: PickFilter, categoryId = '', now = Date.now()): Book[] {
   return books
-    .filter((b) => b.status === 'dong' && !b.takenAt)
+    // เล่มที่ให้มะเขือ 3 ลูกขึ้นไปไม่นำมาชวนอ่าน
+    .filter((b) => b.status === 'dong' && !b.takenAt && (b.rating ?? 0) > -3)
     .filter((b) => !categoryId || b.categoryId === categoryId)
     .filter((b) =>
       filter === 'thin'
