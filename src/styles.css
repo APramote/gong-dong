@@ -2711,3 +2711,19 @@ body.no-scroll {
 .picked-stack.floating .card {
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
 }
+
+/* แถวหนังสือที่มีปุ่มหลายปุ่ม (เลื่อนซ้าย/ขวา ไปแถวหลัง หยิบ): จอแคบให้ปุ่มลงบรรทัดใหม่ ชื่อเรื่องไม่ถูกเบียดจนเหลือตัวอักษรละบรรทัด */
+.row:has(> .reorder) {
+  flex-wrap: wrap;
+}
+.row:has(> .reorder) > .row-main {
+  flex: 1 1 9em;
+}
+.row > .reorder {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+.picked h3 .count {
+  font-weight: 400;
+}

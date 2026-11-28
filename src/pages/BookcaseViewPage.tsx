@@ -263,7 +263,9 @@ export function BookcaseViewPage() {
       {panel && (
         <div className="card picked">
           <div className="section-head">
-            <h3>{panel.name}</h3>
+            <h3>
+              {panel.name} <span className="count">· {t.common.books(panelBooks.length)}</span>
+            </h3>
             <span className="actions">
               <Link className="btn small" to={`/place/${panel.id}`}>
                 {panelIsDrawer ? t.view.openDrawer : t.view.openShelf}
