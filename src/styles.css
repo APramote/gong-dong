@@ -2637,3 +2637,43 @@ details.more[open] {
 body.no-scroll {
   overflow: hidden;
 }
+
+/* รายการหนังสือแบบละเอียด: ปกใหญ่ขึ้น มีรายละเอียดสำคัญและคำโปรย (ตัดที่ 3 บรรทัด) */
+.row.detailed {
+  align-items: flex-start;
+}
+.row.detailed .thumb {
+  width: 64px;
+  height: 92px;
+}
+.row.detailed .thumb.cloth {
+  font-size: 1.4rem;
+}
+.row-blurb {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 6px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.row.detailed .row-main {
+  display: flex;
+  flex-direction: column;
+}
+.view-chips {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.view-chips.chips.small button {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}
+.result-count .actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}

@@ -23,6 +23,7 @@ const RATING_FILTERS: Record<string, (r: number) => boolean> = {
   egg3: (r) => r <= -3,
   none: (r) => r === 0,
 }
+const VIEW_KEY = 'gong-dong.libraryView'
 const FILTER_KEY = 'gong-dong.libraryFilter'
 const STATUSES = ['dong', 'reading', 'done', 'dropped']
 /** ตัวกรองที่จำไว้ (เฉพาะค่าที่รูปแบบถูกต้อง) */
@@ -101,6 +102,22 @@ export function LibraryPage() {
   const [bulk, setBulk] = useState<'move' | 'category' | 'status' | 'info'>('move')
   /** ปลายทางที่เลือก ('' = ยังไม่ได้เลือก ปุ่มใช้จะกดไม่ได้) */
   const [target, setTarget] = useState('')
+  // รูปแบบรายการ: ย่อ (ค่าเริ่มต้น) หรือละเอียด (มีรายละเอียดสำคัญและคำโปรย) จำไว้ในเครื่อง
+  const [view, setViewState] = useState<'compact' | 'detail'>(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === 'detail' ? 'detail' : 'compact'
+    } catch {
+      return 'compact'
+    }
+  })
+  const setView = (v: 'compact' | 'detail') => {
+    setViewState(v)
+    try {
+      localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      // จำไม่ได้ก็ใช้ได้ตามปกติ
+    }
+  }
   const [applying, setApplying] = useState(false)
   /** กำลังหาข้อมูลหลายเล่มอยู่: ล็อกการเลือกและปุ่มอื่นจนกว่าจะเสร็จหรือกดหยุด */
   const [infoRunning, setInfoRunning] = useState(false)
@@ -364,6 +381,15 @@ export function LibraryPage() {
                 {t.library.clearFilters}
               </button>
             )}
+            {shown.length > 0 && (
+              <span className="chips small view-chips" role="group" aria-label={t.library.viewLabel}>
+                {(['compact', 'detail'] as const).map((v) => (
+                  <button key={v} className={view === v ? 'on' : ''} aria-pressed={view === v} onClick={() => setView(v)}>
+                    {t.library.views[v]}
+                  </button>
+                ))}
+              </span>
+            )}
             {shown.length > 0 && !selecting && (
               <button
                 ref={selectBtn}
@@ -393,6 +419,7 @@ export function LibraryPage() {
             <BookRow
               key={b.id}
               book={b}
+              detail={view === 'detail'}
               selected={selecting ? picked.has(b.id) : undefined}
               onSelect={selecting ? togglePick : undefined}
               sub={[

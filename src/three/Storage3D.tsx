@@ -47,11 +47,38 @@ export default function Storage3D({
     scene.add(sun)
     const camera = new THREE.PerspectiveCamera(38, 1, 1, 2000)
     const controls = new OrbitControls(camera, renderer.domElement)
-    controls.enablePan = false
+    // เลื่อนภาพ: ลากสองนิ้ว หรือคลิกขวาลาก (Shift/Ctrl + ลาก) เลื่อนในระนาบจอ ไม่ไหลตามมุมกล้อง
+    controls.enablePan = true
+    controls.screenSpacePanning = true
     controls.minPolarAngle = 0.2
     controls.maxPolarAngle = Math.PI / 2 + 0.15
     const render = () => renderer.render(scene, camera)
-    controls.addEventListener('change', render)
+    // เลื่อนได้ไม่เกินขอบของสิ่งที่วาด จะได้ไม่หลุดหายไปจากจอ
+    const clampTarget = () => {
+      const size = state.current?.built?.size
+      if (!size) return
+      const t = controls.target
+      const x = Math.max(-size.x / 2, Math.min(size.x / 2, t.x))
+      const y = Math.max(-size.y / 2, Math.min(size.y / 2, t.y))
+      const z = Math.max(-size.z / 2, Math.min(size.z / 2, t.z))
+      if (x !== t.x || y !== t.y || z !== t.z) {
+        camera.position.add(new THREE.Vector3(x - t.x, y - t.y, z - t.z))
+        t.set(x, y, z)
+      }
+    }
+    controls.addEventListener('change', () => {
+      clampTarget()
+      render()
+    })
+    // แตะสองครั้ง (ดับเบิลคลิก) กลับมุมมองเริ่มต้น
+    const onReset = () => {
+      controls.reset()
+      render()
+    }
+    renderer.domElement.addEventListener('dblclick', onReset)
+    // คลิกขวาใช้เลื่อนภาพ ไม่เปิดเมนูของเบราว์เซอร์
+    const noMenu = (e: Event) => e.preventDefault()
+    renderer.domElement.addEventListener('contextmenu', noMenu)
 
     const resize = () => {
       const w = el.clientWidth
@@ -92,6 +119,8 @@ export default function Storage3D({
       ro.disconnect()
       renderer.domElement.removeEventListener('pointerdown', onDown)
       renderer.domElement.removeEventListener('pointerup', onUp)
+      renderer.domElement.removeEventListener('dblclick', onReset)
+      renderer.domElement.removeEventListener('contextmenu', noMenu)
       controls.dispose()
       if (state.current?.built) dispose(state.current.built.root)
       // คืน WebGL context ทันที ไม่อย่างนั้นเปิดหน้านี้หลายครั้งจะเกินจำนวนที่เบราว์เซอร์ยอม
@@ -134,6 +163,8 @@ export default function Storage3D({
       s.camera.far = Math.max(2000, dist * 4)
       s.camera.updateProjectionMatrix()
       s.controls.update()
+      // จำมุมนี้ไว้เป็นมุมเริ่มต้น (แตะสองครั้งเพื่อกลับมา)
+      s.controls.saveState()
     }
     s.render()
     // eslint-disable-next-line react-hooks/exhaustive-deps
