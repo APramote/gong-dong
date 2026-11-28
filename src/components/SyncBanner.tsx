@@ -1,7 +1,13 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { getState, subscribe, syncNow } from '../lib/autosync'
+import { getSharedAt, getState, subscribe, syncNow } from '../lib/autosync'
 import { syncErrorText } from '../lib/syncError'
 import { t } from '../th'
+
+/**
+ * เลขรุ่นของการตั้งค่าที่ใช้ร่วมกัน: เปลี่ยนเมื่อซิงก์แล้วได้ค่าใหม่ หรือแท็บอื่นแก้/ซิงก์ไป
+ * หน้าที่อ่านการตั้งค่าไว้ตอนเปิด ใช้เลขนี้เป็นสัญญาณอ่านใหม่ จะได้เห็นผลทันทีโดยไม่ต้องเปิดหน้าใหม่
+ */
+export const useSettingsVersion = () => useSyncExternalStore(subscribe, getSharedAt)
 
 /** สถานะซิงก์อัตโนมัติ ใช้ได้จากทุกหน้า */
 export const useAutoSync = () => useSyncExternalStore(subscribe, getState)

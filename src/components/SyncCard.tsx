@@ -6,14 +6,18 @@ import { dayKey, timeAgo } from '../lib/stats'
 import { markPending, refresh, reset, syncNow, setAutoSync } from '../lib/autosync'
 import { syncErrorText } from '../lib/syncError'
 import { t } from '../th'
-import { useAutoSync } from './SyncBanner'
+import { useAutoSync, useSettingsVersion } from './SyncBanner'
 
 type Msg = { ok: boolean; text: string } | null
 
 /** ซิงก์กับ Google Drive และสำรอง/กู้คืนเป็นไฟล์ */
 export function SyncCard() {
   const [s, setS] = useState(loadSettings)
+  // บัญชี สวิตช์ และเวลาซิงก์เปลี่ยนจากที่อื่น (ซิงก์เสร็จ แท็บอื่น): การ์ดนี้แสดงค่าล่าสุดเสมอ
+  const sharedAt = useSettingsVersion()
   const auto = useAutoSync()
+  // ซิงก์เสร็จหรือการตั้งค่าเปลี่ยนจากที่อื่น: อ่านค่าล่าสุดมาแสดง (สถานะซิงก์เปลี่ยนเมื่อซิงก์จบ)
+  useEffect(() => setS(loadSettings()), [sharedAt, auto.lastSyncAt, auto.account])
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState<Msg>(null)
   /** งานที่กำลังทำเป็นของส่วนไหน ข้อความจะแสดงใต้ปุ่มของส่วนนั้น */

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSettingsVersion } from '../components/SyncBanner'
 import { Link, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
@@ -73,6 +74,9 @@ export function DashboardPage() {
   const sessions = useLiveQuery(() => repo.listSessions(), []) ?? []
   const categories = useLiveQuery(() => repo.listCategories(), []) ?? []
   const [settings, setSettings] = useState(loadSettings)
+  // ซิงก์แล้วได้เป้าการอ่านจากเครื่องอื่น: แสดงค่าใหม่ทันที
+  const pulledSettings = useSettingsVersion()
+  useEffect(() => setSettings(loadSettings()), [pulledSettings])
   const [editing, setEditing] = useState(false)
 
   const d = useMemo(() => dashboard(books ?? [], sessions, Date.now(), categories), [books, sessions, categories])

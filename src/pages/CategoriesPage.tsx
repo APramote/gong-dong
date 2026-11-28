@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSettingsVersion } from '../components/SyncBanner'
 import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { normName, repo } from '../db/repo'
@@ -21,6 +22,9 @@ export function CategoriesPage() {
   const applying = useRef(false)
   const [msg, setMsg] = useState('')
   const [limit, setLimit] = useState(() => loadSettings().maxCategories)
+  // ซิงก์แล้วได้จำนวนหมวดสูงสุดจากเครื่องอื่น: แสดงค่าใหม่ทันที
+  const pulledSettings = useSettingsVersion()
+  useEffect(() => setLimit(loadSettings().maxCategories), [pulledSettings])
   /** หมวดที่กำลังเลือกปลายทางเพื่อรวม */
   const [merging, setMerging] = useState<string | null>(null)
   const [mergeTo, setMergeTo] = useState('')

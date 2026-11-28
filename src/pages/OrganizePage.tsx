@@ -1,4 +1,5 @@
-import { memo, useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { useSettingsVersion } from '../components/SyncBanner'
 import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
@@ -148,6 +149,9 @@ export function OrganizePage() {
   /** สัดส่วนงานของ AI ที่เสร็จแล้ว 0–1 (นับตามจำนวนครั้งที่ต้องเรียก AI) */
   const [ratio, setRatio] = useState(0)
   const [mode, setModeState] = useState<OrganizeMode>(() => loadSettings().organizeMode)
+  // ซิงก์แล้วได้วิธีจัดระเบียบที่เลือกจากเครื่องอื่น: แสดงค่าใหม่ทันที
+  const pulledSettings = useSettingsVersion()
+  useEffect(() => setModeState(loadSettings().organizeMode), [pulledSettings])
   const setMode = (m: OrganizeMode) => {
     setModeState(m)
     saveSettings({ ...loadSettings(), organizeMode: m })

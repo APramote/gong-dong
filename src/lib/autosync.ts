@@ -213,6 +213,8 @@ export function setAutoSync(on: boolean): void {
 /** เพิ่มขึ้นทุกครั้งที่ได้การตั้งค่าใหม่จาก Drive หน้าตั้งค่าใช้ดูว่าต้องอ่านค่าใหม่ */
 let settingsVersion = 0
 export const getSettingsVersion = () => settingsVersion
+/** เวลาที่การตั้งค่าที่ใช้ร่วมกันเปลี่ยนล่าสุด (ทั้งจากเครื่องนี้ แท็บอื่น และที่รับมาจาก Drive) */
+export const getSharedAt = () => loadSettings().sharedAt
 
 /** มีการตั้งค่าที่ต้องส่งขึ้น (เช่น เพิ่งเปิดสวิตช์ใช้การตั้งค่าร่วมกัน) */
 export const markPending = () => markDirty()
