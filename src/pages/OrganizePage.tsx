@@ -166,6 +166,9 @@ export function OrganizePage() {
   useLeaveGuard(Boolean(plan), t.organize.unsavedLeave)
   const [pickedCats, setPickedCats] = useState<Set<string>>(new Set())
   const [pickedMoves, setPickedMoves] = useState<Set<string>>(new Set())
+  // ปลายทางที่ผู้ใช้เปลี่ยนเอง: ปลายทางตามแผน → ที่เก็บที่เลือกแทน (แผนใหม่เริ่มจากว่าง)
+  const [destTo, setDestTo] = useState<Map<string, string>>(new Map())
+  useEffect(() => setDestTo(new Map()), [plan])
 
   const byId = useMemo(() => new Map((books ?? []).map((b) => [b.id, b])), [books])
   const catName = (b?: Book) => (b?.categoryId && categories.find((c) => c.id === b.categoryId)?.name) || ''
@@ -323,7 +326,11 @@ export function OrganizePage() {
     try {
       // เล่มที่ถูกลบหรือถูกหยิบไปหลังวิเคราะห์ ไม่ทำอะไรกับเล่มนั้น
       const cats = plan.categories.filter((c) => pickedCats.has(c.bookId) && byId.has(c.bookId))
-      const moves = plan.moves.filter((m) => pickedMoves.has(m.bookId) && byId.has(m.bookId) && !byId.get(m.bookId)!.takenAt)
+      // ปลายทางใช้ตามที่ผู้ใช้ปรับ เล่มที่อยู่ที่นั่นอยู่แล้วไม่ต้องย้าย
+      const moves = plan.moves
+        .filter((m) => pickedMoves.has(m.bookId) && byId.has(m.bookId) && !byId.get(m.bookId)!.takenAt)
+        .map((m) => ({ ...m, toPlaceId: destTo.get(m.toPlaceId) ?? m.toPlaceId }))
+        .filter((m) => byId.get(m.bookId)!.placeId !== m.toPlaceId)
       // ตั้งหมวดทีละหมวด และย้ายทีละปลายทาง ในธุรกรรมเดียวต่อกลุ่ม (เร็วกว่าเขียนทีละเล่มมาก)
       const byCategory = new Map<string, string[]>()
       for (const c of cats) byCategory.set(c.category, [...(byCategory.get(c.category) ?? []), c.bookId])
@@ -515,6 +522,8 @@ export function OrganizePage() {
                 {[...movesByDest].map(([dest, moves]) => {
                   const ids = moves.map((m) => m.bookId)
                   const chosen = ids.filter((id) => pickedMoves.has(id)).length
+                  const target = destTo.get(dest) ?? dest
+                  const stay = (destBooks.get(dest) ?? []).filter((b) => b.placeId === target).length
                   return (
                   <div key={dest} className="dest-group">
                     {/* ติ๊กที่หัวข้อ = เลือกหรือไม่เลือกทั้งที่เก็บนี้ รายเล่มอยู่ในส่วนพับด้านล่าง (กลุ่มเล็กเปิดไว้ให้) */}
@@ -534,9 +543,39 @@ export function OrganizePage() {
                         }
                       />
                       <span>
-                        → {label(dest)} <span className="muted">{t.organize.pickedOf(chosen, ids.length)}</span>
+                        → {label(target)} <span className="muted">{t.organize.pickedOf(chosen, ids.length)}</span>
                       </span>
                     </label>
+                    <label className="dest-change">
+                      <span>{t.organize.destChange}</span>
+                      <select
+                        value={target}
+                        onChange={(e) =>
+                          setDestTo((cur) => {
+                            const next = new Map(cur)
+                            if (e.target.value === dest) next.delete(dest)
+                            else next.set(dest, e.target.value)
+                            return next
+                          })
+                        }
+                      >
+                        {groups.map((g) => (
+                          <optgroup key={g.title} label={g.title}>
+                            {g.options.map((o) => (
+                              <option key={o.id} value={o.id}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </label>
+                    {target !== dest && (
+                      <p className="muted dest-note">
+                        {t.organize.destWas(label(dest))}
+                        {stay > 0 && ` ${t.organize.destStay(stay)}`}
+                      </p>
+                    )}
                     <details className="dest-books" open={ids.length <= 12 || undefined}>
                       <summary>{t.organize.showBooks(ids.length)}</summary>
                       <PickList books={destBooks.get(dest) ?? []} picked={pickedMoves} onToggle={toggleMove} sub={moveSub} />
