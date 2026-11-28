@@ -563,3 +563,47 @@ test('ผลจากการตรวจการจัดระเบีย�
   expect([...readMerges({ merges: [{ from: 'ก', to: 'ข' }, { from: 'ข', to: 'ก' }, { from: 'ค', to: 'ก' }] }, ['ก', 'ข', 'ค'])]).toEqual([])
   expect(capCategories([{ category: 'ใหม่' }, { category: 'เดิม' }], ['เดิม', 'สอง'], 2)).toEqual([{ category: 'เดิม' }])
 })
+
+test('ที่ว่างบนชั้น: ความกว้างของชั้นหรือของตู้ สองแถว และการคิดจากความหนา', async () => {
+  const { thickness, footprint, shelfWidth, usage, rowsOf } = await import('./capacity')
+  expect(thickness({ pages: 100 })).toBeCloseTo(1.25)
+  expect(thickness({ pages: null })).toBeCloseTo(2.225)
+  expect(thickness({ pages: 5000 })).toBe(7)
+  const shelf = { kind: 'shelf' as const }
+  expect(shelfWidth(shelf, { shelfWidth: 80 })).toBe(80)
+  expect(shelfWidth({ ...shelf, width: 60 }, { shelfWidth: 80 })).toBe(60)
+  expect(shelfWidth(shelf, null)).toBeNull()
+  expect(shelfWidth({ kind: 'box' as const, width: 60 }, null)).toBeNull() // เฉพาะชั้นวาง
+  expect(rowsOf({ ...shelf, rows: 2 })).toBe(2)
+  expect(rowsOf({ kind: 'pile' as const, rows: 2 })).toBe(1)
+  const books = [{ pages: 300, row: 0 as const }, { pages: 300, row: 1 as const }, { pages: 300 }]
+  const one = usage(shelf, { shelfWidth: 5 }, books)
+  expect(one.used).toHaveLength(1)
+  expect(one.used[0]).toBeCloseTo(3 * footprint({ pages: 300 }))
+  expect(one).toMatchObject({ width: 5, capacity: 5, over: true })
+  const two = usage({ ...shelf, rows: 2 as const }, { shelfWidth: 6 }, books)
+  expect(two.used.map((x) => Math.round(x * 10) / 10)).toEqual([5.4, 2.7])
+  expect(two).toMatchObject({ capacity: 12, over: false })
+  expect(usage(shelf, null, books)).toMatchObject({ width: null, capacity: null, over: false })
+})
+
+test('จัดระเบียบตามความกว้างชั้นจริง: ชั้นแคบรับได้น้อยกว่า 40 เล่ม', async () => {
+  const { buildLayoutPrompt, planMoves } = await import('./organize')
+  const { footprint } = await import('./capacity')
+  const mk = (id: string, o: object) =>
+    ({ id, title: id, authors: '', categoryId: null, status: 'dong', placeId: null, takenAt: null, finishedAt: null, createdAt: 0, seriesId: null, seriesNo: null, pages: 300, ...o }) as any
+  const place = (id: string) => ({ id, kind: 'shelf', name: id, bookcaseId: null, label: '', location: '' })
+  const places = [place('NARROW'), place('WIDE')] as any
+  const books = Array.from({ length: 30 }, (_, i) => mk('n' + i, {}))
+  const cats = new Map(books.map((b: any) => [b.id, 'นิยาย']))
+  const per = footprint({ pages: 300 })
+  const capacity = new Map([['NARROW', per * 10 + 0.01], ['WIDE', 200]])
+  const input = buildLayoutPrompt(books, places, [], cats, 'full', new Map([['NARROW', 10], ['WIDE', 70]]))
+  expect(input.prompt).toContain('p1 | shelf | "NARROW" | 0 books | holds about 10 books')
+  const raw = { summary: '', tips: [], box: '', layout: [{ category: 'นิยาย', places: ['p1', 'p2'] }] }
+  for (const mode of ['full', 'minimal'] as const) {
+    const moves = planMoves(raw, input, books, places, [], cats, { mode, capacity }).moves
+    expect(moves.filter((m) => m.toPlaceId === 'NARROW')).toHaveLength(10)
+    expect(moves.filter((m) => m.toPlaceId === 'WIDE')).toHaveLength(20)
+  }
+})

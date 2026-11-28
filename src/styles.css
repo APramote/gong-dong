@@ -2454,3 +2454,26 @@ details.more[open] {
   white-space: normal;
   text-align: center;
 }
+
+/* ---------- ที่ว่างบนชั้น และแถวหน้า/แถวหลัง ---------- */
+.shelf-size {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0 16px;
+}
+.shelf-size p {
+  margin: 0;
+}
+.shelf-size .cols {
+  align-items: end;
+}
+.row-head {
+  margin: 18px 0 6px;
+  font-size: 1rem;
+  color: var(--muted);
+}
+.row-group .reorder {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}

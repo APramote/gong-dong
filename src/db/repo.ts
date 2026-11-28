@@ -20,7 +20,7 @@ const MAX_ESTIMATE_MINUTES = 180
 const alive = <T extends SyncFields>(rows: T[]) => rows.filter((r) => r.deletedAt === null)
 
 /** ฟิลด์ที่ระบบจัดการเอง ฟอร์มแก้ไขไม่ได้ */
-type SystemFields = 'position' | 'takenAt' | 'takenFrom' | 'finishedAt'
+type SystemFields = 'position' | 'takenAt' | 'takenFrom' | 'finishedAt' | 'row'
 export type BookInput = Omit<Book, keyof SyncFields | SystemFields>
 
 export interface ReturnInput {
@@ -374,6 +374,8 @@ export function createRepo(db: GongDongDB = defaultDb) {
         ...input,
         placeId,
         position,
+        // ย้ายที่เก็บแล้วเริ่มที่แถวหน้า (แถวหน้า/หลังเป็นของชั้นเดิม)
+        row: old.placeId === placeId ? (old.row ?? 0) : 0,
         finishedAt,
         // ฟอร์มอาจถือค่าเก่าอยู่ ใช้ค่าในฐานข้อมูลเสมอ
         takenAt: old.takenAt ?? null,
@@ -458,6 +460,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
         await db.books.update(id, {
           placeId,
           position: await nextPosition(placeId),
+          row: 0,
           updatedAt: Date.now(),
         })
       })
@@ -477,7 +480,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
         for (const id of ids) {
           const b = await db.books.get(id)
           if (!b || b.deletedAt !== null || b.takenAt || b.placeId === placeId) continue
-          await db.books.update(id, { placeId, position: position++, updatedAt: now })
+          await db.books.update(id, { placeId, position: position++, row: 0, updatedAt: now })
           moved++
         }
         return moved
@@ -540,9 +543,13 @@ export function createRepo(db: GongDongDB = defaultDb) {
       const book = await db.books.get(id)
       if (!book) return
       const rows = await booksIn(book.placeId)
+      // เลื่อนภายในแถวเดียวกัน (ชั้นที่วางซ้อนสองแถว แถวหน้าและแถวหลังเรียงแยกกัน)
+      const mine = rows.filter((b) => (b.row ?? 0) === (book.row ?? 0))
+      const at = mine.findIndex((b) => b.id === id)
+      const other = mine[at + dir]
+      if (at < 0 || !other) return
       const i = rows.findIndex((b) => b.id === id)
-      const j = i + dir
-      if (i < 0 || j < 0 || j >= rows.length) return
+      const j = rows.findIndex((b) => b.id === other.id)
       const now = Date.now()
       // สลับสองเล่มแล้วเรียงเลขตำแหน่งใหม่ทั้งที่เก็บ (หลังซิงก์ตำแหน่งอาจซ้ำกัน สลับค่าเฉย ๆ จะไม่ขยับ)
       const order = [...rows]
@@ -550,6 +557,34 @@ export function createRepo(db: GongDongDB = defaultDb) {
       await db.transaction('rw', db.books, async () => {
         for (let k = 0; k < order.length; k++)
           if (order[k].position !== k || k === i || k === j) await db.books.update(order[k].id, { position: k, updatedAt: now })
+      })
+    },
+
+    /** ย้ายหนังสือไปแถวหน้า (0) หรือแถวหลัง (1) ของชั้นเดิม ไปต่อท้ายแถวนั้น */
+    async setRow(id: string, row: 0 | 1): Promise<void> {
+      await db.transaction('rw', db.books, async () => {
+        const b = await db.books.get(id)
+        if (!b || b.deletedAt !== null || b.takenAt || (b.row ?? 0) === row) return
+        await db.books.update(id, { row, position: await nextPosition(b.placeId), updatedAt: Date.now() })
+      })
+    },
+
+    /** ตั้งความกว้างของชั้นทั้งตู้ (ซม.) — null = ไม่ระบุ */
+    async setShelfWidth(bookcaseId: string, width: number | null): Promise<void> {
+      await db.bookcases.update(bookcaseId, { shelfWidth: width, updatedAt: Date.now() })
+    },
+
+    /** ตั้งความกว้างเฉพาะชั้น และจำนวนแถว (เปลี่ยนกลับเป็นแถวเดียว หนังสือแถวหลังกลับมาแถวหน้า) */
+    async setShelfShape(placeId: string, shape: { width?: number | null; rows?: 1 | 2 }): Promise<void> {
+      await db.transaction('rw', db.places, db.books, async () => {
+        const now = Date.now()
+        await db.places.update(placeId, { ...shape, updatedAt: now })
+        if (shape.rows === 1)
+          await db.books
+            .where('placeId')
+            .equals(placeId)
+            .filter((b) => b.row === 1)
+            .modify({ row: 0, updatedAt: now })
       })
     },
 
@@ -634,6 +669,7 @@ export function createRepo(db: GongDongDB = defaultDb) {
         await db.books.update(id, {
           placeId,
           position,
+          row: 0,
           takenAt: null,
           takenFrom: null,
           currentPage: page ?? book.currentPage,
@@ -892,7 +928,7 @@ async function removePlace(db: GongDongDB, id: string): Promise<void> {
   // ต่อท้ายรายการ "ยังไม่ระบุที่เก็บ" ตามลำดับเดิม ไม่ให้ตำแหน่งชนกับเล่มที่อยู่ก่อน
   const unplaced = (await db.books.toArray()).filter((b) => b.placeId === null && b.deletedAt === null && !b.takenAt)
   let next = unplaced.reduce((m, b) => Math.max(m, b.position + 1), 0)
-  for (const b of books) await db.books.update(b.id, { placeId: null, position: next++, updatedAt: now })
+  for (const b of books) await db.books.update(b.id, { placeId: null, position: next++, row: 0, updatedAt: now })
   await db.places.update(id, { deletedAt: now, updatedAt: now })
 }
 

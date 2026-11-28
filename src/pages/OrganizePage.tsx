@@ -27,6 +27,7 @@ import {
 import { placeGroups, placeLabel } from '../placeLabel'
 import { useLeaveGuard } from '../components/useLeaveGuard'
 import { Ring } from '../components/Ring'
+import { footprint, rowsOf, shelfWidth } from '../lib/capacity'
 import { loadSettings, saveSettings } from '../lib/settings'
 import { t } from '../th'
 
@@ -274,8 +275,18 @@ export function OrganizePage() {
         for (const b of all) if (b.categoryId) categoryOf.set(b.id, catName(b))
         for (const c of suggestions) categoryOf.set(c.bookId, c.category)
         try {
-          const input = buildLayoutPrompt(all, places, bookcases, categoryOf, mode)
-          layout = planMoves(await askJson(input.prompt, layoutSchema), input, all, places, sessions, categoryOf, { mode, seriesName })
+          // ชั้นที่ใส่ความกว้างไว้: คิดที่ว่างจากความหนาของหนังสือจริง (และบอก AI ว่าจุได้ประมาณกี่เล่ม)
+          const capacity = new Map<string, number>()
+          const fits = new Map<string, number>()
+          const average = all.length ? all.reduce((n, b) => n + footprint(b), 0) / all.length : 2.3
+          for (const p of places) {
+            const width = shelfWidth(p, bookcases.find((x) => x.id === p.bookcaseId))
+            if (width === null) continue
+            capacity.set(p.id, width * rowsOf(p))
+            fits.set(p.id, Math.max(1, Math.floor((width * rowsOf(p)) / average)))
+          }
+          const input = buildLayoutPrompt(all, places, bookcases, categoryOf, mode, fits)
+          layout = planMoves(await askJson(input.prompt, layoutSchema), input, all, places, sessions, categoryOf, { mode, seriesName, capacity })
           setPlannedCats(categoryOf)
         } catch (e) {
           firstError ??= e

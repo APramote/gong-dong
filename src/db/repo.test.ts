@@ -487,3 +487,34 @@ test('ตั้งหมวดและเปลี่ยนสถานะห�
   expect(await repo.setStatusMany([a, done], 'dong')).toBe(2)
   expect((await repo.getBook(done))!).toMatchObject({ status: 'dong', finishedAt: null })
 })
+
+test('ชั้นวางซ้อนสองแถว: ย้ายไปแถวหลัง เลื่อนภายในแถว และกลับเป็นแถวเดียว', async () => {
+  const db = new GongDongDB(`rows-${n++}`)
+  const r = createRepo(db)
+  const caseId = await r.addBookcase({ name: 'ตู้', room: '' }, 1)
+  const shelf = (await r.listPlaces()).find((p) => p.bookcaseId === caseId)!
+  const ids: Record<string, string> = {}
+  for (const title of ['ก', 'ข', 'ค', 'ง']) ids[title] = await r.addBook({ ...emptyBook, title, placeId: shelf.id })
+  await r.setShelfWidth(caseId, 80)
+  await r.setShelfShape(shelf.id, { rows: 2, width: 60 })
+  expect((await r.listBookcases())[0].shelfWidth).toBe(80)
+  expect((await r.getPlace(shelf.id))!).toMatchObject({ rows: 2, width: 60 })
+  await r.setRow(ids['ข'], 1)
+  await r.setRow(ids['ง'], 1)
+  const rowOf = async (row: number) => (await r.booksIn(shelf.id)).filter((b) => (b.row ?? 0) === row).map((b) => b.title)
+  expect(await rowOf(0)).toEqual(['ก', 'ค'])
+  expect(await rowOf(1)).toEqual(['ข', 'ง'])
+  // เลื่อนภายในแถวหน้า: ก กับ ค สลับกัน ไม่ข้ามไปยุ่งกับแถวหลัง
+  await r.shiftBook(ids['ก'], 1)
+  expect(await rowOf(0)).toEqual(['ค', 'ก'])
+  expect(await rowOf(1)).toEqual(['ข', 'ง'])
+  await r.shiftBook(ids['ก'], 1) // อยู่ท้ายแถวแล้ว ไม่เปลี่ยน
+  expect(await rowOf(0)).toEqual(['ค', 'ก'])
+  // ย้ายออกไปที่อื่นแล้วกลับมา เริ่มที่แถวหน้า
+  const pile = await r.addPlace('pile', { name: 'กอง', location: '', label: '' })
+  await r.moveBook(ids['ข'], pile)
+  expect((await r.getBook(ids['ข']))!.row ?? 0).toBe(0)
+  // กลับเป็นแถวเดียว: เล่มแถวหลังมารวมแถวหน้า
+  await r.setShelfShape(shelf.id, { rows: 1 })
+  expect((await r.booksIn(shelf.id)).every((b) => (b.row ?? 0) === 0)).toBe(true)
+})

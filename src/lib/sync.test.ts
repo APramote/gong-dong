@@ -218,3 +218,26 @@ test('ผลจากการตรวจ: ข้อมูลนำเข้า
   expect(snap.tables.quotes).toEqual([])
   expect(snap.covers).toEqual([{ id: 'c', createdAt: 3, updatedAt: 3, deletedAt: null }])
 })
+
+test('ซิงก์ความกว้างชั้น จำนวนแถว และแถวของหนังสือ', async () => {
+  const a = device()
+  const b = device()
+  const drive = memoryStore()
+  const caseId = await a.repo.addBookcase({ name: 'ตู้', room: '' }, 1)
+  const shelf = (await a.repo.listPlaces())[0]
+  const id = await a.repo.addBook({ ...emptyBook, title: 'แถวหลัง', placeId: shelf.id })
+  await a.repo.setShelfWidth(caseId, 82.5)
+  await a.repo.setShelfShape(shelf.id, { rows: 2, width: 70 })
+  await a.repo.setRow(id, 1)
+  await syncAll(a.db, drive)
+  await syncAll(b.db, drive)
+  expect((await b.repo.listBookcases())[0].shelfWidth).toBe(82.5)
+  expect((await b.repo.getPlace(shelf.id))!).toMatchObject({ rows: 2, width: 70 })
+  expect((await b.repo.getBook(id))!.row).toBe(1)
+  // ค่าแปลกปลอมจากไฟล์ถูกทิ้ง
+  const snap = parseSnapshot(JSON.stringify({ version: 1, tables: { bookcases: [{ id: 'x', updatedAt: 1, shelfWidth: -5 }], places: [{ id: 'p', updatedAt: 1, kind: 'shelf', width: 99999, rows: 7 }], books: [{ id: 'k', updatedAt: 1, row: 5 }] } }))
+  expect(snap.tables.bookcases![0]).not.toHaveProperty('shelfWidth')
+  expect(snap.tables.places![0]).not.toHaveProperty('width')
+  expect(snap.tables.places![0]).not.toHaveProperty('rows')
+  expect(snap.tables.books![0]).not.toHaveProperty('row')
+})

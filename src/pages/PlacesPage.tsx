@@ -6,6 +6,7 @@ import type { Place } from '../db/types'
 import { FieldsForm } from '../components/FieldsForm'
 import { BookcaseCard, PlaceCard } from '../components/PlaceCards'
 import { bookcaseFields, placeFields } from '../placeFields'
+import { rowsOf, usage } from '../lib/capacity'
 import { t } from '../th'
 
 const VIEW_KEY = 'gong-dong.placesView'
@@ -161,7 +162,14 @@ export function PlacesPage() {
                     }}
                   />
                 )}
-                <ul className="list">{shelves.map((s) => placeRow(s, ''))}</ul>
+                <ul className="list">
+                  {shelves.map((s) => {
+                    // ชั้นที่รู้ความกว้าง: บอกว่าใช้ที่ไปเท่าไร
+                    const u = usage(s, bc, books.filter((b) => b.placeId === s.id && !b.takenAt))
+                    const fill = u.capacity === null ? '' : t.shelf.fill(Math.round(u.used.reduce((n, x) => n + x, 0)), Math.round(u.capacity))
+                    return placeRow(s, [fill, rowsOf(s) === 2 ? t.shelf.twoRows : ''].filter(Boolean).join(' · '))
+                  })}
+                </ul>
               </div>
             )
           })

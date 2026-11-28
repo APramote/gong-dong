@@ -44,6 +44,8 @@ export interface Book extends SyncFields {
   takenFrom: string | null
   /** เวลาที่อ่านจบ ใช้ทำสถิติ */
   finishedAt: number | null
+  /** แถวบนชั้นที่วางซ้อนสองแถว: 0 = แถวหน้า (ค่าเริ่มต้น) 1 = แถวหลัง */
+  row?: 0 | 1
   /** สีสัน (#rrggbb) จากรูป ใช้วาด 3D — ว่างคือให้แอปเลือกสีเอง */
   spineColor: string
   /** ชุดหนังสือ (ตาราง series) และเล่มที่ในชุด */
@@ -133,6 +135,8 @@ export interface Bookcase extends SyncFields {
   name: string
   room: string
   look?: Look
+  /** ความกว้างด้านในของชั้น (ซม.) ใช้กับทุกชั้นในตู้ — ไม่ใส่ = ยังไม่รู้ */
+  shelfWidth?: number | null
 }
 
 export type PlaceKind = 'shelf' | 'drawer' | 'pile' | 'box'
@@ -152,6 +156,10 @@ export interface Place extends SyncFields {
   location: string
   label: string
   look?: Look
+  /** ชั้นวาง: ความกว้างเฉพาะชั้นนี้ (ซม.) ถ้าต่างจากค่าของตู้ */
+  width?: number | null
+  /** ชั้นวาง: 2 = วางซ้อนสองแถว (แถวหน้าและแถวหลัง) */
+  rows?: 1 | 2
 }
 
 /** รูปปก เก็บแยกจากข้อมูลหนังสือเพื่อให้รายการหนังสือเบา — id คือ id ของหนังสือ */

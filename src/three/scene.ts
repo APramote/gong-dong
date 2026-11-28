@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { Book, Look } from '../db/types'
+import { GAP, thickness } from '../lib/capacity'
 
 /** ข้อมูลหนังสือที่ใช้วาด (ใช้ได้ทั้งหนังสือจริงและรายการตัวอย่างก่อนบันทึก) */
 export type Book3D = Pick<Book, 'id' | 'title' | 'pages' | 'spineColor'>
@@ -7,6 +8,10 @@ export type Book3D = Pick<Book, 'id' | 'title' | 'pages' | 'spineColor'>
 /** ตู้หนังสือ: ชั้นจากล่างขึ้นบน (ชั้นที่ 1 = ล่างสุด) หนังสือในชั้นเรียงซ้ายไปขวา */
 export interface BookcaseModel {
   shelves: Book3D[][]
+  /** แถวหลังของแต่ละชั้น (ชั้นที่วางซ้อนสองแถว) ลำดับชั้นเดียวกับ shelves */
+  back?: Book3D[][]
+  /** ความกว้างด้านในของชั้น (ซม.) ถ้ารู้ ใช้เป็นความกว้างของตู้จริง */
+  shelfWidth?: number | null
   /** ลิ้นชักที่เป็นที่เก็บจริง เรียงจากแถวล่างสุด ซ้ายไปขวา (ไม่มี id = ตัวอย่าง แตะไม่ได้) */
   drawers?: { id: string; books: Book3D[] }[]
   look?: Look
@@ -28,7 +33,7 @@ function hash(s: string): number {
 /** ขนาดหนังสือ (ซม.): ความหนาตามจำนวนหน้า ความสูง/ลึกต่างกันเล็กน้อยให้ดูเป็นธรรมชาติ */
 export function bookSize(b: Book3D) {
   const h = hash(b.id)
-  const thick = Math.min(7, Math.max(1, (b.pages ?? 250) * 0.0065 + 0.6))
+  const thick = thickness(b)
   return { thick, height: 18 + (h % 7), depth: 12 + ((h >> 3) % 4) }
 }
 
@@ -93,7 +98,7 @@ const DRAWER_H = 16
 const LEG_H = 10
 
 function buildBookcase(model: BookcaseModel): Built {
-  const { shelves, look, doorsOpen = false } = model
+  const { shelves, look, doorsOpen = false, back = [] } = model
   const root = new THREE.Group()
   const pickable: THREE.Mesh[] = []
   const drawerGroups: THREE.Group[] = []
@@ -110,9 +115,10 @@ function buildBookcase(model: BookcaseModel): Built {
   const shelfZone = levels * SHELF_SPACE + (levels - 1) * BOARD
   const innerH = drawerZone + shelfZone
   const outerH = innerH + 2 * BOARD
-  const booksWidth = Math.max(0, ...shelves.map((s) => s.reduce((n, b) => n + bookSize(b).thick + 0.15, 0)))
+  const booksWidth = Math.max(0, ...[...shelves, ...back].map((s) => s.reduce((n, b) => n + bookSize(b).thick + GAP, 0)))
   const fromRatio = look?.ratio ? (outerH + legH) * look.ratio - 2 * BOARD : 0
-  const innerW = Math.max(50, booksWidth + 6, fromRatio)
+  // รู้ความกว้างจริงของชั้นก็ใช้ค่านั้น (หนังสือที่เกินจะไม่ถูกวาด เห็นได้ว่าชั้นเต็ม) ไม่รู้จึงเดาจากหนังสือและสัดส่วนในรูป
+  const innerW = model.shelfWidth && model.shelfWidth > 0 ? Math.max(30, model.shelfWidth) : Math.max(50, booksWidth + 6, fromRatio)
   const depth = 30
   const outerW = innerW + 2 * BOARD
   const y0 = legH // พื้นล่างของตัวตู้
@@ -195,17 +201,21 @@ function buildBookcase(model: BookcaseModel): Built {
   for (let i = 0; i < levels; i++) {
     const floor = shelfBase + i * (SHELF_SPACE + BOARD)
     if (i < levels - 1) part(innerW, BOARD, depth, 0, floor + SHELF_SPACE + BOARD / 2, 0)
-    let x = -innerW / 2 + 1
-    for (const b of shelves[i] ?? []) {
-      const s = bookSize(b)
-      const color = bookColor(b)
-      const mesh = boxMesh(s.thick, s.height, s.depth, color, textTexture(b.title, color, true))
-      mesh.position.set(x + s.thick / 2, floor + s.height / 2, depth / 2 - s.depth / 2 - 1.5)
-      mesh.userData = { bookId: b.id, home: mesh.position.clone() }
-      root.add(mesh)
-      pickable.push(mesh)
-      x += s.thick + 0.15
-      if (x > innerW / 2 - 1) break // ล้นชั้น ไม่วาดต่อ
+    // แถวหน้าชิดขอบหน้าชั้น แถวหลัง (ถ้ามี) ชิดผนังหลัง
+    for (const [row, list] of [[0, shelves[i] ?? []], [1, back[i] ?? []]] as const) {
+      let x = -innerW / 2 + 1
+      for (const b of list) {
+        const s = bookSize(b)
+        if (x + s.thick > innerW / 2 - 0.5) break // ล้นชั้น ไม่วาดต่อ
+        const color = bookColor(b)
+        const mesh = boxMesh(s.thick, s.height, s.depth, color, textTexture(b.title, color, true))
+        const z = row === 0 ? depth / 2 - s.depth / 2 - 1.5 : -depth / 2 + s.depth / 2 + 1
+        mesh.position.set(x + s.thick / 2, floor + s.height / 2, z)
+        mesh.userData = { bookId: b.id, home: mesh.position.clone() }
+        root.add(mesh)
+        pickable.push(mesh)
+        x += s.thick + GAP
+      }
     }
   }
 

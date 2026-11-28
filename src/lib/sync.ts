@@ -42,6 +42,8 @@ const coverFile = (id: string) => `cover-${id}`
 const DAY = 86400000
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+/** ขนาดเป็นเซนติเมตร: ต้องเป็นบวกและไม่เกินจริง (กันค่าเพี้ยนจากไฟล์ที่ถูกแก้) */
+const size = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= 1000 ? v : null)
 const ref = (v: unknown) => (typeof v === 'string' && v ? v : null)
 const oneOf = <T extends string>(v: unknown, list: readonly T[], fallback: T): T => (list.includes(v as T) ? (v as T) : fallback)
 
@@ -83,6 +85,7 @@ const CLEAN: Record<TableName, (r: Record<string, unknown>) => Record<string, un
     currentPage: num(r.currentPage),
     placeId: ref(r.placeId),
     position: num(r.position) ?? 0,
+    ...(r.row === 1 && { row: 1 }),
     takenAt: num(r.takenAt),
     takenFrom: ref(r.takenFrom),
     finishedAt: num(r.finishedAt),
@@ -96,7 +99,12 @@ const CLEAN: Record<TableName, (r: Record<string, unknown>) => Record<string, un
     boughtFrom: str(r.boughtFrom),
     signed: r.signed === true,
   }),
-  bookcases: (r) => ({ name: str(r.name), room: str(r.room), ...(look(r.look) && { look: look(r.look) }) }),
+  bookcases: (r) => ({
+    name: str(r.name),
+    room: str(r.room),
+    ...(look(r.look) && { look: look(r.look) }),
+    ...(size(r.shelfWidth) !== null && { shelfWidth: size(r.shelfWidth) }),
+  }),
   places: (r) =>
     ['shelf', 'drawer', 'pile', 'box'].includes(r.kind as string)
       ? {
@@ -107,6 +115,8 @@ const CLEAN: Record<TableName, (r: Record<string, unknown>) => Record<string, un
           location: str(r.location),
           label: str(r.label),
           ...(look(r.look) && { look: look(r.look) }),
+          ...(size(r.width) !== null && { width: size(r.width) }),
+          ...(r.rows === 2 && { rows: 2 }),
         }
       : null,
   sessions: (r) =>
@@ -245,7 +255,7 @@ export async function repair(db: GongDongDB, now = Date.now(), fromSync = false)
     let next = books.filter((b) => b.placeId === null).reduce((m, b) => Math.max(m, b.position + 1), 0)
     for (const b of books) {
       const patch: Record<string, unknown> = {}
-      if (b.placeId && !places.has(b.placeId)) Object.assign(patch, { placeId: null, position: next++ })
+      if (b.placeId && !places.has(b.placeId)) Object.assign(patch, { placeId: null, position: next++, row: 0 })
       if (b.seriesId && !series.has(b.seriesId)) Object.assign(patch, { seriesId: null, seriesNo: null })
       if (Object.keys(patch).length) {
         await db.books.update(b.id, { ...patch, updatedAt: now })

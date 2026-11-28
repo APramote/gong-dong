@@ -10,6 +10,8 @@ import { FieldsForm } from '../components/FieldsForm'
 import { bookcaseFields } from '../placeFields'
 import { BookRow } from '../components/BookRow'
 import type { Pick3D } from '../three/scene'
+import { rowOf, rowsOf } from '../lib/capacity'
+import { readWidth } from '../components/ShelfSize'
 import { t } from '../th'
 
 const Storage3D = lazy(() => import('../three/Storage3D'))
@@ -37,6 +39,7 @@ export function BookcaseViewPage() {
   const onShelf = shelves.map((s) =>
     books.filter((b) => b.placeId === s.id && !b.takenAt).sort((a, b) => a.position - b.position),
   )
+  const twoRows = (i: number) => rowsOf(shelves[i]) === 2
   const drawers = places.filter((p) => p.kind === 'drawer' && p.bookcaseId === id)
   const inPlace = (pid: string) =>
     books.filter((b) => b.placeId === pid && !b.takenAt).sort((a, b) => a.position - b.position)
@@ -70,7 +73,9 @@ export function BookcaseViewPage() {
         <Suspense fallback={null}>
           <Storage3D
             model={{
-              shelves: onShelf.map((row) => row.map(as3D)),
+              shelves: onShelf.map((row, i) => row.filter((b) => !twoRows(i) || rowOf(b) === 0).map(as3D)),
+              back: onShelf.map((row, i) => (twoRows(i) ? row.filter((b) => rowOf(b) === 1).map(as3D) : [])),
+              shelfWidth: bookcase.shelfWidth ?? null,
               drawers: drawers.map((d) => ({ id: d.id, books: inPlace(d.id).map(as3D) })),
               look,
               doorsOpen,
@@ -125,6 +130,19 @@ export function BookcaseViewPage() {
             look={draft}
             onChange={changeShape}
           />
+          <label>
+            {t.shelf.widthCase}
+            <input
+              inputMode="decimal"
+              defaultValue={bookcase.shelfWidth ?? ''}
+              placeholder={t.shelf.notSet}
+              onBlur={(e) => {
+                const width = readWidth(e.target.value)
+                if (width !== (bookcase.shelfWidth ?? null)) repo.setShelfWidth(id, width)
+              }}
+            />
+            <span className="muted">{t.shelf.widthCaseHint}</span>
+          </label>
         </div>
       )}
 

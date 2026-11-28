@@ -1,5 +1,6 @@
 import type { Book, Bookcase, Place, ReadingSession } from '../db/types'
 import { placeLabel } from '../placeLabel'
+import { footprint } from './capacity'
 
 const DAY = 24 * 60 * 60 * 1000
 const YEAR = 365 * DAY
@@ -286,6 +287,8 @@ export function buildLayoutPrompt(
   bookcases: Bookcase[],
   categoryOf: Map<string, string>,
   mode: OrganizeMode = 'minimal',
+  /** ที่เก็บที่รู้ความกว้าง → จุได้ประมาณกี่เล่ม */
+  fits: Map<string, number> = new Map(),
 ): LayoutInput {
   // กองไม่อยู่ในการจัดระเบียบ: ไม่ส่งกองเป็นที่เก็บ และไม่นับหนังสือในกอง
   const pile = new Set(places.filter((p) => p.kind === 'pile').map((p) => p.id))
@@ -301,7 +304,8 @@ export function buildLayoutPrompt(
     const extra = [p.label && `label ${JSON.stringify(p.label)}`, p.location && `at ${JSON.stringify(p.location)}`]
       .filter(Boolean)
       .join(', ')
-    return `${code} | ${p.kind} | ${JSON.stringify(placeLabel(p, bookcases))} | ${counts.get(p.id) ?? 0} books${extra ? ` | ${extra}` : ''}`
+    const room = fits.has(p.id) ? ` | holds about ${fits.get(p.id)} books` : ''
+    return `${code} | ${p.kind} | ${JSON.stringify(placeLabel(p, bookcases))} | ${counts.get(p.id) ?? 0} books${room}${extra ? ` | ${extra}` : ''}`
   })
   const groups = new Map<string, { total: number; active: number; where: Map<string, number> }>()
   for (const b of atHome) {
@@ -339,7 +343,8 @@ export function buildLayoutPrompt(
       : 'The reader wants a clean rearrangement, so ignore where books are now: give each category its own ' +
         'shelves, next to each other in the same bookcase where possible, and avoid sharing a shelf between ' +
         'categories unless they are small. ') +
-    'Give larger categories more shelves (roughly 20-40 books per shelf), put categories with many books still ' +
+    'Give larger categories more shelves (respect "holds about N books" where given, otherwise assume roughly ' +
+    '20-40 books per shelf), put categories with many books still ' +
     'to read in easy-to-reach shelves, and never use a box here. Use only the codes listed above and ' +
     'copy category names exactly.\n' +
     '2. "box": the code of the one box best suited for books finished or dropped long ago, or an empty string if ' +
@@ -390,6 +395,8 @@ export const R = {
 
 export interface PlanOptions {
   mode: OrganizeMode
+  /** ที่เก็บที่รู้ความกว้าง → พื้นที่ทั้งหมดเป็นเซนติเมตร (ความกว้าง × จำนวนแถว) */
+  capacity?: Map<string, number>
   /** id ชุด → ชื่อชุด (ใช้ในเหตุผลของการย้าย) */
   seriesName?: Map<string, string>
   now?: number
@@ -452,14 +459,18 @@ export function planMoves(
     return { key, series: sid && list.length > 1 ? (options.seriesName?.get(sid) || 'เดียวกัน') : '', books: list, category }
   })
 
+  // ที่ว่างของแต่ละที่เก็บ: รู้ความกว้างชั้นก็คิดเป็นเซนติเมตรจากความหนาของหนังสือ ไม่รู้ก็นับเป็นเล่ม (ประมาณ 40 เล่มต่อชั้น)
+  const capOf = (id: string) => options.capacity?.get(id) ?? SHELF_ROOM
+  const size = (b: Book, id: string) => (options.capacity?.has(id) ? footprint(b) : 1)
+  const sizeAt = (list: Book[], id: string) => list.reduce((n, b) => n + size(b, id), 0)
   const load = new Map<string, number>()
-  for (const b of atHome) if (b.placeId) load.set(b.placeId, (load.get(b.placeId) ?? 0) + 1)
+  for (const b of atHome) if (b.placeId) load.set(b.placeId, (load.get(b.placeId) ?? 0) + size(b, b.placeId))
   const moves: OrganizePlan['moves'] = []
   const send = (b: Book, to: string, reason: string) => {
     // เล่มหนึ่งถูกวางแผนย้ายได้ครั้งเดียว (ครั้งแรกชนะ) และไม่ย้ายไปที่เดิม
     if (b.placeId === to || moves.some((m) => m.bookId === b.id)) return
-    if (b.placeId) load.set(b.placeId, (load.get(b.placeId) ?? 1) - 1)
-    load.set(to, (load.get(to) ?? 0) + 1)
+    if (b.placeId) load.set(b.placeId, Math.max(0, (load.get(b.placeId) ?? 0) - size(b, b.placeId)))
+    load.set(to, (load.get(to) ?? 0) + size(b, to))
     moves.push({ bookId: b.id, toPlaceId: to, reason })
   }
   const active = (b: Book) => b.status === 'dong' || b.status === 'reading'
@@ -513,7 +524,7 @@ export function planMoves(
     const filled = new Map<string, number>()
     for (const b of atHome) {
       const at = now2.get(b.id) ?? b.placeId
-      if (at && !moving.has(b.id)) filled.set(at, (filled.get(at) ?? 0) + 1)
+      if (at && !moving.has(b.id)) filled.set(at, (filled.get(at) ?? 0) + size(b, at))
     }
     const used = (id: string) => filled.get(id) ?? 0
     for (const [category, targets] of layout) {
@@ -522,11 +533,11 @@ export function planMoves(
         .sort((a, b) => (a.series || a.books[0].title).localeCompare(b.series || b.books[0].title, 'th'))
       let at = 0
       for (const u of mine) {
-        const fits = (id: string) => used(id) === 0 || used(id) + u.books.length <= SHELF_ROOM
+        const fits = (id: string) => used(id) === 0 || used(id) + sizeAt(u.books, id) <= capOf(id)
         while (at < targets.length - 1 && !fits(targets[at])) at++
         // ที่เก็บของหมวดเต็มหมดแล้ว: ใช้ที่ที่ว่างที่สุดในกลุ่ม ไม่กองทั้งหมดไว้ที่สุดท้าย
-        const to = fits(targets[at]) ? targets[at] : targets.reduce((best, id) => (used(id) < used(best) ? id : best))
-        filled.set(to, used(to) + u.books.length)
+        const to = fits(targets[at]) ? targets[at] : targets.reduce((best, id) => (used(id) / capOf(id) < used(best) / capOf(best) ? id : best))
+        filled.set(to, used(to) + sizeAt(u.books, to))
         for (const b of u.books) send(b, to, why(u, b))
       }
     }
@@ -550,17 +561,17 @@ export function planMoves(
     for (const u of placed) {
       const targets = layout.get(u.category)!
       const home = homes(u.category)
-      const pick = (need: number) =>
-        targets.find((id) => (load.get(id) ?? 0) + need <= SHELF_ROOM) ??
-        targets.reduce((best, id) => ((load.get(id) ?? 0) < (load.get(best) ?? 0) ? id : best))
+      const pick = (incoming: Book[]) =>
+        targets.find((id) => (load.get(id) ?? 0) + sizeAt(incoming.filter((b) => b.placeId !== id), id) <= capOf(id)) ??
+        targets.reduce((best, id) => ((load.get(id) ?? 0) / capOf(id) < (load.get(best) ?? 0) / capOf(best) ? id : best))
       if (u.books.length === 1) {
         const b = u.books[0]
-        if (!b.placeId || !home.has(b.placeId)) send(b, pick(1), why(u, b))
+        if (!b.placeId || !home.has(b.placeId)) send(b, pick([b]), why(u, b))
         continue
       }
       // ชุด: ไปรวมกันที่ที่เล่มส่วนใหญ่อยู่ (ถ้าที่นั้นเป็นบ้านของหมวด) ไม่อย่างนั้นหาที่ใหม่ให้ทั้งชุด
       const here = u.books.map((b) => b.placeId).filter((id): id is string => Boolean(id && home.has(id)))
-      const anchor = here.length ? mostCommon(here) : pick(u.books.length)
+      const anchor = here.length ? mostCommon(here) : pick(u.books)
       for (const b of u.books) send(b, anchor, why(u, b))
     }
   }
