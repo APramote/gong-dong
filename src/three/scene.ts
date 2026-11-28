@@ -16,6 +16,8 @@ export interface BookcaseModel {
   backView?: boolean
   /** ชั้นไหนวางซ้อนสองแถว (ลำดับเดียวกับ shelves) */
   twoRows?: boolean[]
+  /** id ของชั้น (ลำดับเดียวกับ shelves) มีแล้วแตะป้ายหรือที่ว่างของชั้นเพื่อเลือกชั้นได้ */
+  shelfIds?: string[]
   /** ความกว้างด้านในของชั้น (ซม.) ถ้ารู้ ใช้เป็นความกว้างของตู้จริง */
   shelfWidth?: number | null
   /** ลิ้นชักที่เป็นที่เก็บจริง เรียงจากแถวล่างสุด ซ้ายไปขวา (ไม่มี id = ตัวอย่าง แตะไม่ได้) */
@@ -32,7 +34,7 @@ export interface PileModel {
 }
 
 /** สิ่งที่แตะเลือกได้ในตู้ */
-export type Pick3D = { kind: 'book' | 'drawer'; id: string }
+export type Pick3D = { kind: 'book' | 'drawer' | 'shelf'; id: string }
 
 /** สีเริ่มต้นเมื่อหนังสือไม่มีสีจากรูป เลือกตาม id เพื่อให้สีคงที่ */
 const PALETTE = ['#8c3b2e', '#2f5d62', '#c9a227', '#4a4e8c', '#6b8e4e', '#a0522d', '#3d3d3d', '#b5654a', '#5b7fa6', '#7a5c99']
@@ -300,11 +302,29 @@ function buildBookcase(model: BookcaseModel): Built {
   for (let i = 0; i < levels; i++) {
     const floor = shelfBase + i * (SHELF_SPACE + BOARD)
     if (i < levels - 1) part(innerW, BOARD, depth, 0, floor + SHELF_SPACE + BOARD / 2, 0)
+    // แตะที่ว่างของชั้น (ผนังหลังหรือเหนือหนังสือ) เพื่อเลือกชั้น: แผ่นใสชิดผนังหลัง หนังสืออยู่หน้ากว่าจึงถูกเลือกก่อน
+    const shelfId = model.shelfIds?.[i]
+    if (shelfId) {
+      const pane = new THREE.Mesh(
+        new THREE.PlaneGeometry(innerW, SHELF_SPACE),
+        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+      )
+      pane.position.set(0, floor + SHELF_SPACE / 2, -depth / 2 + 1)
+      pane.userData = { shelfId }
+      root.add(pane)
+      pickable.push(pane)
+    }
     // ป้ายของชั้น: ลอยอยู่ข้างตู้ ระดับเดียวกับชั้น มีเส้นโยงเข้าหาชั้น ไม่บังหนังสือ
     // ตู้บานเดียว (บานพับอยู่ซ้าย เปิดออกทางซ้าย) ป้ายอยู่ทางขวา เปิดบานแล้วยังเห็นป้าย — ตู้อื่นป้ายอยู่ทางซ้าย
     const lines = model.labels?.[i]?.filter(Boolean) ?? []
     if (lines.length) {
       const s = sign(lines, signSide > 0 ? 'left' : 'right')
+      // แตะป้ายเพื่อเลือกชั้น
+      if (shelfId) {
+        const plate = s.group.children[0] as THREE.Mesh
+        plate.userData = { shelfId }
+        pickable.push(plate)
+      }
       s.group.position.set(signSide * (outerW / 2 + SIGN_GAP), floor + SHELF_SPACE / 2, depth / 2 - 2)
       const link = new THREE.Mesh(new THREE.BoxGeometry(SIGN_GAP, 0.3, 0.3), new THREE.MeshStandardMaterial({ color: '#b9ab94' }))
       link.position.set(signSide * (outerW / 2 + SIGN_GAP / 2), floor + SHELF_SPACE / 2, depth / 2 - 2)

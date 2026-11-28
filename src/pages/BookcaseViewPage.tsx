@@ -83,6 +83,12 @@ export function BookcaseViewPage() {
   const pickShelf = pick && shelves.find((s) => s.id === pick.placeId)
   const drawer = selected?.kind === 'drawer' ? drawers.find((d) => d.id === selected.id) : undefined
   const drawerBooks = drawer ? inPlace(drawer.id) : []
+  // แตะป้ายหรือที่ว่างของชั้น: แสดงรายการหนังสือของชั้นนั้นเหมือนลิ้นชัก (แถวหน้าก่อน แล้วแถวหลัง)
+  const shelfPick = selected?.kind === 'shelf' ? shelves.find((x) => x.id === selected.id) : undefined
+  const shelfBooks = shelfPick ? [...inPlace(shelfPick.id)].sort((a, b) => rowOf(a) - rowOf(b) || a.position - b.position) : []
+  const panel = drawer ?? shelfPick
+  const panelBooks = drawer ? drawerBooks : shelfBooks
+  const panelTwoRows = Boolean(shelfPick && rowsOf(shelfPick) === 2)
 
   /** สลับแถวที่ดู: เล่มที่เลือกค้างไว้อาจกลายเป็นเล่มที่จางอยู่ ล้างการเลือก */
   const switchRow = (back: boolean) => {
@@ -135,13 +141,14 @@ export function BookcaseViewPage() {
               labels: shelfLabels,
               backView: backView && anyTwoRows && backCount > 0,
               twoRows: shelves.map((_, i) => twoRows(i)),
+              shelfIds: shelves.map((x) => x.id),
               shelfWidth: bookcase.shelfWidth ?? null,
               drawers: drawers.map((d) => ({ id: d.id, books: inPlace(d.id).map(as3D) })),
               look,
               doorsOpen,
             }}
             label={t.view.label3d(bookcase.name, shelves.length, drawers.length, onShelf.flat().length)}
-            selected={pick || drawer ? selected : null}
+            selected={pick || drawer || shelfPick ? selected : null}
             onSelect={setSelected}
           />
         </Suspense>
@@ -242,22 +249,23 @@ export function BookcaseViewPage() {
         </div>
       )}
 
-      {drawer && (
+      {panel && (
         <div className={`card picked${full ? ' floating' : ''}`}>
           <div className="section-head">
-            <h3>{drawer.name}</h3>
-            <Link className="btn small" to={`/place/${drawer.id}`}>
-              {t.view.openDrawer}
+            <h3>{panel.name}</h3>
+            <Link className="btn small" to={`/place/${panel.id}`}>
+              {drawer ? t.view.openDrawer : t.view.openShelf}
             </Link>
           </div>
-          {drawerBooks.length === 0 ? (
-            <p className="muted">{t.view.drawerEmpty}</p>
+          {panelBooks.length === 0 ? (
+            <p className="muted">{drawer ? t.view.drawerEmpty : t.view.shelfEmpty}</p>
           ) : (
             <ul className="list">
-              {drawerBooks.map((b) => (
+              {panelBooks.map((b) => (
                 <BookRow
                   key={b.id}
                   book={b}
+                  sub={panelTwoRows ? (rowOf(b) === 1 ? t.shelf.back : t.shelf.front) : undefined}
                   actions={
                     <button
                       className="btn small"
@@ -275,8 +283,8 @@ export function BookcaseViewPage() {
             </ul>
           )}
           <div className="actions">
-            <Link className="btn primary" to={`/add?place=${drawer.id}`}>
-              {t.view.addToDrawer}
+            <Link className="btn primary" to={`/add?place=${panel.id}`}>
+              {drawer ? t.view.addToDrawer : t.view.addToShelf}
             </Link>
           </div>
         </div>

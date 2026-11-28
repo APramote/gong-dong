@@ -107,7 +107,13 @@ export default function Storage3D({
       ray.setFromCamera(ndc, camera)
       const data = ray.intersectObjects(s.built.pickable, false)[0]?.object.userData
       onSelectRef.current?.(
-        data?.bookId ? { kind: 'book', id: data.bookId } : data?.drawerId ? { kind: 'drawer', id: data.drawerId } : null,
+        data?.bookId
+          ? { kind: 'book', id: data.bookId }
+          : data?.drawerId
+            ? { kind: 'drawer', id: data.drawerId }
+            : data?.shelfId
+              ? { kind: 'shelf', id: data.shelfId }
+              : null,
       )
     }
     renderer.domElement.addEventListener('pointerdown', onDown)
