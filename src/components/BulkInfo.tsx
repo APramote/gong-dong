@@ -5,6 +5,7 @@ import { enrich } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
 import { AiError } from '../lib/aiCommon'
 import { normalizeIsbn } from '../lib/isbn'
+import { makeCover } from '../lib/aiCover'
 import { t } from '../th'
 import { Ring } from './Ring'
 
@@ -122,7 +123,17 @@ export function BulkInfo({
         if (!r.found) missing++
         else {
           const { found: _f, isbn, ...rest } = r
-          const n = await repo.fillBook(b.id, { ...rest, isbn: normalizeIsbn(isbn) ?? '' })
+          // เล่มที่ยังไม่มีรูปปก: สร้างปกจำลอง (มีแถบกำกับ AI ในรูป)
+          let coverAi = false
+          if (!(await repo.getCover(b.id))) {
+            try {
+              await repo.setCover(b.id, await makeCover(b.title, b.authors || rest.authors, rest.coverColor))
+              coverAi = true
+            } catch {
+              // วาดปกไม่ได้ ข้ามไป ข้อมูลอื่นยังเติมได้
+            }
+          }
+          const n = await repo.fillBook(b.id, { ...rest, isbn: normalizeIsbn(isbn) ?? '', coverAi })
           if (n) filled++
           else nothing++
         }

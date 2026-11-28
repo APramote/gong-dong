@@ -45,6 +45,12 @@ export interface Enrichment {
   blurb: string
   reviewSummary: string
   links: { title: string; url: string }[]
+  /** คำโปรยนี้ AI เขียนเอง (หาคำโปรยจริงไม่เจอ) */
+  blurbAi: boolean
+  /** แท็กที่ AI ตั้งให้จากเนื้อหาของหนังสือ */
+  tags: string[]
+  /** สีปก (#rrggbb): สีหลักของปกจริงถ้ารู้ ไม่รู้ก็เป็นสีที่เข้ากับหนังสือ — '' = ไม่ได้ให้มา */
+  coverColor: string
 }
 
 const RECOGNIZE = {
@@ -107,10 +113,15 @@ export function enrichPrompt(book: {
     '"found" (boolean: false if you cannot confidently identify this exact book),\n' +
     '"authors", "publisher", "year" (4 digits), "pages" (number or null), "isbn", "category",\n' +
     '"synopsis" (what the book is about, 2-4 sentences, written in Thai),\n' +
-    '"blurb" (the publisher\'s back-cover or marketing blurb, quoted in its original language, max 3 sentences),\n' +
+    '"blurb" (the publisher\'s back-cover or marketing blurb, quoted in its original language, max 3 sentences; ' +
+    'if you cannot find a real one, write a short inviting blurb of 1-2 sentences in Thai based only on the synopsis),\n' +
+    '"blurbWritten" (boolean: true if you wrote the blurb yourself, false if it is quoted from a source),\n' +
+    '"tags" (array of 3-5 short topic tags in Thai that you choose from what the book is about, e.g. ["ประวัติศาสตร์","ชีวประวัติ"]),\n' +
+    '"coverColor" (hex colour like "#7a4b2a": the dominant colour of the real cover if you know it, otherwise a colour that suits the book),\n' +
     '"reviewSummary" (what readers and critics say: main praise and criticism, 2-3 sentences, written in Thai; ' +
     'summarise, never copy a review).\n' +
-    'Use an empty string for anything you did not find. Never guess or invent facts. ' +
+    'Use an empty string for anything you did not find. Never guess or invent facts ' +
+    '(the self-written blurb, the tags and the colour are the only things you may compose yourself). ' +
     'Keep names in the script used by the book (Thai stays Thai).'
   )
 }
@@ -158,6 +169,11 @@ export function parseEnrichmentText(
     blurb: clean(raw?.blurb),
     reviewSummary: clean(raw?.reviewSummary),
     links,
+    blurbAi: raw?.blurbWritten === true && Boolean(clean(raw?.blurb)),
+    tags: Array.isArray(raw?.tags)
+      ? [...new Set((raw.tags as unknown[]).map((x) => clean(x).replace(/^#/, '').slice(0, 30)).filter(Boolean))].slice(0, 5)
+      : [],
+    coverColor: /^#[0-9a-f]{6}$/i.test(str(raw?.coverColor)) ? str(raw?.coverColor).toLowerCase() : '',
   }
 }
 

@@ -14,6 +14,8 @@ export interface BookLink {
 
 export type ReadingStatus = 'dong' | 'reading' | 'done' | 'dropped'
 
+export type AiField = 'blurb' | 'tags' | 'cover'
+
 export interface Book extends SyncFields {
   title: string
   authors: string
@@ -44,6 +46,8 @@ export interface Book extends SyncFields {
   takenFrom: string | null
   /** เวลาที่อ่านจบ ใช้ทำสถิติ */
   finishedAt: number | null
+  /** ช่องที่ AI สร้างขึ้นเอง ไม่ใช่ข้อมูลที่ค้นเจอ ('blurb' คำโปรย · 'tags' แท็ก · 'cover' ปกจำลอง) ใช้กำกับป้าย AI — ผู้ใช้แก้ช่องนั้นเองแล้วป้ายหายไป */
+  aiFields?: AiField[]
   /** คะแนนความชอบ: 1 ถึง 5 = ดาว (ชอบ) · -1 ถึง -5 = มะเขือ (ไม่ชอบ) · ไม่มีหรือ 0 = ยังไม่ให้คะแนน */
   rating?: number
   /** แถวบนชั้นที่วางซ้อนสองแถว: 0 = แถวหน้า (ค่าเริ่มต้น) 1 = แถวหลัง */

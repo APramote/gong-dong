@@ -7,6 +7,9 @@ import { PlaceSelect } from '../components/PlaceSelect'
 import { CategorySelect } from '../components/CategorySelect'
 import { SeriesSelect } from '../components/SeriesSelect'
 import { QuoteSection } from '../components/QuoteSection'
+import { AiBadge } from '../components/AiBadge'
+import { makeCover } from '../lib/aiCover'
+import type { AiField } from '../db/types'
 import { Rating } from '../components/Rating'
 import { ReturnForm } from '../components/ReturnForm'
 import { CheckInForm } from '../components/CheckInForm'
@@ -159,6 +162,10 @@ export function BookFormPage() {
   const set = <K extends keyof BookInput>(key: K, value: BookInput[K]) =>
     setForm((f) => ({ ...f, [key]: value }))
 
+  // ป้าย AI ของช่องที่ AI สร้างเอง: ผู้ใช้แก้ช่องนั้นแล้วป้ายหายไป (ถือว่าเป็นของผู้ใช้แล้ว)
+  const isAi = (k: AiField) => Boolean(form.aiFields?.includes(k))
+  const dropAi = (k: AiField) => setForm((f) => (f.aiFields?.includes(k) ? { ...f, aiFields: f.aiFields.filter((x) => x !== k) } : f))
+
   /** บันทึกฟอร์ม คืน id ของหนังสือ หรือ null ถ้าข้อมูลไม่ครบ */
   async function save(): Promise<string | null> {
     const title = form.title.trim()
@@ -233,10 +240,30 @@ export function BookFormPage() {
     try {
       const r = await enrich(form)
       if (!r.found) return setAiMsg({ ok: false, text: t.book.aiNotFound })
-      const { found: _f, isbn, category, ...rest } = r
+      const { found: _f, isbn, category, blurbAi, tags, coverColor: aiColor, ...rest } = r
       if (category && !form.categoryId) setCatSuggestion(category)
-      const n = fillEmpty({ ...rest, isbn: normalizeIsbn(isbn) ?? '' })
-      setAiMsg({ ok: true, text: n ? t.book.aiFilled(n) : t.book.aiNothingNew })
+      // สิ่งที่ AI สร้างเอง (ไม่ใช่ข้อมูลที่ค้นเจอ): จดไว้เพื่อกำกับป้าย AI
+      const made: AiField[] = []
+      if (!form.blurb && rest.blurb && blurbAi) made.push('blurb')
+      let extra = 0
+      if (!tagsText.trim() && tags.length) {
+        setTagsText(tags.join(', '))
+        made.push('tags')
+        extra++
+      }
+      // ยังไม่มีรูปปก: สร้างปกจำลอง (มีแถบกำกับ AI ในรูป) บันทึกเมื่อกดบันทึกฟอร์ม
+      if (!coverUrl) {
+        try {
+          setNewCover(await makeCover(form.title, form.authors || rest.authors, aiColor))
+          made.push('cover')
+          extra++
+        } catch {
+          // วาดปกไม่ได้ ข้ามไป
+        }
+      }
+      const n = fillEmpty({ ...rest, isbn: normalizeIsbn(isbn) ?? '', ...(aiColor && { spineColor: aiColor }) }) + extra
+      if (made.length) setForm((f) => ({ ...f, aiFields: [...new Set([...(f.aiFields ?? []), ...made])] }))
+      setAiMsg({ ok: true, text: n ? t.book.aiFilled(n) + (made.length ? ` ${t.book.aiMade}` : '') : t.book.aiNothingNew })
     } catch (e) {
       setAiMsg({ ok: false, text: aiErrorText(e) })
     } finally {
@@ -336,7 +363,7 @@ export function BookFormPage() {
 
     <form className="form" onSubmit={submit}>
       <div className="cover-edit">
-        {coverUrl ? <img className="cover" src={coverUrl} alt={t.book.cover} /> : <span className="cover" />}
+        {coverUrl ? <img className="cover" src={coverUrl} alt={isAi('cover') ? t.book.coverAi : t.book.cover} /> : <span className="cover" />}
         <div className="actions">
           <input
             ref={coverInput}
@@ -348,7 +375,10 @@ export function BookFormPage() {
             onChange={async (e) => {
               const file = e.target.files?.[0]
               e.target.value = ''
-              if (file) setNewCover(await resizeImage(file, 480))
+              if (file) {
+                setNewCover(await resizeImage(file, 480))
+                dropAi('cover')
+              }
             }}
           />
           <button type="button" className="btn small" onClick={() => coverInput.current?.click()}>
@@ -369,7 +399,14 @@ export function BookFormPage() {
             {t.book.pickCover}
           </button>
           {coverUrl && (
-            <button type="button" className="btn small danger" onClick={() => setNewCover(null)}>
+            <button
+              type="button"
+              className="btn small danger"
+              onClick={() => {
+                setNewCover(null)
+                dropAi('cover')
+              }}
+            >
               {t.book.removeCover}
             </button>
           )}
@@ -424,8 +461,17 @@ export function BookFormPage() {
           suggestion={catSuggestion}
         />
         <label>
-          {t.book.tags}
-          <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} />
+          <span>
+            {t.book.tags}
+            {isAi('tags') && <AiBadge />}
+          </span>
+          <input
+            value={tagsText}
+            onChange={(e) => {
+              setTagsText(e.target.value)
+              dropAi('tags')
+            }}
+          />
         </label>
       </div>
       <div className="cols">
@@ -501,8 +547,18 @@ export function BookFormPage() {
         <textarea rows={4} value={form.synopsis} onChange={(e) => set('synopsis', e.target.value)} />
       </label>
       <label>
-        {t.book.blurb}
-        <textarea rows={3} value={form.blurb} onChange={(e) => set('blurb', e.target.value)} />
+        <span>
+          {t.book.blurb}
+          {isAi('blurb') && <AiBadge />}
+        </span>
+        <textarea
+          rows={3}
+          value={form.blurb}
+          onChange={(e) => {
+            set('blurb', e.target.value)
+            dropAi('blurb')
+          }}
+        />
       </label>
       <label>
         {t.book.reviewSummary}

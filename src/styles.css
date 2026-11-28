@@ -2727,3 +2727,20 @@ body.no-scroll {
 .picked h3 .count {
   font-weight: 400;
 }
+
+/* ป้ายกำกับสิ่งที่ AI สร้างขึ้นเอง */
+.ai-badge {
+  display: inline-block;
+  margin: 0 6px;
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.5;
+  vertical-align: middle;
+}
+.row-blurb .ai-badge {
+  margin-left: 0;
+}

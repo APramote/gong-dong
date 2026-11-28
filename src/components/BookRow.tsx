@@ -4,6 +4,7 @@ import type { Book } from '../db/types'
 import { t } from '../th'
 import { CoverThumb } from './Cover'
 import { ratingText } from './Rating'
+import { AiBadge } from './AiBadge'
 
 /** แถวหนังสือ (memo: แถวที่ข้อมูลไม่เปลี่ยนไม่ต้องวาดใหม่ตอนพิมพ์ค้นหา) */
 export const BookRow = memo(function BookRow({
@@ -31,7 +32,12 @@ export const BookRow = memo(function BookRow({
   const more = detail && (
     <>
       {facts && <span className="row-sub">{facts}</span>}
-      {blurb && <span className="row-blurb">{blurb}</span>}
+      {blurb && (
+        <span className="row-blurb">
+          {book.blurb && book.aiFields?.includes('blurb') && <AiBadge />}
+          {blurb}
+        </span>
+      )}
     </>
   )
   // โหมดเลือกหลายเล่ม: ทั้งแถวเป็นช่องติ๊ก แตะตรงไหนก็เลือก (ไม่พาไปหน้าหนังสือ การเลือกจะได้ไม่หาย)

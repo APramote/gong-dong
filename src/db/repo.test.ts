@@ -638,3 +638,22 @@ test('จัดหลายเล่มเข้าชุด: ใส่เลข
   expect(await r.setSeriesMany([b, c], null)).toBe(2)
   expect(await no(b)).toEqual([null, null])
 })
+
+test('เติมข้อมูลจาก AI: แท็กและคำโปรยที่ AI สร้างถูกจดไว้ ของที่ผู้ใช้มีอยู่ไม่ถูกแตะ', async () => {
+  const db = new GongDongDB(`fill-ai-${n++}`)
+  const r = createRepo(db)
+  const a = await r.addBook({ ...emptyBook, title: 'ก' })
+  expect(await r.fillBook(a, { blurb: 'ชวนอ่าน', blurbAi: true, tags: ['ประวัติศาสตร์', 'ชีวประวัติ'], coverColor: '#7a4b2a', coverAi: true })).toBe(4)
+  const got = (await r.getBook(a))!
+  expect(got).toMatchObject({ blurb: 'ชวนอ่าน', tags: ['ประวัติศาสตร์', 'ชีวประวัติ'], spineColor: '#7a4b2a' })
+  expect([...(got.aiFields ?? [])].sort()).toEqual(['blurb', 'cover', 'tags'])
+  // เล่มที่มีแท็กและคำโปรยของตัวเอง: ไม่เติม ไม่ติดป้าย
+  const b = await r.addBook({ ...emptyBook, title: 'ข', tags: ['ของฉัน'], blurb: 'คำโปรยจริง' })
+  await r.fillBook(b, { blurb: 'AI', blurbAi: true, tags: ['x'] })
+  expect((await r.getBook(b))!).toMatchObject({ tags: ['ของฉัน'], blurb: 'คำโปรยจริง' })
+  expect((await r.getBook(b))!.aiFields ?? []).toEqual([])
+  // คำโปรยจริงจากแหล่งข้อมูล: ไม่ติดป้าย AI
+  const c = await r.addBook({ ...emptyBook, title: 'ค', tags: ['t'] })
+  await r.fillBook(c, { blurb: 'จากสำนักพิมพ์', blurbAi: false })
+  expect((await r.getBook(c))!.aiFields ?? []).toEqual([])
+})

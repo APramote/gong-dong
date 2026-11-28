@@ -97,6 +97,7 @@ const CLEAN: Record<TableName, (r: Record<string, unknown>) => Record<string, un
     placeId: ref(r.placeId),
     position: num(r.position) ?? 0,
     ...(r.row === 1 && { row: 1 }),
+    ...(Array.isArray(r.aiFields) && { aiFields: r.aiFields.filter((x) => x === 'blurb' || x === 'tags' || x === 'cover') }),
     ...(typeof r.rating === 'number' && Number.isInteger(r.rating) && r.rating !== 0 && Math.abs(r.rating) <= 5 && { rating: r.rating }),
     takenAt: num(r.takenAt),
     takenFrom: ref(r.takenFrom),

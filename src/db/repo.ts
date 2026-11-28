@@ -36,6 +36,14 @@ export interface BookInfo {
   reviewSummary?: string
   links?: { title: string; url: string }[]
   category?: string
+  /** คำโปรยที่ส่งมา AI เขียนเอง */
+  blurbAi?: boolean
+  /** แท็กที่ AI ตั้งให้ */
+  tags?: string[]
+  /** สีปกที่ AI ให้มา (ใช้เมื่อเล่มยังไม่มีสีสัน) */
+  coverColor?: string
+  /** เพิ่งสร้างปกจำลองให้เล่มนี้ */
+  coverAi?: boolean
 }
 
 export interface ReturnInput {
@@ -642,9 +650,20 @@ export function createRepo(db: GongDongDB = defaultDb) {
           const match = alive(await db.categories.toArray()).find((c) => c.name.toLowerCase() === want)
           if (match) patch.categoryId = match.id
         }
+        // สิ่งที่ AI สร้างเอง: แท็ก (เมื่อเล่มยังไม่มีแท็ก) และจดไว้ว่าช่องไหน AI สร้าง
+        const ai = new Set(b.aiFields ?? [])
+        const tags = (info.tags ?? []).map((x) => x.trim()).filter(Boolean).slice(0, 5)
+        if (b.tags.length === 0 && tags.length) {
+          patch.tags = tags
+          ai.add('tags')
+        }
+        if (patch.blurb && info.blurbAi) ai.add('blurb')
+        if (info.coverAi) ai.add('cover')
+        if (!b.spineColor && info.coverColor && /^#[0-9a-f]{6}$/i.test(info.coverColor)) patch.spineColor = info.coverColor
         const n = Object.keys(patch).length
-        if (n) await db.books.update(id, { ...patch, updatedAt: Date.now() })
-        return n
+        if (ai.size !== (b.aiFields?.length ?? 0)) patch.aiFields = [...ai]
+        if (Object.keys(patch).length) await db.books.update(id, { ...patch, updatedAt: Date.now() })
+        return n + (info.coverAi ? 1 : 0)
       })
     },
 

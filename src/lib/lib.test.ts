@@ -661,3 +661,18 @@ test('เดาเลขเล่มจากชื่อเรื่อง', as
   expect(guessVolumes(['ชุด ก 2', 'ชุด ก 2'])).toEqual([null, null])
   expect(guessVolumes(['21 Lessons for the 21st Century'])).toEqual([null])
 })
+
+test('ผลค้นข้อมูลจาก AI: แยกคำโปรยที่ AI เขียนเอง แท็ก และสีปก', async () => {
+  const { parseEnrichmentText, enrichPrompt } = await import('./aiCommon')
+  const r = parseEnrichmentText(
+    JSON.stringify({ found: true, blurb: 'ชวนอ่าน', blurbWritten: true, tags: ['#ประวัติศาสตร์', 'ประวัติศาสตร์', ' ชีวประวัติ ', 7, ''], coverColor: '#7A4B2A', synopsis: 'ย่อ' }),
+    [],
+  )
+  expect(r).toMatchObject({ blurb: 'ชวนอ่าน', blurbAi: true, tags: ['ประวัติศาสตร์', 'ชีวประวัติ'], coverColor: '#7a4b2a' })
+  // คำโปรยจริง ไม่มีแท็ก สีผิดรูปแบบ
+  const q = parseEnrichmentText(JSON.stringify({ found: true, blurb: 'จริง', blurbWritten: false, tags: 'x', coverColor: 'red' }), [])
+  expect(q).toMatchObject({ blurbAi: false, tags: [], coverColor: '' })
+  // บอกว่าเขียนเองแต่ไม่มีคำโปรย: ไม่นับ
+  expect(parseEnrichmentText(JSON.stringify({ found: true, blurb: '', blurbWritten: true }), []).blurbAi).toBe(false)
+  expect(enrichPrompt({ title: 'ก', authors: '', publisher: '', isbn: '' })).toMatch(/blurbWritten/)
+})
