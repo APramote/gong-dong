@@ -2691,3 +2691,8 @@ body.no-scroll {
 .card.picked.floating {
   bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 }
+
+/* ข้อความผลการซิงก์มีหลายบรรทัด */
+#sync .ok {
+  white-space: pre-line;
+}

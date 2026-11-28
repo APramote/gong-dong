@@ -43,7 +43,7 @@ export function SyncCard() {
     try {
       const r = await syncNow(true, (done, total) => setBusy(t.sync.covers(done, total)))
       update({}) // อ่านบัญชีและเวลาซิงก์ล่าสุดที่เพิ่งบันทึก
-      if (r) setMsg({ ok: true, text: t.sync.done(r.pushed, r.pulled) })
+      if (r) setMsg({ ok: true, text: [t.sync.done(r.pushed, r.pulled), r.shared ? t.sync.shared[r.shared](Boolean(r.hasKey)) : ''].filter(Boolean).join('\n') })
     } catch (e) {
       setMsg({ ok: false, text: syncErrorText(e) })
     }

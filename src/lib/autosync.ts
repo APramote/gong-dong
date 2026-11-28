@@ -162,6 +162,8 @@ export async function syncNow(
     const shared = await syncShared(store, { load: loadSettings, save: saveSettings, defaults: defaultSettings })
     if (mine !== epoch) throw new Error('cancelled')
     if (shared === 'pulled' || shared === 'both') settingsVersion++
+    const after = loadSettings()
+    Object.assign(result, { shared, hasKey: Boolean(after.provider === 'claude' ? after.claudeKey : after.geminiKey) })
     // ระหว่างซิงก์ไม่มีการแก้ไขเพิ่ม = ไม่มีของค้างแล้ว (ถ้ามี จะซิงก์อีกรอบใน 1 นาที)
     if (read(DIRTY) === dirtyBefore) write(DIRTY, null)
     saveSettings({ ...loadSettings(), googleAccount: email, lastSyncAt: Date.now() })

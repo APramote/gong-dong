@@ -95,6 +95,12 @@ export function mergeShared(
 const same = (a: Shared, b: Shared) => SHARED_KEYS.every((k) => a[k] === b[k])
 
 /**
+ * ผลของการซิงก์การตั้งค่า: pulled = เครื่องนี้ได้ค่าใหม่ · pushed = ส่งขึ้น · both = ทั้งสองทาง · none = ตรงกันอยู่แล้ว
+ * absent = ยังไม่มีการตั้งค่าใน Drive และเครื่องนี้ก็ยังไม่มีอะไรให้ส่ง · off = ปิดสวิตช์ไว้ · newer = ไฟล์มาจากแอปรุ่นใหม่กว่า
+ */
+export type SharedResult = 'pulled' | 'pushed' | 'both' | 'none' | 'absent' | 'off' | 'newer'
+
+/**
  * ซิงก์การตั้งค่าร่วมกับ Drive คืน 'pulled' เมื่อเครื่องนี้ได้ค่าใหม่ 'pushed' เมื่อส่งขึ้น 'none' เมื่อไม่มีอะไรเปลี่ยน
  * ปิดสวิตช์ไว้ = ไม่อ่านและไม่เขียนไฟล์นี้เลย
  */
@@ -102,9 +108,9 @@ export async function syncShared(
   store: RemoteStore,
   io: { load: () => Settings; save: (s: Settings) => void; defaults: Settings },
   now = Date.now(),
-): Promise<'pulled' | 'pushed' | 'both' | 'none'> {
+): Promise<SharedResult> {
   const local = io.load()
-  if (!local.syncSettings) return 'none'
+  if (!local.syncSettings) return 'off'
   const mine = pickShared(local)
   let remote: Shared | null = null
   let remoteAt = 0
@@ -113,7 +119,7 @@ export async function syncShared(
     try {
       const file = JSON.parse(await (await store.get(SETTINGS_FILE))!.text()) as SharedFile
       // ไฟล์จากแอปรุ่นใหม่กว่า: ไม่อ่านและไม่เขียนทับ รอให้เครื่องนี้อัปเดตก่อน
-      if (typeof file?.version === 'number' && file.version > FILE_VERSION) return 'none'
+      if (typeof file?.version === 'number' && file.version > FILE_VERSION) return 'newer'
       if (file?.version === FILE_VERSION && typeof file.sharedAt === 'number') {
         remote = clean(file.values, mine, now)
         remoteAt = stamp(file.sharedAt, now)
@@ -123,7 +129,7 @@ export async function syncShared(
     }
   }
   // ยังไม่มีไฟล์ และเครื่องนี้ยังไม่มีอะไรให้แบ่ง (ไม่มี key และไม่เคยแก้การตั้งค่า): ไม่ต้องสร้างไฟล์
-  if (!remote && !local.sharedAt && !mine.geminiKey && !mine.claudeKey) return 'none'
+  if (!remote && !local.sharedAt && !mine.geminiKey && !mine.claudeKey) return 'absent'
   const merged = mergeShared(mine, local.sharedAt, remote, remoteAt, pickShared(io.defaults), now)
   const pull = !same(merged.values, mine)
   const push = !remote || !same(merged.values, remote) || merged.at !== remoteAt

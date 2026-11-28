@@ -41,6 +41,10 @@ export interface SyncResult {
   /** จำนวนรายการที่ส่งขึ้น / รับลงมา (รวมรูปปก) */
   pushed: number
   pulled: number
+  /** ผลของการซิงก์การตั้งค่า AI ที่ใช้ร่วมกัน (มีเมื่อซิงก์ผ่านตัวซิงก์หลัก) */
+  shared?: import('./sharedSettings').SharedResult
+  /** หลังซิงก์ เครื่องนี้มี API key ของผู้ให้บริการที่เลือกอยู่หรือไม่ */
+  hasKey?: boolean
 }
 
 export const DATA_FILE = 'data.json'

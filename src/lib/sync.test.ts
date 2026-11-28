@@ -298,7 +298,7 @@ test('การตั้งค่า AI ใช้ร่วมกันทุก�
   expect(pc.get().geminiKey).toBe('')
   // ปิดสวิตช์: ไม่อ่านไม่เขียน
   const off = device({ syncSettings: false, geminiKey: 'LOCAL-ONLY', geminiKeyAt: T + 50, sharedAt: T + 50 })
-  expect(await syncShared(drive, off.io, T + 51)).toBe('none')
+  expect(await syncShared(drive, off.io, T + 51)).toBe('off')
   expect(JSON.parse(await drive.files.get(SETTINGS_FILE)!.text()).values.geminiKey).toBe('')
   // ไฟล์ที่ถูกแก้: ค่าผิดชนิดถูกทิ้ง เวลาในอนาคตไกลถูกจำกัด (ไม่ชนะตลอดไป)
   drive.files.set(SETTINGS_FILE, new Blob([JSON.stringify({ version: 1, sharedAt: T * 5, values: { provider: 'evil', maxCategories: -3, geminiKey: 'NEW', geminiKeyAt: T * 5 } })]))
@@ -307,6 +307,8 @@ test('การตั้งค่า AI ใช้ร่วมกันทุก�
   expect(pc.get().sharedAt).toBeLessThanOrEqual(T + 60 + 86400000)
   // ไฟล์จากแอปรุ่นใหม่กว่า: ไม่อ่าน ไม่เขียนทับ
   drive.files.set(SETTINGS_FILE, new Blob([JSON.stringify({ version: 2, sharedAt: 1, values: {} })]))
-  expect(await syncShared(drive, pc.io, T + 70)).toBe('none')
+  expect(await syncShared(drive, pc.io, T + 70)).toBe('newer')
+  // เครื่องเปล่ากับ Drive ที่ยังไม่มีไฟล์: บอกว่ายังไม่มี
+  expect(await syncShared(memoryStore(), device({}).io, T + 71)).toBe('absent')
   expect(JSON.parse(await drive.files.get(SETTINGS_FILE)!.text()).version).toBe(2)
 })
