@@ -574,6 +574,24 @@ export function createRepo(db: GongDongDB = defaultDb) {
       await db.bookcases.update(bookcaseId, { shelfWidth: width, updatedAt: Date.now() })
     },
 
+    /** ตั้งจำนวนแถวของทุกชั้นในตู้ (กลับเป็นแถวเดียว หนังสือแถวหลังกลับมาแถวหน้า) */
+    async setBookcaseRows(bookcaseId: string, rows: 1 | 2): Promise<void> {
+      await db.transaction('rw', db.places, db.books, async () => {
+        const now = Date.now()
+        const shelves = alive(await db.places.where('bookcaseId').equals(bookcaseId).toArray()).filter((p) => p.kind === 'shelf')
+        for (const p of shelves) {
+          if ((p.rows ?? 1) === rows) continue
+          await db.places.update(p.id, { rows, updatedAt: now })
+          if (rows === 1)
+            await db.books
+              .where('placeId')
+              .equals(p.id)
+              .filter((b) => b.row === 1)
+              .modify({ row: 0, updatedAt: now })
+        }
+      })
+    },
+
     /** ตั้งความกว้างเฉพาะชั้น และจำนวนแถว (เปลี่ยนกลับเป็นแถวเดียว หนังสือแถวหลังกลับมาแถวหน้า) */
     async setShelfShape(placeId: string, shape: { width?: number | null; rows?: 1 | 2 }): Promise<void> {
       await db.transaction('rw', db.places, db.books, async () => {

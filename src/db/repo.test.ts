@@ -518,3 +518,17 @@ test('ชั้นวางซ้อนสองแถว: ย้ายไปแ
   await r.setShelfShape(shelf.id, { rows: 1 })
   expect((await r.booksIn(shelf.id)).every((b) => (b.row ?? 0) === 0)).toBe(true)
 })
+
+test('ตั้งสองแถวทั้งตู้: ทุกชั้นเปลี่ยนตาม และกลับเป็นแถวเดียวพาเล่มแถวหลังมาแถวหน้า', async () => {
+  const db = new GongDongDB(`caserows-${n++}`)
+  const r = createRepo(db)
+  const caseId = await r.addBookcase({ name: 'ตู้', room: '' }, 3)
+  const shelves = (await r.listPlaces()).filter((p) => p.bookcaseId === caseId)
+  const book = await r.addBook({ ...emptyBook, title: 'ก', placeId: shelves[1].id })
+  await r.setBookcaseRows(caseId, 2)
+  expect((await r.listPlaces()).filter((p) => p.bookcaseId === caseId).every((p) => p.rows === 2)).toBe(true)
+  await r.setRow(book, 1)
+  await r.setBookcaseRows(caseId, 1)
+  expect((await r.listPlaces()).filter((p) => p.bookcaseId === caseId).every((p) => p.rows === 1)).toBe(true)
+  expect((await r.getBook(book))!.row ?? 0).toBe(0)
+})

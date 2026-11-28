@@ -336,6 +336,14 @@ export const t = {
     fromCase: (n: number) => `ใช้ค่าของตู้ ${n} ซม.`,
     notSet: 'ยังไม่ได้ใส่',
     twoRows: 'วางซ้อนสองแถว',
+    twoRowsAll: 'วางซ้อนสองแถวทุกชั้นในตู้นี้',
+    widthHint: 'เว้นว่างไว้ = ใช้ความกว้างของตู้',
+    setSize: 'ตั้งขนาดชั้น',
+    widthIs: (n: number) => `ชั้นกว้าง ${n} ซม.`,
+    widthNone: 'ยังไม่ได้ใส่ความกว้างชั้น',
+    caseSummary: (width: number | null, twoRows: boolean) =>
+      [width ? `ชั้นกว้าง ${width} ซม.` : 'ยังไม่ได้ใส่ความกว้างชั้น', twoRows ? 'วางซ้อนสองแถว' : ''].filter(Boolean).join(' · '),
+    editCase: 'แก้ไขตู้',
     toBack: 'ไปแถวหลัง',
     toFront: 'มาแถวหน้า',
     confirmOneRow: 'กลับเป็นแถวเดียว? หนังสือแถวหลังจะมารวมกับแถวหน้า',
@@ -500,7 +508,6 @@ export const t = {
   },
 
   view: {
-    rename: 'แก้ชื่อตู้',
     remove: 'ลบตู้',
     open: 'ดู 3D',
     openBookcase: 'ดูทั้งตู้แบบ 3D',

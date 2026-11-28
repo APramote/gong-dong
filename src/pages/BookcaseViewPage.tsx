@@ -11,7 +11,8 @@ import { bookcaseFields } from '../placeFields'
 import { BookRow } from '../components/BookRow'
 import type { Pick3D } from '../three/scene'
 import { rowOf, rowsOf } from '../lib/capacity'
-import { readWidth } from '../components/ShelfSize'
+import { bookcaseSizeFields } from '../placeFields'
+import { allTwoRows, bookcaseInitial, saveBookcase } from '../lib/bookcaseSize'
 import { t } from '../th'
 
 const Storage3D = lazy(() => import('../three/Storage3D'))
@@ -67,6 +68,8 @@ export function BookcaseViewPage() {
           </p>
           <h1>{bookcase.name}</h1>
           {bookcase.room && <p className="muted">{bookcase.room}</p>}
+          {/* ขนาดชั้นที่ตั้งไว้ แตะ "แก้ไขตู้" ด้านล่างเพื่อเปลี่ยน */}
+          <p className="muted">{t.shelf.caseSummary(bookcase.shelfWidth ?? null, allTwoRows(id, places))}</p>
         </div>
       </div>
       <div className="view3d-wrap">
@@ -97,7 +100,7 @@ export function BookcaseViewPage() {
           {draft ? t.shape.done : t.shape.edit}
         </button>
         <button className="btn small" onClick={() => setRenaming((r) => !r)}>
-          {t.view.rename}
+          {t.shelf.editCase}
         </button>
         <button className="btn small" onClick={() => repo.addShelf(id)}>
           {t.places.addShelf}
@@ -115,12 +118,11 @@ export function BookcaseViewPage() {
       </div>
       {renaming && (
         <FieldsForm
-          fields={bookcaseFields}
-          initial={{ name: bookcase.name, room: bookcase.room }}
+          fields={[...bookcaseFields, ...bookcaseSizeFields]}
+          initial={bookcaseInitial(bookcase, places)}
           onCancel={() => setRenaming(false)}
           onSubmit={async (v) => {
-            await repo.updateBookcase(id, { name: v.name, room: v.room })
-            setRenaming(false)
+            if (await saveBookcase(bookcase, places, v)) setRenaming(false)
           }}
         />
       )}
@@ -130,19 +132,6 @@ export function BookcaseViewPage() {
             look={draft}
             onChange={changeShape}
           />
-          <label>
-            {t.shelf.widthCase}
-            <input
-              inputMode="decimal"
-              defaultValue={bookcase.shelfWidth ?? ''}
-              placeholder={t.shelf.notSet}
-              onBlur={(e) => {
-                const width = readWidth(e.target.value)
-                if (width !== (bookcase.shelfWidth ?? null)) repo.setShelfWidth(id, width)
-              }}
-            />
-            <span className="muted">{t.shelf.widthCaseHint}</span>
-          </label>
         </div>
       )}
 

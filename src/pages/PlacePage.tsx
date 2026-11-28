@@ -9,6 +9,7 @@ import { placeLabel } from '../placeLabel'
 import { StoragePhoto } from '../components/StoragePhoto'
 import { ShelfSize } from '../components/ShelfSize'
 import { rowOf, rowsOf } from '../lib/capacity'
+import { readWidth } from '../lib/bookcaseSize'
 import type { Book } from '../db/types'
 import { t } from '../th'
 
@@ -77,10 +78,20 @@ export function PlacePage() {
       {place && editing && (
         <FieldsForm
           fields={placeFields[place.kind]}
-          initial={{ name: place.name, location: place.location, label: place.label }}
+          initial={{
+            name: place.name,
+            location: place.location,
+            label: place.label,
+            width: place.width ? String(place.width) : '',
+            twoRows: rowsOf(place) === 2 ? '1' : '',
+          }}
           onCancel={() => setEditing(false)}
           onSubmit={async (v) => {
-            await repo.updatePlace(place.id, v)
+            const rows = v.twoRows === '1' ? 2 : 1
+            // กลับเป็นแถวเดียว: หนังสือแถวหลังจะมารวมกับแถวหน้า ถามก่อนถ้ามีเล่มอยู่แถวหลัง
+            if (place.kind === 'shelf' && rows === 1 && books.some((b) => b.row === 1) && !confirm(t.shelf.confirmOneRow)) return
+            await repo.updatePlace(place.id, { name: v.name, location: v.location ?? place.location, label: v.label ?? place.label })
+            if (place.kind === 'shelf') await repo.setShelfShape(place.id, { width: readWidth(v.width ?? ''), rows })
             setEditing(false)
           }}
         />
@@ -94,7 +105,7 @@ export function PlacePage() {
         </p>
       )}
       {place && (place.kind === 'pile' || place.kind === 'box') && <StoragePhoto id={place.id} />}
-      {place?.kind === 'shelf' && <ShelfSize place={place} bookcase={bookcases.find((x) => x.id === place.bookcaseId)} books={books} />}
+      {place?.kind === 'shelf' && <ShelfSize place={place} bookcase={bookcases.find((x) => x.id === place.bookcaseId)} books={books} onEdit={() => setEditing(true)} />}
 
       <div className="section-head">
         <p className="muted">

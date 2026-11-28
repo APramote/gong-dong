@@ -5,7 +5,8 @@ import { repo } from '../db/repo'
 import type { Place } from '../db/types'
 import { FieldsForm } from '../components/FieldsForm'
 import { BookcaseCard, PlaceCard } from '../components/PlaceCards'
-import { bookcaseFields, placeFields } from '../placeFields'
+import { bookcaseFields, bookcaseSizeFields, placeFields } from '../placeFields'
+import { bookcaseInitial, readWidth, saveBookcase } from '../lib/bookcaseSize'
 import { rowsOf, usage } from '../lib/capacity'
 import { t } from '../th'
 
@@ -100,12 +101,15 @@ export function PlacesPage() {
         t.places.addBookcase,
         'bookcase',
         <FieldsForm
-          fields={[...bookcaseFields, { key: 'shelves', label: t.places.shelfCount, numeric: true }]}
+          fields={[...bookcaseFields, { key: 'shelves', label: t.places.shelfCount, numeric: true }, ...bookcaseSizeFields]}
           initial={{ shelves: '4' }}
           onCancel={close}
           onSubmit={async (v) => {
             const n = Math.min(Math.max(parseInt(v.shelves, 10) || 1, 1), 30)
-            await repo.addBookcase({ name: v.name, room: v.room }, n)
+            const id = await repo.addBookcase({ name: v.name, room: v.room }, n)
+            const width = readWidth(v.width ?? '')
+            if (width !== null) await repo.setShelfWidth(id, width)
+            if (v.twoRows === '1') await repo.setBookcaseRows(id, 2)
             close()
           }}
         />,
@@ -153,12 +157,11 @@ export function PlacesPage() {
                 </div>
                 {open === `edit:${bc.id}` && (
                   <FieldsForm
-                    fields={bookcaseFields}
-                    initial={{ name: bc.name, room: bc.room }}
+                    fields={[...bookcaseFields, ...bookcaseSizeFields]}
+                    initial={bookcaseInitial(bc, places)}
                     onCancel={close}
                     onSubmit={async (v) => {
-                      await repo.updateBookcase(bc.id, { name: v.name, room: v.room })
-                      close()
+                      if (await saveBookcase(bc, places, v)) close()
                     }}
                   />
                 )}

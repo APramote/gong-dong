@@ -7,8 +7,18 @@ export const bookcaseFields: Field[] = [
   { key: 'room', label: t.places.room },
 ]
 
+/** ขนาดชั้นของตู้: ความกว้างใช้กับทุกชั้น และวางซ้อนสองแถวทุกชั้น */
+export const bookcaseSizeFields: Field[] = [
+  { key: 'width', label: t.shelf.widthCase, decimal: true, hint: t.shelf.widthCaseHint },
+  { key: 'twoRows', label: t.shelf.twoRowsAll, check: true },
+]
+
 export const placeFields: Record<PlaceKind, Field[]> = {
-  shelf: [{ key: 'name', label: t.places.shelfName, required: true }],
+  shelf: [
+    { key: 'name', label: t.places.shelfName, required: true },
+    { key: 'width', label: t.shelf.width, decimal: true, hint: t.shelf.widthHint },
+    { key: 'twoRows', label: t.shelf.twoRows, check: true },
+  ],
   drawer: [{ key: 'name', label: t.places.drawerName, required: true }],
   pile: [
     { key: 'name', label: t.places.pileName, required: true },
