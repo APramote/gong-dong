@@ -79,7 +79,8 @@ let lastMark = 0
 function markDirty() {
   const now = Date.now()
   // เพิ่มหรือลบทีละหลายพันแถวเรียกมาทุกแถว ทำงานจริงไม่เกินสี่ครั้งต่อวินาที
-  if (now - lastMark < 250) return
+  // ยกเว้นระหว่างซิงก์: ต้องจดทุกครั้ง ไม่อย่างนั้นการแก้ที่มาชิดกันจะถูกนับว่าซิงก์ไปแล้ว
+  if (now - lastMark < 250 && phase !== 'syncing' && !running) return
   lastMark = now
   const wasClean = !read(DIRTY)
   write(DIRTY, String(now))

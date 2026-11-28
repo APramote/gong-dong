@@ -12,6 +12,21 @@ import { t } from '../th'
 const NO_PLACE = '__none__'
 const IN_HAND = '__hand__'
 const NO_CATEGORY = '__none__'
+const FILTER_KEY = 'gong-dong.libraryFilter'
+const STATUSES = ['dong', 'reading', 'done', 'dropped']
+/** ตัวกรองที่จำไว้ (เฉพาะค่าที่รูปแบบถูกต้อง) */
+function saved(): { query?: string; status?: ReadingStatus; placeId?: string } {
+  try {
+    const o = JSON.parse(sessionStorage.getItem(FILTER_KEY) ?? '{}') as Record<string, unknown>
+    return {
+      query: typeof o.query === 'string' ? o.query : undefined,
+      status: STATUSES.includes(o.status as string) ? (o.status as ReadingStatus) : undefined,
+      placeId: typeof o.placeId === 'string' ? o.placeId : undefined,
+    }
+  } catch {
+    return {}
+  }
+}
 const PAGE = 100
 const NEW_CATEGORY = '__new__'
 const HINT_KEY = 'gong-dong.backupHintHidden'
@@ -26,13 +41,26 @@ export function LibraryPage() {
   const categoryId = params.get('cat') ?? ''
   const setCategoryId = (v: string) => setParams(v ? { cat: v } : {}, { replace: true })
 
-  const [query, setQuery] = useState('')
+  // ตัวกรองจำไว้ตลอดการเปิดแอปครั้งนี้ เปิดดูหนังสือแล้วย้อนกลับมา รายการยังกรองเหมือนเดิม
+  const [query, setQuery] = useState(() => saved().query ?? '')
   // ค้นหาตามค่าที่ตามหลังการพิมพ์ ช่องพิมพ์จะไม่หน่วงเมื่อคลังใหญ่
   const deferredQuery = useDeferredValue(query)
   /** แสดงทีละหน้า คลังหลายพันเล่มไม่ต้องวาดทุกแถวพร้อมกัน */
   const [limit, setLimit] = useState(PAGE)
-  const [status, setStatus] = useState<ReadingStatus | ''>('')
-  const [placeId, setPlaceId] = useState('')
+  const [status, setStatus] = useState<ReadingStatus | ''>(() => saved().status ?? '')
+  const [placeId, setPlaceId] = useState(() => saved().placeId ?? '')
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTER_KEY, JSON.stringify({ query, status, placeId }))
+    } catch {
+      // จำไม่ได้ก็ใช้ได้ตามปกติ
+    }
+  }, [query, status, placeId])
+  // หมวดใน URL ถูกลบหรือรวมไปแล้ว: กลับเป็นทุกหมวด ไม่ค้างเป็นรายการว่าง
+  const catKnown = categoryId === '' || categoryId === NO_CATEGORY || categories.length === 0 || categories.some((c) => c.id === categoryId)
+  useEffect(() => {
+    if (!catKnown) setParams({}, { replace: true })
+  }, [catKnown, setParams])
   // ---------- เลือกหลายเล่มเพื่อย้ายที่เก็บ ----------
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())

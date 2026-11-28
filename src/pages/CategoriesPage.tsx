@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { normName, repo } from '../db/repo'
@@ -17,6 +17,8 @@ export function CategoriesPage() {
   const [name, setName] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  /** กันกดใช้ข้อเสนอรวมหมวดซ้ำระหว่างที่กำลังทำ */
+  const applying = useRef(false)
   const [msg, setMsg] = useState('')
   const [limit, setLimit] = useState(() => loadSettings().maxCategories)
   /** หมวดที่กำลังเลือกปลายทางเพื่อรวม */
@@ -74,6 +76,15 @@ export function CategoriesPage() {
   }
 
   async function applyProposal() {
+    if (applying.current) return
+    applying.current = true
+    try {
+      await applyRows()
+    } finally {
+      applying.current = false
+    }
+  }
+  async function applyRows() {
     const rows = (proposal ?? []).filter((x) => picked.has(x.from))
     for (const row of rows) {
       const from = (await repo.listCategories()).find((c) => c.name === row.from)
@@ -87,6 +98,9 @@ export function CategoriesPage() {
   const over = categories.length - limit
 
   async function rename(c: Category) {
+    // ตั้งชื่อซ้ำกับหมวดที่มีอยู่ = รวมหมวด (ย้อนกลับไม่ได้) ถามก่อน
+    const same = (categories ?? []).find((x) => x.id !== c.id && normName(x.name).toLowerCase() === normName(draft).toLowerCase())
+    if (same && !confirm(t.categories.confirmMerge(c.name, same.name, count(c.id)))) return
     const kept = await repo.renameCategory(c.id, draft)
     setEditing(null)
     const target = (await repo.listCategories()).find((x) => x.id === kept)

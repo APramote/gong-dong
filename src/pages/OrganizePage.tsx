@@ -117,6 +117,8 @@ function RuleGroup({
             className="btn primary"
             disabled={chosen.length === 0 || !target}
             onClick={async () => {
+              const name = options.flatMap((g) => g.options).find((o) => o.id === target)?.label ?? ''
+              if (!confirm(t.organize.confirmMove(chosen.length, name))) return
               await repo.moveBooks(
                 chosen.map((b) => b.id),
                 target,

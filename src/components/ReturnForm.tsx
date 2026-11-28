@@ -28,8 +28,10 @@ export function ReturnForm({
   const [placeId, setPlaceId] = useState<string | null>(
     book.takenFrom && placeExists(book.takenFrom) ? book.takenFrom : null,
   )
-  // คั่นไว้ถึงหน้าสุดท้ายแล้ว ถือว่าอ่านจบ (แก้ได้)
-  const [finished, setFinished] = useState(Boolean(book.pages && book.currentPage && book.currentPage >= book.pages))
+  // เล่มที่อ่านจบอยู่แล้ว หรือคั่นไว้ถึงหน้าสุดท้าย ถือว่าอ่านจบ (แก้ได้) — หยิบเล่มที่จบแล้วมาเปิดดู วางคืนต้องไม่กลายเป็น "กำลังอ่าน"
+  const [finished, setFinished] = useState(
+    book.status === 'done' || Boolean(book.pages && book.currentPage && book.currentPage >= book.pages),
+  )
 
   function onPage(v: string) {
     setPage(v)
