@@ -649,3 +649,15 @@ test('สุ่มจากกองดอง: ไม่ชวนอ่านเ
   const pool = dongPool([mk('a'), mk('b', 5), mk('c', -2), mk('d', -3), mk('e', -5)], 'any' as any)
   expect(pool.map((b) => b.id)).toEqual(['a', 'b', 'c'])
 })
+
+test('เดาเลขเล่มจากชื่อเรื่อง', async () => {
+  const { guessVolumes } = await import('./series')
+  expect(guessVolumes(['ไซอิ๋ว 1', 'ไซอิ๋ว 2', 'ไซอิ๋ว ๓'])).toEqual([1, 2, 3])
+  expect(guessVolumes(['เชิงอรรถมังกรหยก 3 ดาบมังกรหยก', 'เชิงอรรถมังกรหยก 8 เทพอสูรมังกรฟ้า'])).toEqual([3, 8])
+  expect(guessVolumes(['500 ล้านปีของความรัก 01 วิทยาศาสตร์ของอารมณ์', '500 ล้านปีของความรัก 02 วิทยาศาสตร์ของอารมณ์'])).toEqual([1, 2])
+  expect(guessVolumes(['มหาภารตะ เล่ม ๑', 'เรื่องเล่าจากมหากาพย์ มหาภารตะ ตอนอวสาน เล่ม ๔', 'รามายณะ'])).toEqual([1, 4, null])
+  // เลขซ้ำกัน หรือไม่มีเลข: ไม่เดา
+  expect(guessVolumes(['1984', 'Sapiens'])).toEqual([null, null])
+  expect(guessVolumes(['ชุด ก 2', 'ชุด ก 2'])).toEqual([null, null])
+  expect(guessVolumes(['21 Lessons for the 21st Century'])).toEqual([null])
+})

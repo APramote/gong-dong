@@ -1,5 +1,5 @@
 import { db } from '../db/db'
-import { DEFAULT_GOOGLE_CLIENT_ID, loadSettings, onSharedChange, saveSettings } from './settings'
+import { DEFAULT_GOOGLE_CLIENT_ID, defaultSettings, loadSettings, onSharedChange, saveSettings } from './settings'
 import { isSyncWrite, TABLES, type SyncResult } from './sync'
 
 /**
@@ -159,7 +159,7 @@ export async function syncNow(
     if (mine !== epoch) throw new Error('cancelled')
     // การตั้งค่าที่ใช้ร่วมกัน (AI และ key เป้าการอ่าน): ไฟล์แยกในโฟลเดอร์เดียวกัน
     const { syncShared } = await import('./sharedSettings')
-    const shared = await syncShared(store, { load: loadSettings, save: saveSettings })
+    const shared = await syncShared(store, { load: loadSettings, save: saveSettings, defaults: defaultSettings })
     if (mine !== epoch) throw new Error('cancelled')
     if (shared === 'pulled' || shared === 'both') settingsVersion++
     // ระหว่างซิงก์ไม่มีการแก้ไขเพิ่ม = ไม่มีของค้างแล้ว (ถ้ามี จะซิงก์อีกรอบใน 1 นาที)
@@ -211,6 +211,9 @@ export function setAutoSync(on: boolean): void {
 /** เพิ่มขึ้นทุกครั้งที่ได้การตั้งค่าใหม่จาก Drive หน้าตั้งค่าใช้ดูว่าต้องอ่านค่าใหม่ */
 let settingsVersion = 0
 export const getSettingsVersion = () => settingsVersion
+
+/** มีการตั้งค่าที่ต้องส่งขึ้น (เช่น เพิ่งเปิดสวิตช์ใช้การตั้งค่าร่วมกัน) */
+export const markPending = () => markDirty()
 
 let started = false
 /** เริ่มเฝ้าการเปลี่ยนแปลงของข้อมูล เรียกครั้งเดียวตอนเปิดแอป */

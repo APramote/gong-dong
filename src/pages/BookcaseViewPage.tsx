@@ -142,6 +142,7 @@ export function BookcaseViewPage() {
               backView: backView && anyTwoRows && backCount > 0,
               twoRows: shelves.map((_, i) => twoRows(i)),
               shelfIds: shelves.map((x) => x.id),
+              widths: shelves.map((x) => shelfWidth(x, bookcase)),
               shelfWidth: bookcase.shelfWidth ?? null,
               drawers: drawers.map((d) => ({ id: d.id, books: inPlace(d.id).map(as3D) })),
               look,
@@ -163,6 +164,8 @@ export function BookcaseViewPage() {
             onClick={async () => {
               const n = await repo.spillToBack(id)
               setSpillMsg(t.view.spilled(n))
+              // ข้อความผลลัพธ์อยู่ชั่วครู่ ไม่ค้างหลังสถานการณ์เปลี่ยน
+              setTimeout(() => setSpillMsg(''), 8000)
               if (n) switchRow(true)
             }}
           >
@@ -245,6 +248,9 @@ export function BookcaseViewPage() {
             <Link className="btn" to={`/book/${pick.id}`}>
               {t.view.openBook}
             </Link>
+            <button className="btn" aria-label={t.view.closeCard} onClick={() => setSelected(null)}>
+              ✕
+            </button>
           </div>
         </div>
       )}
@@ -253,9 +259,14 @@ export function BookcaseViewPage() {
         <div className={`card picked${full ? ' floating' : ''}`}>
           <div className="section-head">
             <h3>{panel.name}</h3>
-            <Link className="btn small" to={`/place/${panel.id}`}>
-              {drawer ? t.view.openDrawer : t.view.openShelf}
-            </Link>
+            <span className="actions">
+              <Link className="btn small" to={`/place/${panel.id}`}>
+                {drawer ? t.view.openDrawer : t.view.openShelf}
+              </Link>
+              <button className="btn small" aria-label={t.view.closeCard} onClick={() => setSelected(null)}>
+                ✕
+              </button>
+            </span>
           </div>
           {panelBooks.length === 0 ? (
             <p className="muted">{drawer ? t.view.drawerEmpty : t.view.shelfEmpty}</p>

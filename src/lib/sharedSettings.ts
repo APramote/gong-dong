@@ -7,25 +7,22 @@ import type { RemoteStore } from './sync'
  * ไม่รวมสิ่งที่เป็นของแต่ละเครื่อง: บัญชีที่เข้าสู่ระบบ เวลาซิงก์ Client ID และสวิตช์ซิงก์
  */
 export const SETTINGS_FILE = 'settings.json'
+const FILE_VERSION = 1
+const DAY = 86400000
 
-export const SHARED_KEYS = [
-  'aiEnabled',
-  'provider',
-  'geminiKey',
-  'geminiModel',
-  'claudeKey',
-  'claudeModel',
-  'dailyGoalMinutes',
-  'dailyGoalPages',
-  'yearGoalBooks',
-  'maxCategories',
-  'organizeMode',
+/** ค่าทั่วไป: เครื่องที่แก้ล่าสุดชนะทั้งชุด */
+const PLAIN_KEYS = ['aiEnabled', 'provider', 'dailyGoalMinutes', 'dailyGoalPages', 'yearGoalBooks', 'maxCategories', 'organizeMode'] as const
+/** API key กับรุ่นของมัน: ตัดสินแยกทีละตัวด้วยเวลาของ key เอง (การลบ key โดยตั้งใจก็ตามไปทุกเครื่อง) */
+const KEY_SETS = [
+  { key: 'geminiKey', model: 'geminiModel', at: 'geminiKeyAt' },
+  { key: 'claudeKey', model: 'claudeModel', at: 'claudeKeyAt' },
 ] as const
+export const SHARED_KEYS = [...PLAIN_KEYS, 'geminiKey', 'geminiModel', 'geminiKeyAt', 'claudeKey', 'claudeModel', 'claudeKeyAt'] as const
 type SharedKey = (typeof SHARED_KEYS)[number]
 export type Shared = Pick<Settings, SharedKey>
 
 interface SharedFile {
-  version: 1
+  version: number
   /** เวลาที่การตั้งค่าชุดนี้ถูกแก้ล่าสุด */
   sharedAt: number
   values: Partial<Shared>
@@ -33,8 +30,11 @@ interface SharedFile {
 
 export const pickShared = (s: Settings): Shared => Object.fromEntries(SHARED_KEYS.map((k) => [k, s[k]])) as Shared
 
+/** เวลาจากไฟล์: ต้องเป็นตัวเลขไม่ติดลบ และไม่อยู่ในอนาคตเกินหนึ่งวัน (นาฬิกาเพี้ยนหรือไฟล์ถูกแก้ จะได้ไม่ชนะตลอดไป) */
+const stamp = (v: unknown, now: number) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.min(v, now + DAY) : 0)
+
 /** รับเฉพาะค่าที่ชนิดถูกต้อง (ไฟล์ใน Drive อาจถูกแก้มา) ค่าที่ผิดใช้ค่าของเครื่องนี้แทน */
-function clean(raw: unknown, fallback: Shared): Shared {
+function clean(raw: unknown, fallback: Shared, now: number): Shared {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   const str = (k: SharedKey, max = 300) => (typeof o[k] === 'string' && (o[k] as string).length <= max ? (o[k] as string) : (fallback[k] as string))
   const int = (k: SharedKey, lo: number, hi: number) =>
@@ -44,8 +44,10 @@ function clean(raw: unknown, fallback: Shared): Shared {
     provider: o.provider === 'gemini' || o.provider === 'claude' ? o.provider : fallback.provider,
     geminiKey: str('geminiKey'),
     geminiModel: str('geminiModel', 100),
+    geminiKeyAt: stamp(o.geminiKeyAt, now),
     claudeKey: str('claudeKey'),
     claudeModel: str('claudeModel', 100),
+    claudeKeyAt: stamp(o.claudeKeyAt, now),
     dailyGoalMinutes: int('dailyGoalMinutes', 0, 1440),
     dailyGoalPages: int('dailyGoalPages', 0, 5000),
     yearGoalBooks: int('yearGoalBooks', 0, 5000),
@@ -55,15 +57,38 @@ function clean(raw: unknown, fallback: Shared): Shared {
 }
 
 /**
- * รวมสองฝั่ง: ฝั่งที่แก้ล่าสุดชนะทั้งชุด ยกเว้น API key —
- * key ที่ว่างไม่ทับ key ที่อีกฝั่งมีอยู่ (เครื่องใหม่ที่ยังไม่ได้ใส่ key ต้องไม่ลบ key ของเครื่องเดิม)
+ * รวมสองฝั่ง
+ * - ค่าทั่วไป: ฝั่งที่แก้ล่าสุดชนะทั้งชุด ยกเว้นเครื่องที่ตั้งค่าไว้ก่อนมีระบบนี้ (เวลาเป็น 0): ค่าที่เครื่องนั้นเคยตั้งเอง (ต่างจากค่าเริ่มต้น) ยังอยู่
+ * - API key: ตัดสินแยกทีละตัวด้วยเวลาของ key เอง เวลาเท่ากัน (เช่น 0 ทั้งคู่) ฝั่งที่มี key ชนะฝั่งที่ว่าง
  */
-export function mergeShared(local: Shared, localAt: number, remote: Shared | null, remoteAt: number): { values: Shared; at: number } {
-  if (!remote) return { values: local, at: localAt || Date.now() }
-  const [win, lose, at] = remoteAt > localAt ? [remote, local, remoteAt] : [local, remote, localAt || remoteAt]
-  const values = { ...win }
-  if (!values.geminiKey && lose.geminiKey) Object.assign(values, { geminiKey: lose.geminiKey, geminiModel: lose.geminiModel })
-  if (!values.claudeKey && lose.claudeKey) Object.assign(values, { claudeKey: lose.claudeKey, claudeModel: lose.claudeModel })
+export function mergeShared(
+  local: Shared,
+  localAt: number,
+  remote: Shared | null,
+  remoteAt: number,
+  defaults: Shared,
+  now = Date.now(),
+): { values: Shared; at: number } {
+  if (!remote) return { values: local, at: localAt || now }
+  const remoteWins = remoteAt > localAt
+  const values: Shared = { ...(remoteWins ? remote : local) }
+  let at = Math.max(localAt, remoteAt)
+  if (remoteWins && localAt === 0) {
+    let kept = false
+    for (const k of PLAIN_KEYS)
+      if (local[k] !== defaults[k] && local[k] !== remote[k]) {
+        ;(values as Record<string, unknown>)[k] = local[k]
+        kept = true
+      }
+    // มีค่าของเครื่องนี้รวมเข้าไป = ชุดใหม่ ต้องใหม่กว่าของเดิมเพื่อส่งต่อให้เครื่องอื่น
+    if (kept) at = Math.max(now, remoteAt + 1)
+  }
+  for (const set of KEY_SETS) {
+    const [l, r] = [local[set.at], remote[set.at]]
+    const takeRemote = r > l || (r === l && !local[set.key] && Boolean(remote[set.key]))
+    const from = takeRemote ? remote : local
+    Object.assign(values, { [set.key]: from[set.key], [set.model]: from[set.model], [set.at]: from[set.at] })
+  }
   return { values, at }
 }
 
@@ -75,7 +100,8 @@ const same = (a: Shared, b: Shared) => SHARED_KEYS.every((k) => a[k] === b[k])
  */
 export async function syncShared(
   store: RemoteStore,
-  io: { load: () => Settings; save: (s: Settings) => void },
+  io: { load: () => Settings; save: (s: Settings) => void; defaults: Settings },
+  now = Date.now(),
 ): Promise<'pulled' | 'pushed' | 'both' | 'none'> {
   const local = io.load()
   if (!local.syncSettings) return 'none'
@@ -86,9 +112,11 @@ export async function syncShared(
   if (names.has(SETTINGS_FILE)) {
     try {
       const file = JSON.parse(await (await store.get(SETTINGS_FILE))!.text()) as SharedFile
-      if (file?.version === 1 && typeof file.sharedAt === 'number') {
-        remote = clean(file.values, mine)
-        remoteAt = file.sharedAt
+      // ไฟล์จากแอปรุ่นใหม่กว่า: ไม่อ่านและไม่เขียนทับ รอให้เครื่องนี้อัปเดตก่อน
+      if (typeof file?.version === 'number' && file.version > FILE_VERSION) return 'none'
+      if (file?.version === FILE_VERSION && typeof file.sharedAt === 'number') {
+        remote = clean(file.values, mine, now)
+        remoteAt = stamp(file.sharedAt, now)
       }
     } catch {
       // ไฟล์อ่านไม่ได้: ถือว่ายังไม่มี แล้วเขียนใหม่จากเครื่องนี้
@@ -96,13 +124,15 @@ export async function syncShared(
   }
   // ยังไม่มีไฟล์ และเครื่องนี้ยังไม่มีอะไรให้แบ่ง (ไม่มี key และไม่เคยแก้การตั้งค่า): ไม่ต้องสร้างไฟล์
   if (!remote && !local.sharedAt && !mine.geminiKey && !mine.claudeKey) return 'none'
-  const merged = mergeShared(mine, local.sharedAt, remote, remoteAt)
+  const merged = mergeShared(mine, local.sharedAt, remote, remoteAt, pickShared(io.defaults), now)
   const pull = !same(merged.values, mine)
   const push = !remote || !same(merged.values, remote) || merged.at !== remoteAt
-  // อ่านค่าล่าสุดอีกครั้งก่อนบันทึก ไม่ทับค่าของเครื่อง (บัญชี เวลาซิงก์) ที่เปลี่ยนระหว่างรอเครือข่าย
-  if (pull || local.sharedAt !== merged.at) io.save({ ...io.load(), ...merged.values, sharedAt: merged.at })
+  // ผู้ใช้แก้การตั้งค่าระหว่างรอเครือข่าย: รอบนี้ไม่บันทึกทับ ปล่อยให้รอบถัดไปรวมใหม่ (การแก้นั้นทำเครื่องหมายค้างซิงก์ไว้แล้ว)
+  const latest = io.load()
+  if (latest.sharedAt !== local.sharedAt || !same(pickShared(latest), mine)) return 'none'
+  if (pull || local.sharedAt !== merged.at) io.save({ ...latest, ...merged.values, sharedAt: merged.at })
   if (push) {
-    const file: SharedFile = { version: 1, sharedAt: merged.at, values: merged.values }
+    const file: SharedFile = { version: FILE_VERSION, sharedAt: merged.at, values: merged.values }
     await store.put(SETTINGS_FILE, new Blob([JSON.stringify(file)], { type: 'application/json' }))
   }
   return pull && push ? 'both' : pull ? 'pulled' : push ? 'pushed' : 'none'

@@ -18,6 +18,8 @@ export interface BookcaseModel {
   twoRows?: boolean[]
   /** id ของชั้น (ลำดับเดียวกับ shelves) มีแล้วแตะป้ายหรือที่ว่างของชั้นเพื่อเลือกชั้นได้ */
   shelfIds?: string[]
+  /** ความกว้างที่ใช้ได้ของแต่ละชั้น (ซม.) ลำดับเดียวกับ shelves — null = ไม่รู้ (ชั้นที่ตั้งความกว้างเองต่างจากค่าของตู้) */
+  widths?: (number | null)[]
   /** ความกว้างด้านในของชั้น (ซม.) ถ้ารู้ ใช้เป็นความกว้างของตู้จริง */
   shelfWidth?: number | null
   /** ลิ้นชักที่เป็นที่เก็บจริง เรียงจากแถวล่างสุด ซ้ายไปขวา (ไม่มี id = ตัวอย่าง แตะไม่ได้) */
@@ -216,7 +218,13 @@ function buildBookcase(model: BookcaseModel): Built {
   const booksWidth = Math.max(0, ...[...shelves, ...back].map((s) => s.reduce((n, b) => n + bookSize(b).thick + GAP, 0)))
   const fromRatio = look?.ratio ? (outerH + legH) * look.ratio - 2 * BOARD : 0
   // รู้ความกว้างจริงของชั้นก็ใช้ค่านั้น (หนังสือที่เกินจะไม่ถูกวาด เห็นได้ว่าชั้นเต็ม) ไม่รู้จึงเดาจากหนังสือและสัดส่วนในรูป
-  const innerW = model.shelfWidth && model.shelfWidth > 0 ? Math.max(30, model.shelfWidth) : Math.max(50, booksWidth + 6, fromRatio)
+  // ความกว้างที่รู้ของแต่ละชั้น (ค่าของชั้นเอง ไม่มีก็ใช้ค่าของตู้) ตัวตู้กว้างเท่าชั้นที่กว้างที่สุด
+  const limits = shelves.map((_, i) => {
+    const w = model.widths?.[i] ?? model.shelfWidth ?? null
+    return w && w > 0 ? w : null
+  })
+  const widest = Math.max(0, model.shelfWidth ?? 0, ...limits.map((w) => w ?? 0))
+  const innerW = widest > 0 ? Math.max(30, widest + 0.6) : Math.max(50, booksWidth + 6, fromRatio)
   const depth = 30
   const outerW = innerW + 2 * BOARD
   /** ความกว้างของป้ายที่ลอยข้างตู้ (รวมช่องว่าง) ใช้จัดกล้องให้เห็นทั้งตู้และป้าย */
@@ -320,7 +328,8 @@ function buildBookcase(model: BookcaseModel): Built {
     if (lines.length) {
       const s = sign(lines, signSide > 0 ? 'left' : 'right')
       // แตะป้ายเพื่อเลือกชั้น
-      if (shelfId) {
+      // (ป้ายที่ซ่อนอยู่แตะไม่ได้)
+      if (shelfId && !(doors === 2 && doorsOpen)) {
         const plate = s.group.children[0] as THREE.Mesh
         plate.userData = { shelfId }
         pickable.push(plate)
@@ -338,10 +347,13 @@ function buildBookcase(model: BookcaseModel): Built {
     const ghostFront = Boolean(model.backView && model.twoRows?.[i] && (back[i]?.length ?? 0) > 0)
     // แถวหน้าชิดขอบหน้าชั้น แถวหลัง (ถ้ามี) ชิดผนังหลัง
     for (const [row, list] of [[0, shelves[i] ?? []], [1, back[i] ?? []]] as const) {
-      let x = -innerW / 2 + 1
+      // รู้ความกว้างชั้น: ใช้กติกาเดียวกับตัวนับที่ว่าง (ความหนา + ช่องว่างของทุกเล่มรวมกันไม่เกินความกว้าง) ตัวเลขในหน้ากับภาพจึงตรงกัน
+      const limit = limits[i]
+      const start = limit === null ? -innerW / 2 + 1 : -innerW / 2 + 0.3
+      let x = start
       for (const b of list) {
         const s = bookSize(b)
-        if (x + s.thick > innerW / 2 - 0.5) break // ล้นชั้น ไม่วาดต่อ
+        if (limit === null ? x + s.thick > innerW / 2 - 0.5 : x - start + s.thick + GAP > limit + 1e-6) break // ล้นชั้น ไม่วาดต่อ
         const color = bookColor(b)
         const mesh = boxMesh(s.thick, s.height, s.depth, color, textTexture(b.title, color, true))
         const z = row === 0 ? depth / 2 - s.depth / 2 - 1.5 : -depth / 2 + s.depth / 2 + 1

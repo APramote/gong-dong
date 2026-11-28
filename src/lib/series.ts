@@ -47,3 +47,37 @@ export function ranges(nums: number[]): string {
   }
   return out.join(', ')
 }
+
+const toAscii = (s: string) => s.replace(/[๐-๙]/g, (d) => String('๐๑๒๓๔๕๖๗๘๙'.indexOf(d)))
+const volume = (text: string | undefined) => {
+  const n = text ? parseInt(text, 10) : NaN
+  return Number.isFinite(n) && n >= 1 && n <= MAX_VOLUMES ? n : null
+}
+
+/**
+ * เดาเลขเล่มจากชื่อเรื่องของหนังสือที่จะจัดเข้าชุดเดียวกัน (null = เดาไม่ได้ ให้ผู้ใช้ใส่เอง)
+ * 1) ชื่อขึ้นต้นเหมือนกัน แล้วตามด้วยตัวเลข เช่น "ไซอิ๋ว 1", "ไซอิ๋ว 2" 2) มีคำว่า เล่ม/ภาค/vol/# นำหน้าตัวเลข
+ * 3) ตัวเลขที่เติมศูนย์ เช่น 01 4) ตัวเลขท้ายชื่อ — เลขที่ซ้ำกันในกลุ่มถือว่าเดาผิด ไม่ใส่ให้
+ */
+export function guessVolumes(titles: string[]): (number | null)[] {
+  const list = titles.map((x) => toAscii(x).trim())
+  let prefix = ''
+  if (list.length > 1) {
+    prefix = list[0]
+    for (const s of list) while (prefix && !s.startsWith(prefix)) prefix = prefix.slice(0, -1)
+    // ตัดตัวเลขท้ายส่วนที่ซ้ำออก ("… 0" จาก 01/02 ไม่ใช่ส่วนของชื่อ)
+    prefix = prefix.replace(/\d+$/, '')
+  }
+  const out = list.map((s) => {
+    const afterPrefix = prefix.trim().length >= 2 ? volume(s.slice(prefix.length).match(/^\s*(\d{1,3})(?!\d)/)?.[1]) : null
+    return (
+      afterPrefix ??
+      volume(s.match(/(?:เล่ม(?:ที่)?|ภาค(?:ที่)?|vol(?:ume)?\.?|#)\s*(\d{1,3})(?!\d)/i)?.[1]) ??
+      volume(s.match(/(?<!\d)0(\d{1,2})(?!\d)/)?.[1]) ??
+      volume(s.match(/(?<!\d)(\d{1,3})\s*$/)?.[1])
+    )
+  })
+  const seen = new Map<number, number>()
+  for (const n of out) if (n !== null) seen.set(n, (seen.get(n) ?? 0) + 1)
+  return out.map((n) => (n !== null && seen.get(n) === 1 ? n : null))
+}

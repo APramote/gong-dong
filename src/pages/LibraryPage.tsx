@@ -8,6 +8,7 @@ import { CoverThumb } from '../components/Cover'
 import { placeGroups, placeLabel } from '../placeLabel'
 import { loadSettings } from '../lib/settings'
 import { aiOn } from '../lib/ai'
+import { guessVolumes } from '../lib/series'
 import { BulkInfo } from '../components/BulkInfo'
 import { t } from '../th'
 
@@ -47,6 +48,8 @@ function saved(): {
 }
 const PAGE = 100
 const NEW_CATEGORY = '__new__'
+const NO_SERIES = '__noseries__'
+const NEW_SERIES = '__newseries__'
 const HINT_KEY = 'gong-dong.backupHintHidden'
 
 export function LibraryPage() {
@@ -55,6 +58,7 @@ export function LibraryPage() {
   const places = placesRaw ?? []
   const bookcases = useLiveQuery(() => repo.listBookcases(), []) ?? []
   const categories = useLiveQuery(() => repo.listCategories(), []) ?? []
+  const seriesList = useLiveQuery(() => repo.listSeries(), []) ?? []
   // ตัวกรองหมวดอยู่ใน URL (?cat=) เพื่อให้ลิงก์จากหน้าหมวดเปิดคลังที่กรองแล้วได้
   const [params, setParams] = useSearchParams()
   const categoryId = params.get('cat') ?? ''
@@ -99,7 +103,7 @@ export function LibraryPage() {
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   /** จะทำอะไรกับเล่มที่เลือก: ย้ายที่เก็บ ตั้งหมวด หรือเปลี่ยนสถานะ */
-  const [bulk, setBulk] = useState<'move' | 'category' | 'status' | 'info'>('move')
+  const [bulk, setBulk] = useState<'move' | 'category' | 'status' | 'series' | 'info'>('move')
   /** ปลายทางที่เลือก ('' = ยังไม่ได้เลือก ปุ่มใช้จะกดไม่ได้) */
   const [target, setTarget] = useState('')
   // รูปแบบรายการ: ย่อ (ค่าเริ่มต้น) หรือละเอียด (มีรายละเอียดสำคัญและคำโปรย) จำไว้ในเครื่อง
@@ -212,7 +216,11 @@ export function LibraryPage() {
           ? target === NO_CATEGORY
             ? t.categories.none
             : (catName.get(target) ?? '')
-          : t.status[target as ReadingStatus]
+          : bulk === 'series'
+            ? target === NO_SERIES
+              ? ''
+              : (seriesList.find((x) => x.id === target)?.name ?? '')
+            : t.status[target as ReadingStatus]
     // ทำกับหลายเล่มพร้อมกันและย้อนกลับไม่ได้ ถามก่อนเสมอ
     if (!confirm(t.library.confirmBulk[bulk](n, name))) return
     setApplying(true)
@@ -224,6 +232,13 @@ export function LibraryPage() {
         setMoveMsg(target === NO_PLACE ? t.library.unplaced(moved, inHand) : t.library.moved(moved, name, inHand))
       } else if (bulk === 'category') {
         setMoveMsg(t.library.categorized(await repo.setCategoryMany(ids, target === NO_CATEGORY ? null : target), name))
+      } else if (bulk === 'series') {
+        if (target === NO_SERIES) setMoveMsg(t.library.seriesCleared(await repo.setSeriesMany(ids, null)))
+        else {
+          // เดาเลขเล่มจากชื่อเรื่อง (เช่น "ไซอิ๋ว 1", "… เล่ม 2") เล่มที่เดาไม่ได้ใส่เองได้ในหน้าชุดหนังสือ
+          const changed = await repo.setSeriesMany(ids, target, guessVolumes(pickedShown.map((b) => b.title)))
+          setMoveMsg(t.library.seriesSet(changed, name))
+        }
       } else {
         setMoveMsg(t.library.statusSet(await repo.setStatusMany(ids, target as ReadingStatus), name))
       }
@@ -459,8 +474,8 @@ export function LibraryPage() {
           </div>
           <div className="chips small" role="group" aria-label={t.library.bulkLabel}>
             {(aiOn()
-              ? (['move', 'category', 'status', 'info'] as const)
-              : (['move', 'category', 'status'] as const)
+              ? (['move', 'category', 'status', 'series', 'info'] as const)
+              : (['move', 'category', 'status', 'series'] as const)
             ).map((k) => (
               <button
                 key={k}
@@ -492,7 +507,12 @@ export function LibraryPage() {
                 aria-label={t.library.bulkTarget[bulk]}
                 value={target}
                 onChange={async (e) => {
-                  if (e.target.value !== NEW_CATEGORY) return setTarget(e.target.value)
+                  if (e.target.value === NEW_SERIES) {
+                  const name = prompt(t.library.newSeries)?.trim()
+                  if (name) setTarget(await repo.ensureSeries(name))
+                  return
+                }
+                if (e.target.value !== NEW_CATEGORY) return setTarget(e.target.value)
                   const name = prompt(t.categories.newName)?.trim()
                   if (name) setTarget(await repo.ensureCategory(name))
                 }}
@@ -521,6 +541,17 @@ export function LibraryPage() {
                       </option>
                     ))}
                     <option value={NEW_CATEGORY}>{t.categories.addNew}</option>
+                  </>
+                )}
+                {bulk === 'series' && (
+                  <>
+                    {seriesList.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.name}
+                      </option>
+                    ))}
+                    <option value={NEW_SERIES}>{t.library.addSeries}</option>
+                    <option value={NO_SERIES}>{t.library.noSeries}</option>
                   </>
                 )}
                 {bulk === 'status' &&

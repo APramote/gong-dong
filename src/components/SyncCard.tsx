@@ -3,7 +3,7 @@ import { db } from '../db/db'
 import { download } from '../lib/download'
 import { loadSettings, saveSettings } from '../lib/settings'
 import { dayKey, timeAgo } from '../lib/stats'
-import { refresh, reset, syncNow, setAutoSync } from '../lib/autosync'
+import { markPending, refresh, reset, syncNow, setAutoSync } from '../lib/autosync'
 import { syncErrorText } from '../lib/syncError'
 import { t } from '../th'
 import { useAutoSync } from './SyncBanner'
@@ -130,7 +130,11 @@ export function SyncCard() {
             </span>
           </label>
           <label className="switch-row">
-            <input type="checkbox" role="switch" checked={s.syncSettings} onChange={(e) => update({ syncSettings: e.target.checked })} />
+            <input type="checkbox" role="switch" checked={s.syncSettings} onChange={(e) => {
+                update({ syncSettings: e.target.checked })
+                // เปิดแล้วมีการตั้งค่าที่ต้องส่งขึ้น: นับเป็นของค้างซิงก์
+                if (e.target.checked) markPending()
+              }} />
             <span>
               <span className="row-title">{t.sync.settingsSwitch}</span>
               <span className="row-sub">{s.syncSettings ? t.sync.settingsOn : t.sync.settingsOff}</span>

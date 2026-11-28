@@ -5,6 +5,14 @@ import { build, dispose, type Built, type Model3D, type Pick3D } from './scene'
 
 export type { Pick3D }
 
+/** ระยะกล้องที่เห็นทั้งชิ้นพอดี ทั้งด้านสูงและด้านกว้าง */
+function fitDistance(size: THREE.Vector3, camera: THREE.PerspectiveCamera): number {
+  const fov = (camera.fov * Math.PI) / 180
+  const fitH = size.y / 2 / Math.tan(fov / 2)
+  const fitW = size.x / 2 / Math.tan(fov / 2) / camera.aspect
+  return Math.max(fitH, fitW) * 1.15 + size.z / 2
+}
+
 /**
  * วาดตู้หนังสือแบบ 3D หมุน/ซูมได้ แตะหนังสือเพื่อเลือก
  * วาดเฉพาะเมื่อมีการเปลี่ยนแปลง ไม่วนวาดตลอดเวลา เพื่อประหยัดแบตเตอรี่
@@ -30,6 +38,8 @@ export default function Storage3D({
     built: Built | null
     render: () => void
   } | null>(null)
+  /** ระยะกล้องที่พอดีกับสิ่งที่วาด ณ สัดส่วนจอปัจจุบัน (0 = ยังไม่ได้จัด) */
+  const fitted = useRef(0)
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
 
@@ -71,7 +81,16 @@ export default function Storage3D({
       render()
     })
     // แตะสองครั้ง (ดับเบิลคลิก) กลับมุมมองเริ่มต้น
-    const onReset = () => {
+    const onReset = (e: MouseEvent) => {
+      // แตะสองครั้งบนหนังสือ ป้าย หรือลิ้นชัก คือการเลือกเร็ว ๆ ไม่ใช่การขอกลับมุมเดิม
+      const built = state.current?.built
+      if (built) {
+        const rect = renderer.domElement.getBoundingClientRect()
+        const ray = new THREE.Raycaster()
+        ray.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), camera)
+        const hit = ray.intersectObjects(built.pickable, false)[0]?.object.userData
+        if (hit?.bookId || hit?.drawerId) return
+      }
       controls.reset()
       render()
     }
@@ -86,6 +105,21 @@ export default function Storage3D({
       renderer.setSize(w, h)
       camera.aspect = w / h
       camera.updateProjectionMatrix()
+      // สัดส่วนจอเปลี่ยน (เช่น ขยายเต็มจอบนมือถือ): ปรับระยะกล้องให้ยังเห็นครบ คงมุมที่หมุนไว้
+      const s = state.current
+      if (s?.built && fitted.current) {
+        const next = fitDistance(s.built.size, camera)
+        const k = next / fitted.current
+        if (Math.abs(k - 1) > 0.02) {
+          camera.position.sub(controls.target).multiplyScalar(k).add(controls.target)
+          controls.position0.sub(controls.target0).multiplyScalar(k).add(controls.target0)
+          controls.minDistance = next * 0.35
+          controls.maxDistance = next * 2.5
+          camera.far = Math.max(2000, next * 4)
+          camera.updateProjectionMatrix()
+          fitted.current = next
+        }
+      }
       render()
     }
     const ro = new ResizeObserver(resize)
@@ -95,6 +129,8 @@ export default function Storage3D({
     let down: { x: number; y: number } | null = null
     const onDown = (e: PointerEvent) => (down = { x: e.clientX, y: e.clientY })
     const onUp = (e: PointerEvent) => {
+      // เลือกด้วยปุ่มหลักเท่านั้น (คลิกขวาใช้เลื่อนภาพ)
+      if (e.button !== 0) return
       if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) return
       const s = state.current
       if (!s?.built) return
@@ -157,10 +193,8 @@ export default function Storage3D({
     lastHeight.current = built.size.y
     if (firstBuild.current || grew) {
       firstBuild.current = false
-      const fov = (s.camera.fov * Math.PI) / 180
-      const fitH = built.size.y / 2 / Math.tan(fov / 2)
-      const fitW = built.size.x / 2 / Math.tan(fov / 2) / s.camera.aspect
-      const dist = Math.max(fitH, fitW) * 1.15 + built.size.z / 2
+      const dist = fitDistance(built.size, s.camera)
+      fitted.current = dist
       s.camera.position.set(dist * 0.25, dist * 0.32, dist)
       s.controls.target.set(0, 0, 0)
       s.controls.minDistance = dist * 0.35

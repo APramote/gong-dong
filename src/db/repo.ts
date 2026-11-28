@@ -588,6 +588,39 @@ export function createRepo(db: GongDongDB = defaultDb) {
 
     /** ย้ายหนังสือไปแถวหน้า (0) หรือแถวหลัง (1) ของชั้นเดิม ไปต่อท้ายแถวนั้น */
     /**
+     * จัดหลายเล่มเข้าชุดเดียวกัน (null = นำออกจากชุด) คืนจำนวนเล่มที่เปลี่ยน
+     * numbers = เลขเล่มที่เดาไว้ของแต่ละเล่ม (ลำดับเดียวกับ ids): ใส่ให้เฉพาะเล่มที่ยังไม่มีเลข และเลขนั้นยังไม่มีในชุด
+     */
+    async setSeriesMany(ids: string[], seriesId: string | null, numbers: (number | null)[] = []): Promise<number> {
+      return db.transaction('rw', db.books, db.series, async () => {
+        if (seriesId) {
+          const s = await db.series.get(seriesId)
+          if (!s || s.deletedAt !== null) return 0
+        }
+        const now = Date.now()
+        const used = new Set<number>()
+        if (seriesId)
+          for (const b of alive(await db.books.where('seriesId').equals(seriesId).toArray())) if (b.seriesNo) used.add(b.seriesNo)
+        let changed = 0
+        for (const [i, id] of ids.entries()) {
+          const b = await db.books.get(id)
+          if (!b || b.deletedAt !== null) continue
+          const same = (b.seriesId ?? null) === seriesId
+          // อยู่ชุดนี้และมีเลขเล่มอยู่แล้ว ไม่แตะ
+          if (same && (!seriesId || b.seriesNo)) continue
+          const guess = numbers[i] ?? null
+          const seriesNo = !seriesId ? null : same ? b.seriesNo : null
+          const no = seriesNo ?? (seriesId && guess && !used.has(guess) ? guess : null)
+          if (no) used.add(no)
+          if (same && no === (b.seriesNo ?? null)) continue
+          await db.books.update(id, { seriesId, seriesNo: no, updatedAt: now })
+          changed++
+        }
+        return changed
+      })
+    },
+
+    /**
      * เติมข้อมูลที่หามาได้ลงในเล่ม เฉพาะช่องที่ยังว่าง (ไม่ทับสิ่งที่ผู้ใช้กรอกไว้) อ่านค่าล่าสุดในฐานข้อมูลเสมอ
      * หมวด: ตั้งให้เฉพาะเมื่อเล่มยังไม่มีหมวด และชื่อตรงกับหมวดที่มีอยู่แล้ว (ไม่สร้างหมวดใหม่ จะได้ไม่มีหมวดงอกเพิ่ม)
      * คืนจำนวนช่องที่เติม

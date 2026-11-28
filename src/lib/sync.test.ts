@@ -264,39 +264,49 @@ test('ไฟล์จากแอปรุ่นใหม่กว่า: แจ
   expect(file.version).toBe(SNAPSHOT_VERSION)
 })
 
-test('การตั้งค่า AI ใช้ร่วมกันทุกเครื่อง: เครื่องใหม่ได้ key จากเครื่องเดิม key ว่างไม่ทับ key ที่มี ปิดสวิตช์แล้วไม่แตะไฟล์', async () => {
+test('การตั้งค่า AI ใช้ร่วมกันทุกเครื่อง: เครื่องใหม่ได้ key จากเครื่องเดิม ลบ key แล้วตามไปทุกเครื่อง ค่าที่ตั้งไว้ก่อนมีระบบนี้ไม่หาย', async () => {
   const { syncShared, SETTINGS_FILE } = await import('./sharedSettings')
   const drive = memoryStore()
   const base = {
     aiEnabled: true, provider: 'gemini', geminiKey: '', geminiModel: '', claudeKey: '', claudeModel: 'c', dailyGoalMinutes: 20, dailyGoalPages: 20,
-    yearGoalBooks: 12, maxCategories: 12, organizeMode: 'minimal', googleClientId: '', lastSyncAt: 0, googleAccount: '', autoSync: true, syncSettings: true, sharedAt: 0,
+    yearGoalBooks: 12, maxCategories: 12, organizeMode: 'minimal', googleClientId: '', lastSyncAt: 0, googleAccount: '', autoSync: true, syncSettings: true,
+    sharedAt: 0, geminiKeyAt: 0, claudeKeyAt: 0,
   } as any
   const device = (init: object) => {
     let s = { ...base, ...init }
-    return { io: { load: () => s, save: (n: any) => (s = n) }, get: () => s }
+    return { io: { load: () => s, save: (n: any) => (s = n), defaults: base }, get: () => s, set: (patch: object) => (s = { ...s, ...patch }) }
   }
-  // มือถือ: ตั้ง key ไว้นานแล้ว (ก่อนมีระบบนี้ sharedAt ยังเป็น 0)
-  const phone = device({ geminiKey: 'KEY-PHONE', geminiModel: 'gemini-x', yearGoalBooks: 30, googleAccount: 'phone' })
-  // PC ใหม่: ยังไม่มีอะไร ซิงก์ก่อนมือถือก็ไม่สร้างไฟล์
-  const pc = device({ googleAccount: 'pc' })
-  expect(await syncShared(drive, pc.io)).toBe('none')
-  expect(drive.files.has(SETTINGS_FILE)).toBe(false)
-  expect(await syncShared(drive, phone.io)).toBe('pushed')
-  expect(await syncShared(drive, pc.io)).toBe('pulled')
-  expect(pc.get()).toMatchObject({ geminiKey: 'KEY-PHONE', geminiModel: 'gemini-x', yearGoalBooks: 30, googleAccount: 'pc' })
-  expect(await syncShared(drive, pc.io)).toBe('none')
-  // PC อีกเครื่องที่ยังไม่มี key แต่เพิ่งแก้เป้า (ใหม่กว่า): เป้าของมันชนะ แต่ key ว่างไม่ทับ key ที่มี
-  const laptop = device({ dailyGoalPages: 50, sharedAt: Date.now() + 1000 })
-  expect(await syncShared(drive, laptop.io)).toBe('both')
-  expect(laptop.get()).toMatchObject({ geminiKey: 'KEY-PHONE', dailyGoalPages: 50 })
-  await syncShared(drive, phone.io)
-  expect(phone.get()).toMatchObject({ geminiKey: 'KEY-PHONE', dailyGoalPages: 50, googleAccount: 'phone' })
+  const T = 1_800_000_000_000
+  // มือถือ: ตั้ง key ผู้ให้บริการ และเป้าไว้นานแล้ว (ก่อนมีระบบนี้ เวลาทุกตัวเป็น 0)
+  const phone = device({ geminiKey: 'KEY-PHONE', geminiModel: 'gemini-x', provider: 'claude', claudeKey: 'CK', yearGoalBooks: 30, googleAccount: 'phone' })
+  // PC ใหม่: แก้เป้าหน้าต่อวันแล้วซิงก์ "ก่อน" มือถือ
+  const pc = device({ googleAccount: 'pc', dailyGoalPages: 50, sharedAt: T })
+  expect(await syncShared(drive, pc.io, T + 1)).toBe('pushed')
+  // มือถือซิงก์ทีหลัง: ได้เป้าจาก PC แต่ผู้ให้บริการ เป้ารายปี และ key ที่ตั้งไว้เองไม่ถูกทับด้วยค่าเริ่มต้นของ PC
+  expect(await syncShared(drive, phone.io, T + 2)).toBe('both')
+  expect(phone.get()).toMatchObject({ provider: 'claude', yearGoalBooks: 30, dailyGoalPages: 50, geminiKey: 'KEY-PHONE', claudeKey: 'CK', googleAccount: 'phone' })
+  expect(await syncShared(drive, pc.io, T + 3)).toBe('pulled')
+  expect(pc.get()).toMatchObject({ provider: 'claude', yearGoalBooks: 30, dailyGoalPages: 50, geminiKey: 'KEY-PHONE', geminiModel: 'gemini-x', claudeKey: 'CK', googleAccount: 'pc' })
+  expect(await syncShared(drive, pc.io, T + 4)).toBe('none')
+  expect(await syncShared(drive, phone.io, T + 4)).toBe('none')
+  // ลบ key โดยตั้งใจบน PC: ตามไปถึงมือถือ ไม่ถูกเติมกลับ
+  pc.set({ geminiKey: '', geminiModel: '', geminiKeyAt: T + 10, sharedAt: T + 10 })
+  expect(await syncShared(drive, pc.io, T + 11)).toBe('pushed')
+  await syncShared(drive, phone.io, T + 12)
+  expect(phone.get()).toMatchObject({ geminiKey: '', claudeKey: 'CK' })
+  await syncShared(drive, pc.io, T + 13)
+  expect(pc.get().geminiKey).toBe('')
   // ปิดสวิตช์: ไม่อ่านไม่เขียน
-  const off = device({ syncSettings: false, geminiKey: 'LOCAL-ONLY', sharedAt: Date.now() + 5000 })
-  expect(await syncShared(drive, off.io)).toBe('none')
-  expect(JSON.parse(await drive.files.get(SETTINGS_FILE)!.text()).values.geminiKey).toBe('KEY-PHONE')
-  // ไฟล์ที่ถูกแก้ให้ค่าผิดชนิด: ค่าผิดถูกทิ้ง ใช้ค่าของเครื่อง
-  drive.files.set(SETTINGS_FILE, new Blob([JSON.stringify({ version: 1, sharedAt: Date.now() + 9000, values: { provider: 'evil', maxCategories: -3, geminiKey: 'NEW' } })]))
-  await syncShared(drive, pc.io)
-  expect(pc.get()).toMatchObject({ provider: 'gemini', maxCategories: 12, geminiKey: 'NEW' })
+  const off = device({ syncSettings: false, geminiKey: 'LOCAL-ONLY', geminiKeyAt: T + 50, sharedAt: T + 50 })
+  expect(await syncShared(drive, off.io, T + 51)).toBe('none')
+  expect(JSON.parse(await drive.files.get(SETTINGS_FILE)!.text()).values.geminiKey).toBe('')
+  // ไฟล์ที่ถูกแก้: ค่าผิดชนิดถูกทิ้ง เวลาในอนาคตไกลถูกจำกัด (ไม่ชนะตลอดไป)
+  drive.files.set(SETTINGS_FILE, new Blob([JSON.stringify({ version: 1, sharedAt: T * 5, values: { provider: 'evil', maxCategories: -3, geminiKey: 'NEW', geminiKeyAt: T * 5 } })]))
+  await syncShared(drive, pc.io, T + 60)
+  expect(pc.get()).toMatchObject({ provider: 'claude', maxCategories: 12, geminiKey: 'NEW' })
+  expect(pc.get().sharedAt).toBeLessThanOrEqual(T + 60 + 86400000)
+  // ไฟล์จากแอปรุ่นใหม่กว่า: ไม่อ่าน ไม่เขียนทับ
+  drive.files.set(SETTINGS_FILE, new Blob([JSON.stringify({ version: 2, sharedAt: 1, values: {} })]))
+  expect(await syncShared(drive, pc.io, T + 70)).toBe('none')
+  expect(JSON.parse(await drive.files.get(SETTINGS_FILE)!.text()).version).toBe(2)
 })

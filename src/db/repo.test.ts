@@ -619,3 +619,22 @@ test('จัดแถวให้ตู้สองแถว: เล่มที
   expect(rows).toEqual(['เล่ม 0:0', 'เล่ม 1:0', 'เล่ม 2:0', 'เล่ม 3:1', 'เล่ม 4:1', 'เล่ม 5:1', 'เล่ม 6:0', 'เล่ม 7:0'])
   expect(await r.spillToBack(caseId)).toBe(0)
 })
+
+test('จัดหลายเล่มเข้าชุด: ใส่เลขเล่มที่เดาได้ ไม่ทับเลขที่มี ไม่ซ้ำเลขในชุด และนำออกจากชุดได้', async () => {
+  const db = new GongDongDB(`series-many-${n++}`)
+  const r = createRepo(db)
+  const sid = await r.ensureSeries('ไซอิ๋ว')
+  const a = await r.addBook({ ...emptyBook, title: 'ไซอิ๋ว 1', seriesId: sid, seriesNo: 1 })
+  const b = await r.addBook({ ...emptyBook, title: 'ไซอิ๋ว 2' })
+  const c = await r.addBook({ ...emptyBook, title: 'ไซอิ๋ว ฉบับพิเศษ' })
+  const d = await r.addBook({ ...emptyBook, title: 'ไซอิ๋ว 1 พิมพ์ใหม่' })
+  expect(await r.setSeriesMany([a, b, c, d], sid, [1, 2, null, 1])).toBe(3)
+  const no = async (id: string) => [(await r.getBook(id))!.seriesId, (await r.getBook(id))!.seriesNo]
+  expect(await no(a)).toEqual([sid, 1])
+  expect(await no(b)).toEqual([sid, 2])
+  expect(await no(c)).toEqual([sid, null])
+  expect(await no(d)).toEqual([sid, null]) // เลข 1 มีในชุดแล้ว ไม่ใส่ซ้ำ
+  expect(await r.setSeriesMany([a, b], sid, [1, 2])).toBe(0)
+  expect(await r.setSeriesMany([b, c], null)).toBe(2)
+  expect(await no(b)).toEqual([null, null])
+})

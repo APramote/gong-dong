@@ -1,8 +1,9 @@
 import { DEFAULT_CLAUDE_MODEL } from './claudeModels'
 
 /**
- * ค่าตั้งค่าที่อยู่เฉพาะเครื่องนี้ (ไม่ sync)
- * API key ไม่ออกจากเครื่อง นอกจากส่งให้ผู้ให้บริการ AI โดยตรง
+ * ค่าตั้งค่าของแอป เก็บในเครื่องนี้
+ * ส่วนที่ใช้ร่วมกันทุกเครื่อง (AI รวม API key และเป้าการอ่าน) ซิงก์ไปยังโฟลเดอร์ข้อมูลของแอปใน Google Drive ของผู้ใช้เอง
+ * เมื่อเปิดสวิตช์ "ใช้การตั้งค่า AI เดียวกันทุกเครื่อง" (ดู sharedSettings.ts) — key ไม่ถูกส่งไปที่อื่นนอกจากผู้ให้บริการ AI และ Drive ของผู้ใช้
  */
 const KEY = 'gong-dong.settings'
 
@@ -41,6 +42,9 @@ export interface Settings {
   syncSettings: boolean
   /** เวลาที่การตั้งค่าที่ใช้ร่วมกันถูกแก้ล่าสุดในเครื่องนี้ (0 = ยังไม่เคยแก้) */
   sharedAt: number
+  /** เวลาที่ key แต่ละตัวถูกใส่ เปลี่ยน หรือลบล่าสุด (0 = ไม่เคยแตะ) ใช้ตัดสินว่า key ของเครื่องไหนใหม่กว่า รวมถึงการลบโดยตั้งใจ */
+  geminiKeyAt: number
+  claudeKeyAt: number
 }
 
 const defaults: Settings = {
@@ -61,7 +65,12 @@ const defaults: Settings = {
   autoSync: true,
   syncSettings: true,
   sharedAt: 0,
+  geminiKeyAt: 0,
+  claudeKeyAt: 0,
 }
+
+/** ค่าเริ่มต้น (ใช้ดูว่าเครื่องนี้เคยตั้งค่าอะไรเองบ้าง) */
+export const defaultSettings: Readonly<Settings> = defaults
 
 export function loadSettings(): Settings {
   try {
@@ -95,7 +104,17 @@ export function saveSettings(s: Settings): void {
   // การตั้งค่าที่ใช้ร่วมกันเปลี่ยน (และผู้เรียกไม่ได้กำหนดเวลามาเอง เช่น ค่าที่รับมาจาก Drive): จดเวลาไว้ให้ตัวซิงก์
   const before = loadSettings()
   const changed = SHARED.some((k) => before[k] !== s[k])
-  const next = changed && s.sharedAt === before.sharedAt ? { ...s, sharedAt: Date.now() } : s
+  // ผู้เรียกทั่วไปไม่แตะเวลา: จดให้เอง (เวลาต้องเดินหน้าเสมอ แม้นาฬิกาเครื่องเคยเดินเร็ว) ตัวซิงก์กำหนดเวลามาเองจึงไม่จดซ้ำ
+  const mine = changed && s.sharedAt === before.sharedAt
+  const now = Math.max(Date.now(), before.sharedAt + 1)
+  const next = mine
+    ? {
+        ...s,
+        sharedAt: now,
+        ...(before.geminiKey !== s.geminiKey && s.geminiKeyAt === before.geminiKeyAt && { geminiKeyAt: now }),
+        ...(before.claudeKey !== s.claudeKey && s.claudeKeyAt === before.claudeKeyAt && { claudeKeyAt: now }),
+      }
+    : s
   localStorage.setItem(KEY, JSON.stringify(next))
-  if (changed && next !== s) sharedListener?.()
+  if (mine) sharedListener?.()
 }

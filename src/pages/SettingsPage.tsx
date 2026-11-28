@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { getSettingsVersion, subscribe } from '../lib/autosync'
 import { aiErrorText } from '../lib/aiError'
 import { checkClaudeKey, listGeminiModels } from '../lib/ai'
@@ -13,6 +13,8 @@ type Status = { ok: boolean; text: string } | null
 
 export function SettingsPage() {
   const [settings, setSettings] = useState(loadSettings)
+  /** ค่าที่บันทึกไว้ล่าสุดเท่าที่หน้านี้รู้ ใช้ดูว่าช่อง key ถูกพิมพ์ค้างอยู่หรือไม่ */
+  const saved = useRef(settings)
   const [geminiModels, setGeminiModels] = useState<string[]>(
     settings.geminiModel ? [settings.geminiModel] : [],
   )
@@ -20,10 +22,19 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false)
   // ซิงก์แล้วได้การตั้งค่าใหม่จากเครื่องอื่น (เช่น API key): แสดงค่าใหม่ทันที ไม่ต้องเปิดหน้านี้ใหม่
   const pulled = useSyncExternalStore(subscribe, getSettingsVersion)
+  const seen = useRef(pulled)
   useEffect(() => {
-    if (!pulled) return
+    // เฉพาะการรับค่าใหม่ที่เกิดขณะเปิดหน้านี้อยู่ (ไม่ใช่ครั้งที่เกิดก่อนเข้าหน้า)
+    if (pulled === seen.current) return
+    seen.current = pulled
     const s = loadSettings()
-    setSettings(s)
+    // กำลังพิมพ์ key ค้างอยู่ (ต่างจากที่บันทึกไว้ก่อนหน้า): ไม่ทับสิ่งที่พิมพ์
+    setSettings((cur) => ({
+      ...s,
+      geminiKey: cur.geminiKey !== saved.current.geminiKey ? cur.geminiKey : s.geminiKey,
+      claudeKey: cur.claudeKey !== saved.current.claudeKey ? cur.claudeKey : s.claudeKey,
+    }))
+    saved.current = s
     setGeminiModels((m) => (s.geminiModel && !m.includes(s.geminiModel) ? [...m, s.geminiModel] : m))
     setStatus({ ok: true, text: t.settings.pulled })
   }, [pulled])
@@ -31,8 +42,10 @@ export function SettingsPage() {
   const update = (patch: Partial<Settings>) => {
     // อ่านค่าล่าสุดจากเครื่องก่อนรวม (การ์ดซิงก์บันทึกบัญชีและเวลาซิงก์แยกต่างหาก ต้องไม่ถูกทับด้วยค่าเก่า)
     const next = { ...loadSettings(), ...patch }
-    setSettings(next)
     saveSettings(next)
+    saved.current = loadSettings()
+    // key ที่พิมพ์ค้างไว้ (ยังไม่ได้กดบันทึก) ยังอยู่ในช่อง ไม่ถูกแทนด้วยค่าที่บันทึกไว้
+    setSettings((cur) => ({ ...loadSettings(), geminiKey: patch.geminiKey ?? cur.geminiKey, claudeKey: patch.claudeKey ?? cur.claudeKey }))
   }
 
   async function checkGemini() {
@@ -125,9 +138,11 @@ export function SettingsPage() {
           type="password"
           autoComplete="off"
           value={key}
-          onChange={(e) =>
-            update(isClaude ? { claudeKey: e.target.value } : { geminiKey: e.target.value })
-          }
+          onChange={(e) => {
+            // พิมพ์แล้วยังไม่บันทึก: บันทึกเมื่อกด "บันทึกและตรวจสอบ key" เท่านั้น key ที่พิมพ์ไม่ครบจะได้ไม่ถูกซิงก์ไปทับเครื่องอื่น
+            const v = e.target.value
+            setSettings((cur) => ({ ...cur, ...(isClaude ? { claudeKey: v } : { geminiKey: v }) }))
+          }}
         />
       </label>
       <p className="muted">{isClaude ? t.settings.claudeKeyHint : t.settings.geminiKeyHint}</p>
