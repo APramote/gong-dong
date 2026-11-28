@@ -2377,3 +2377,80 @@ details.more[open] {
   font-size: 0.85rem;
   color: var(--muted);
 }
+
+/* ---------- ช่องติ๊กแตะง่าย และแถวที่ทั้งแถวเป็นช่องติ๊ก ---------- */
+.pick {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 9px;
+}
+.pick-row {
+  cursor: pointer;
+  align-items: center;
+}
+.dest-head input,
+.check input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 9px 4px 9px 0;
+}
+.dest-books {
+  margin-left: 4px;
+}
+.dest-books > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* ---------- แถบเลือกหลายเล่ม: เตี้ยลง ไม่บังรายการ ---------- */
+.select-bar {
+  gap: 8px;
+  padding: 10px 12px;
+}
+.select-bar:focus {
+  outline: none;
+}
+.select-row .actions {
+  gap: 14px;
+  flex-wrap: nowrap;
+}
+.select-apply {
+  display: flex;
+  gap: 8px;
+}
+.select-apply select {
+  flex: 1;
+  min-width: 0;
+}
+.select-apply .btn {
+  flex: none;
+}
+.result-count {
+  flex-wrap: wrap;
+}
+@media (min-width: 900px) {
+  .select-bar {
+    bottom: 88px;
+  }
+}
+
+/* ชื่อยาวในแผนจัดระเบียบต้องตัดบรรทัดได้ ไม่ดันจอเล็กให้ล้น */
+.pick-row .row-main,
+.dest-head > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dest-group,
+.dest-books {
+  min-width: 0;
+}
+.plan .actions .btn {
+  white-space: normal;
+  text-align: center;
+}

@@ -1,11 +1,9 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
 import type { ReadingStatus } from '../db/types'
 import { BookRow } from '../components/BookRow'
-import { PlaceSelect } from '../components/PlaceSelect'
-import { CategorySelect } from '../components/CategorySelect'
 import { CoverThumb } from '../components/Cover'
 import { placeGroups, placeLabel } from '../placeLabel'
 import { loadSettings } from '../lib/settings'
@@ -15,6 +13,7 @@ const NO_PLACE = '__none__'
 const IN_HAND = '__hand__'
 const NO_CATEGORY = '__none__'
 const PAGE = 100
+const NEW_CATEGORY = '__new__'
 const HINT_KEY = 'gong-dong.backupHintHidden'
 
 export function LibraryPage() {
@@ -37,12 +36,22 @@ export function LibraryPage() {
   // ---------- เลือกหลายเล่มเพื่อย้ายที่เก็บ ----------
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
-  const [dest, setDest] = useState<string | null>(null)
   /** จะทำอะไรกับเล่มที่เลือก: ย้ายที่เก็บ ตั้งหมวด หรือเปลี่ยนสถานะ */
   const [bulk, setBulk] = useState<'move' | 'category' | 'status'>('move')
-  const [bulkCat, setBulkCat] = useState<string | null>(null)
-  const [bulkStatus, setBulkStatus] = useState<ReadingStatus>('dong')
+  /** ปลายทางที่เลือก ('' = ยังไม่ได้เลือก ปุ่มใช้จะกดไม่ได้) */
+  const [target, setTarget] = useState('')
+  const [applying, setApplying] = useState(false)
+  const barRef = useRef<HTMLDivElement>(null)
+  const selectBtn = useRef<HTMLButtonElement>(null)
+  const msgRef = useRef<HTMLParagraphElement>(null)
   const [moveMsg, setMoveMsg] = useState('')
+  // เปิดโหมดเลือก: โฟกัสไปที่แถบคำสั่ง / มีผลลัพธ์: เลื่อนให้เห็นข้อความ (ผู้ใช้อาจเลื่อนลงมาไกล)
+  useEffect(() => {
+    if (selecting) barRef.current?.focus({ preventScroll: true })
+  }, [selecting])
+  useEffect(() => {
+    if (moveMsg) msgRef.current?.scrollIntoView({ block: 'center' })
+  }, [moveMsg])
   const togglePick = useCallback(
     (id: string) =>
       setPicked((cur) => {
@@ -104,6 +113,40 @@ export function LibraryPage() {
   const dong = books.filter((b) => b.status === 'dong').length
   // นับเฉพาะเล่มที่เลือกไว้และยังอยู่ในรายการที่กรองอยู่ (เปลี่ยนตัวกรองแล้วเล่มที่มองไม่เห็นจะไม่ถูกย้าย)
   const pickedShown = selecting ? shown.filter((b) => picked.has(b.id)) : []
+  const closeSelect = () => {
+    setSelecting(false)
+    setPicked(new Set())
+    setTarget('')
+    setTimeout(() => selectBtn.current?.focus(), 0)
+  }
+  async function applyBulk() {
+    const ids = pickedShown.map((b) => b.id)
+    const n = ids.length
+    const name =
+      bulk === 'move'
+        ? target === NO_PLACE ? t.library.noPlace : (labels.get(target) ?? '')
+        : bulk === 'category'
+          ? target === NO_CATEGORY ? t.categories.none : (catName.get(target) ?? '')
+          : t.status[target as ReadingStatus]
+    // ทำกับหลายเล่มพร้อมกันและย้อนกลับไม่ได้ ถามก่อนเสมอ
+    if (!confirm(t.library.confirmBulk[bulk](n, name))) return
+    setApplying(true)
+    try {
+      if (bulk === 'move') {
+        // ย้ายตามลำดับที่เห็นในรายการ เล่มที่อยู่ในมือถูกข้าม
+        const inHand = pickedShown.filter((b) => b.takenAt).length
+        const moved = await repo.moveBooks(ids, target === NO_PLACE ? null : target)
+        setMoveMsg(target === NO_PLACE ? t.library.unplaced(moved, inHand) : t.library.moved(moved, name, inHand))
+      } else if (bulk === 'category') {
+        setMoveMsg(t.library.categorized(await repo.setCategoryMany(ids, target === NO_CATEGORY ? null : target), name))
+      } else {
+        setMoveMsg(t.library.statusSet(await repo.setStatusMany(ids, target as ReadingStatus), name))
+      }
+      closeSelect()
+    } finally {
+      setApplying(false)
+    }
+  }
   const filtering = Boolean(deferredQuery.trim() || status || placeId || categoryId)
 
   return (
@@ -230,8 +273,8 @@ export function LibraryPage() {
 
       {/* กรองหรือค้นอยู่: บอกจำนวนเล่มที่ตรง และล้างตัวกรองได้ในปุ่มเดียว */}
       {(filtering || books.length > 0) && (
-        <p className="muted result-count" role="status">
-          <span>{filtering ? t.library.found(shown.length, books.length) : ''}</span>
+        <p className="muted result-count">
+          <span role="status">{filtering ? t.library.found(shown.length, books.length) : ''}</span>
           <span className="actions">
             {filtering && (
               <button
@@ -248,7 +291,8 @@ export function LibraryPage() {
             )}
             {shown.length > 0 && !selecting && (
               <button
-                className="link-btn"
+                ref={selectBtn}
+                className="btn small"
                 onClick={() => {
                   setSelecting(true)
                   setMoveMsg('')
@@ -261,7 +305,7 @@ export function LibraryPage() {
         </p>
       )}
       {moveMsg && (
-        <p className="ok" role="status">
+        <p className="ok" role="status" ref={msgRef}>
           {moveMsg}
         </p>
       )}
@@ -296,7 +340,7 @@ export function LibraryPage() {
 
       {/* แถบคำสั่งของโหมดเลือกหลายเล่ม ลอยอยู่เหนือเมนูล่าง */}
       {selecting && (
-        <div className="select-bar" role="region" aria-label={t.library.select}>
+        <div className="select-bar" role="region" aria-label={t.library.select} tabIndex={-1} ref={barRef}>
           <div className="select-row">
             <strong>{t.library.pickedN(pickedShown.length)}</strong>
             <span className="actions">
@@ -306,61 +350,72 @@ export function LibraryPage() {
               <button className="link-btn" disabled={picked.size === 0} onClick={() => setPicked(new Set())}>
                 {t.library.pickNone}
               </button>
+              <button className="link-btn" aria-label={t.common.cancel} onClick={closeSelect}>
+                ✕
+              </button>
             </span>
           </div>
           <div className="chips small" role="group" aria-label={t.library.bulkLabel}>
             {(['move', 'category', 'status'] as const).map((k) => (
-              <button key={k} className={bulk === k ? 'on' : ''} aria-pressed={bulk === k} onClick={() => setBulk(k)}>
+              <button
+                key={k}
+                className={bulk === k ? 'on' : ''}
+                aria-pressed={bulk === k}
+                onClick={() => {
+                  setBulk(k)
+                  setTarget('')
+                }}
+              >
                 {t.library.bulk[k]}
               </button>
             ))}
           </div>
-          {bulk === 'move' && <PlaceSelect label={t.library.moveTo} value={dest} onChange={setDest} />}
-          {bulk === 'category' && <CategorySelect value={bulkCat} onChange={setBulkCat} />}
-          {bulk === 'status' && (
-            <label>
-              {t.book.status}
-              <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value as ReadingStatus)}>
-                {Object.entries(t.status).map(([k, v]) => (
+          <div className="select-apply">
+            {/* ต้องเลือกปลายทางเองก่อนเสมอ (ไม่มีค่าเริ่มต้น) กันกดพลาดแล้วหนังสือทั้งกลุ่มหลุดจากที่เก็บหรือหมวด */}
+            <select
+              aria-label={t.library.bulkTarget[bulk]}
+              value={target}
+              onChange={async (e) => {
+                if (e.target.value !== NEW_CATEGORY) return setTarget(e.target.value)
+                const name = prompt(t.categories.newName)?.trim()
+                if (name) setTarget(await repo.ensureCategory(name))
+              }}
+            >
+              <option value="">{t.library.bulkTarget[bulk]}…</option>
+              {bulk === 'move' && (
+                <>
+                  <option value={NO_PLACE}>{t.library.unplace}</option>
+                  {placeGroups(places, bookcases).map((g) => (
+                    <optgroup key={g.title} label={g.title}>
+                      {g.options.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </>
+              )}
+              {bulk === 'category' && (
+                <>
+                  <option value={NO_CATEGORY}>{t.categories.none}</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                  <option value={NEW_CATEGORY}>{t.categories.addNew}</option>
+                </>
+              )}
+              {bulk === 'status' &&
+                Object.entries(t.status).map(([k, v]) => (
                   <option key={k} value={k}>
                     {v}
                   </option>
                 ))}
-              </select>
-            </label>
-          )}
-          <div className="actions">
-            <button
-              className="btn primary"
-              disabled={pickedShown.length === 0}
-              onClick={async () => {
-                const ids = pickedShown.map((b) => b.id)
-                if (bulk === 'move') {
-                  // ย้ายตามลำดับที่เห็นในรายการ เล่มที่อยู่ในมือถูกข้าม
-                  const inHand = pickedShown.filter((b) => b.takenAt).length
-                  const moved = await repo.moveBooks(ids, dest)
-                  setMoveMsg(t.library.moved(moved, dest ? (labels.get(dest) ?? '') : t.library.noPlace, inHand))
-                } else if (bulk === 'category') {
-                  const n = await repo.setCategoryMany(ids, bulkCat)
-                  setMoveMsg(t.library.categorized(n, bulkCat ? (catName.get(bulkCat) ?? '') : t.categories.none))
-                } else {
-                  const n = await repo.setStatusMany(ids, bulkStatus)
-                  setMoveMsg(t.library.statusSet(n, t.status[bulkStatus]))
-                }
-                setPicked(new Set())
-                setSelecting(false)
-              }}
-            >
-              {bulk === 'move' ? t.library.moveN(pickedShown.length) : t.library.applyN(pickedShown.length)}
-            </button>
-            <button
-              className="btn"
-              onClick={() => {
-                setSelecting(false)
-                setPicked(new Set())
-              }}
-            >
-              {t.common.cancel}
+            </select>
+            <button className="btn primary" disabled={pickedShown.length === 0 || !target || applying} onClick={applyBulk}>
+              {t.library.applyN(pickedShown.length)}
             </button>
           </div>
         </div>

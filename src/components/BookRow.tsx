@@ -19,11 +19,23 @@ export const BookRow = memo(function BookRow({
   selected?: boolean
   onSelect?: (id: string) => void
 }) {
+  // โหมดเลือกหลายเล่ม: ทั้งแถวเป็นช่องติ๊ก แตะตรงไหนก็เลือก (ไม่พาไปหน้าหนังสือ การเลือกจะได้ไม่หาย)
+  if (onSelect)
+    return (
+      <li>
+        <label className={`row pick-row${selected ? ' is-picked' : ''}`}>
+          <input type="checkbox" className="pick" checked={Boolean(selected)} onChange={() => onSelect(book.id)} />
+          <CoverThumb bookId={book.id} title={book.title} color={book.spineColor} />
+          <span className="row-main">
+            <span className="row-title">{book.title}</span>
+            <span className="row-sub">{[book.authors, sub].filter(Boolean).join(' · ')}</span>
+          </span>
+          <span className={`status status-${book.status}`}>{t.status[book.status]}</span>
+        </label>
+      </li>
+    )
   return (
-    <li className={`row${selected ? ' is-picked' : ''}`}>
-      {onSelect && (
-        <input type="checkbox" className="pick" aria-label={book.title} checked={Boolean(selected)} onChange={() => onSelect(book.id)} />
-      )}
+    <li className="row">
       <CoverThumb bookId={book.id} title={book.title} color={book.spineColor} />
       <Link to={`/book/${book.id}`} className="row-main">
         <span className="row-title">{book.title}</span>

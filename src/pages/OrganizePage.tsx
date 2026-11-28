@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
@@ -31,7 +31,7 @@ import { loadSettings, saveSettings } from '../lib/settings'
 import { t } from '../th'
 
 /** รายการหนังสือแบบติ๊กเลือกได้ */
-function PickList({
+const PickList = memo(function PickList({
   books,
   picked,
   onToggle,
@@ -42,26 +42,23 @@ function PickList({
   onToggle: (id: string) => void
   sub?: (b: Book) => string
 }) {
+  // ทั้งแถวเป็นช่องติ๊ก (แตะตรงไหนก็เลือก) ไม่พาไปหน้าหนังสือ กันแตะพลาดแล้วหลุดจากแผนที่ AI เพิ่งทำให้
   return (
     <ul className="list">
       {books.map((b) => (
-        <li className="row" key={b.id}>
-          <input
-            type="checkbox"
-            className="pick"
-            aria-label={b.title}
-            checked={picked.has(b.id)}
-            onChange={() => onToggle(b.id)}
-          />
-          <Link to={`/book/${b.id}`} className="row-main">
-            <span className="row-title">{b.title}</span>
-            {sub && <span className="row-sub">{sub(b)}</span>}
-          </Link>
+        <li key={b.id}>
+          <label className="row pick-row">
+            <input type="checkbox" className="pick" checked={picked.has(b.id)} onChange={() => onToggle(b.id)} />
+            <span className="row-main">
+              <span className="row-title">{b.title}</span>
+              {sub && <span className="row-sub">{sub(b)}</span>}
+            </span>
+          </label>
         </li>
       ))}
     </ul>
   )
-}
+})
 
 const toggle = (set: Set<string>, id: string) => {
   const next = new Set(set)
@@ -119,7 +116,10 @@ function RuleGroup({
             className="btn primary"
             disabled={chosen.length === 0 || !target}
             onClick={async () => {
-              for (const b of chosen) await repo.moveBook(b.id, target)
+              await repo.moveBooks(
+                chosen.map((b) => b.id),
+                target,
+              )
             }}
           >
             {t.organize.moveN(chosen.length)}
@@ -154,6 +154,7 @@ export function OrganizePage() {
   const series = useLiveQuery(() => repo.listSeries(), []) ?? []
   const seriesName = useMemo(() => new Map(series.map((x) => [x.id, x.name])), [series])
   const [partial, setPartial] = useState('')
+  const [applying, setApplying] = useState(false)
   // แผนจาก AI ยังไม่ได้ใช้ ออกจากหน้าแล้วต้องเรียก AI (และเสียค่าใช้จ่าย) ใหม่
   useLeaveGuard(Boolean(plan), t.organize.unsavedLeave)
   const [pickedCats, setPickedCats] = useState<Set<string>>(new Set())
@@ -165,12 +166,39 @@ export function OrganizePage() {
     const p = placeId ? places.find((x) => x.id === placeId) : undefined
     return p ? placeLabel(p, bookcases) : '—'
   }
+  // ตารางค้นของแผน คิดครั้งเดียวต่อแผน (แผนใหญ่หลายร้อยเล่ม ติ๊กหนึ่งครั้งต้องไม่ไล่หาทั้งรายการ)
+  const suggested = useMemo(() => new Map((plan?.categories ?? []).map((c) => [c.bookId, c.category])), [plan])
+  const moveOf = useMemo(() => new Map((plan?.moves ?? []).map((m) => [m.bookId, m])), [plan])
+  const movesByDest = useMemo(() => {
+    const out = new Map<string, OrganizePlan['moves']>()
+    for (const m of plan?.moves ?? []) {
+      const list = out.get(m.toPlaceId)
+      if (list) list.push(m)
+      else out.set(m.toPlaceId, [m])
+    }
+    return out
+  }, [plan])
+  // รายการหนังสือของแผน และข้อความใต้ชื่อ เตรียมไว้ให้คงที่ รายการที่ไม่เปลี่ยนจะไม่วาดใหม่
+  const catBooks = useMemo(() => (plan?.categories ?? []).map((c) => byId.get(c.bookId)).filter((b): b is Book => Boolean(b)), [plan, byId])
+  const destBooks = useMemo(
+    () => new Map([...movesByDest].map(([dest, moves]) => [dest, moves.map((m) => byId.get(m.bookId)).filter((b): b is Book => Boolean(b))])),
+    [movesByDest, byId],
+  )
+  const catSub = useCallback((b: Book) => suggested.get(b.id) ?? '', [suggested])
+  const placeNames = useMemo(() => new Map(places.map((p) => [p.id, placeLabel(p, bookcases)])), [places, bookcases])
+  const moveSub = useCallback(
+    (b: Book) => `${b.takenAt ? t.organize.inHand : ((b.placeId && placeNames.get(b.placeId)) || t.library.noPlace)} · ${moveOf.get(b.id)?.reason ?? ''}`,
+    [placeNames, moveOf],
+  )
+  const toggleCat = useCallback((id: string) => setPickedCats((cur) => toggle(cur, id)), [])
+  const toggleMove = useCallback((id: string) => setPickedMoves((cur) => toggle(cur, id)), [])
+  const advice = useMemo(() => ruleAdvice(books ?? [], places, sessions), [books, places, sessions])
   if (!books) return <p className="empty">{t.common.loading}</p>
 
-  const advice = ruleAdvice(books, places, sessions)
   const groups = placeGroups(places, bookcases)
   const boxes = groups.filter((g) => g.title === t.places.boxes)
-  const reachable = groups.filter((g) => g.title !== t.places.boxes)
+  // ปลายทางของเล่มที่ออกจากกล่อง: ชั้นและลิ้นชัก (กองไม่อยู่ในการจัดระเบียบ)
+  const reachable = groups.filter((g) => g.title !== t.places.boxes && g.title !== t.places.piles)
   const quiet = !advice.toBox.length && !advice.outOfBox.length && !advice.unplaced.length
 
   /** ข้อผิดพลาดที่ลองชุดถัดไปก็ไม่ช่วย (ปิด AI ไม่มี key โควตาหมด) หยุดเลย */
@@ -195,6 +223,7 @@ export function OrganizePage() {
       const steps = groups.length + (places.length > 0 ? 1 : 0)
       const titleOf = new Map(all.map((b) => [b.id, b.title]))
       let step = 0
+      let failures = 0
       setRatio(0)
       for (const group of groups) {
         setProgress(t.organize.progressCats(attempted, todo.length))
@@ -202,12 +231,16 @@ export function OrganizePage() {
         try {
           const input = buildCategoryPrompt(group, known, limit)
           for (const c of readCategories(await askJson(input.prompt, categorySchema), input)) {
-            suggestions.push(c)
-            if (!known.some((k) => k.toLowerCase() === c.category.toLowerCase())) known.push(c.category)
+            // ใช้ตัวสะกดเดียวกับหมวดที่รู้จักแล้ว ("Manga" กับ "manga" คือหมวดเดียวกัน)
+            const same = known.find((k) => k.toLowerCase() === c.category.toLowerCase())
+            if (!same) known.push(c.category)
+            suggestions.push({ ...c, category: same ?? c.category })
           }
+          failures = 0
         } catch (e) {
           firstError ??= e
-          if (fatal(e)) break
+          // ล้มเหลวติดกันสองชุด (เช่น เน็ตหลุด) ไม่ต้องลองชุดที่เหลือ
+          if (fatal(e) || ++failures >= 2) break
         }
         setRatio(++step / steps)
       }
@@ -228,7 +261,9 @@ export function OrganizePage() {
         }
       }
       // ด่านสุดท้ายไม่พึ่ง AI: ยังเกินอยู่ก็รวมหมวดใหม่ที่เล็กที่สุดเป็น "อื่น ๆ"
+      const before = suggestions.length
       suggestions = capCategories(suggestions, existing, limit)
+      const dropped = before - suggestions.length
 
       // ขั้นที่ 2: ให้ AI วางผังระดับหมวด แล้วแอปคิดการย้ายรายเล่มเอง
       let layout: Pick<OrganizePlan, 'summary' | 'tips' | 'moves'> = { summary: '', tips: [], moves: [] }
@@ -251,6 +286,8 @@ export function OrganizePage() {
       // ไม่ได้อะไรเลยและมีข้อผิดพลาด = ล้มเหลว ส่วนได้บางส่วนให้ใช้ได้ พร้อมบอกว่าไม่ครบเพราะอะไร
       if (firstError && !gotSomething) return setError(aiErrorText(firstError))
       if (firstError) setPartial(t.organize.partial(suggestions.length, todo.length, aiErrorText(firstError)))
+      // หมวดเต็มเพดานแล้ว AI ยังเสนอหมวดใหม่: เล่มเหล่านั้นยังไม่ได้หมวด บอกให้รู้และบอกทางแก้
+      else if (dropped > 0) setPartial(t.organize.capDropped(dropped, limit))
       setPlan({ ...layout, categories: suggestions })
       setPickedCats(new Set(suggestions.map((c) => c.bookId)))
       setPickedMoves(new Set(layout.moves.map((m) => m.bookId)))
@@ -263,24 +300,37 @@ export function OrganizePage() {
   }
 
   async function apply() {
-    if (!plan) return
-    const cats = plan.categories.filter((c) => pickedCats.has(c.bookId))
-    const moves = plan.moves.filter((m) => pickedMoves.has(m.bookId) && !byId.get(m.bookId)?.takenAt)
-    for (const c of cats) await repo.setCategoryByName(c.bookId, c.category)
-    for (const m of moves) await repo.moveBook(m.bookId, m.toPlaceId)
-    // เรียงหนังสือในที่เก็บที่มีการย้ายเข้า: ชุดเดียวกันอยู่ติดกันตามเลขเล่ม (จัดใหม่ให้ลงตัว = เรียงตามหมวดด้วย)
-    let sorted = 0
-    for (const placeId of new Set(moves.map((m) => m.toPlaceId))) {
-      const inPlace = await repo.booksIn(placeId)
-      sorted += await repo.setOrder(placeId, arrange(inPlace, mode, plannedCats, seriesName))
+    if (!plan || applying) return
+    setApplying(true)
+    setError('')
+    try {
+      // เล่มที่ถูกลบหรือถูกหยิบไปหลังวิเคราะห์ ไม่ทำอะไรกับเล่มนั้น
+      const cats = plan.categories.filter((c) => pickedCats.has(c.bookId) && byId.has(c.bookId))
+      const moves = plan.moves.filter((m) => pickedMoves.has(m.bookId) && byId.has(m.bookId) && !byId.get(m.bookId)!.takenAt)
+      // ตั้งหมวดทีละหมวด และย้ายทีละปลายทาง ในธุรกรรมเดียวต่อกลุ่ม (เร็วกว่าเขียนทีละเล่มมาก)
+      const byCategory = new Map<string, string[]>()
+      for (const c of cats) byCategory.set(c.category, [...(byCategory.get(c.category) ?? []), c.bookId])
+      for (const [name, ids] of byCategory) await repo.setCategoryMany(ids, await repo.ensureCategory(name))
+      const byDest = new Map<string, string[]>()
+      for (const m of moves) byDest.set(m.toPlaceId, [...(byDest.get(m.toPlaceId) ?? []), m.bookId])
+      for (const [placeId, ids] of byDest) await repo.moveBooks(ids, placeId)
+      // เรียงหนังสือในที่เก็บที่มีการย้ายเข้า ใช้หมวดตามที่ผู้ใช้ติ๊กรับจริง (ข้อเสนอที่ไม่ได้ติ๊กไม่นับ)
+      const cat = new Map(plannedCats)
+      for (const c of plan.categories) if (!pickedCats.has(c.bookId)) cat.delete(c.bookId)
+      let sorted = 0
+      for (const placeId of byDest.keys()) {
+        const inPlace = await repo.booksIn(placeId)
+        sorted += await repo.setOrder(placeId, arrange(inPlace, mode, cat, seriesName))
+      }
+      setDone(t.organize.applied(cats.length, moves.length) + (sorted ? ` ${t.organize.sorted}` : ''))
+      setPlan(null)
+    } catch {
+      setError(t.organize.applyFailed)
+    } finally {
+      setApplying(false)
     }
-    setDone(t.organize.applied(cats.length, moves.length) + (sorted ? ` ${t.organize.sorted}` : ''))
-    setPlan(null)
   }
 
-  // จัดกลุ่มแผนย้ายตามปลายทาง
-  const movesByDest = new Map<string, OrganizePlan['moves']>()
-  for (const m of plan?.moves ?? []) movesByDest.set(m.toPlaceId, [...(movesByDest.get(m.toPlaceId) ?? []), m])
 
   return (
     <>
@@ -288,6 +338,8 @@ export function OrganizePage() {
         <h1>{t.organize.title}</h1>
       </div>
 
+      {/* แผนของ AI ครอบคลุมคำแนะนำเบื้องต้นแล้ว ระหว่างดูแผนซ่อนส่วนนี้ไว้ ไม่ให้เล่มเดียวกันถูกเสนอสองที่ */}
+      {!plan && (
       <section>
         <h2>{t.organize.rules}</h2>
         <p className="muted">{t.organize.rulesHint}</p>
@@ -325,8 +377,9 @@ export function OrganizePage() {
         )}
         {advice.noCategory.length > 0 && <p className="muted">{t.organize.noCategory(advice.noCategory.length)}</p>}
       </section>
+      )}
 
-      {!aiOn() && <p className="muted">{t.ai.offNote}</p>}
+      {!aiOn() && <p className="muted">{t.ai.off}</p>}
       {aiOn() && (
       <section>
         <h2>{t.organize.ai}</h2>
@@ -342,7 +395,11 @@ export function OrganizePage() {
             {progress}
           </p>
         )}
-        {done && <p className="ok">{done}</p>}
+        {done && (
+          <p className="ok" role="status">
+            {done}
+          </p>
+        )}
         {!plan && (
           <div className="mode-pick">
             <div className="chips" role="group" aria-label={t.organize.modeLabel}>
@@ -371,7 +428,19 @@ export function OrganizePage() {
 
         {plan && (
           <div className="plan">
-            {partial && <p className="muted">{partial}</p>}
+            {partial && (
+              <p className="muted" role="status">
+                {partial}
+              </p>
+            )}
+            {places.length === 0 && (
+              <p className="muted">
+                {t.organize.noPlaces}{' '}
+                <Link className="link" to="/scan">
+                  {t.scan.open}
+                </Link>
+              </p>
+            )}
             {plan.summary && (
               <div className="card">
                 <h3>{t.organize.summary}</h3>
@@ -388,7 +457,7 @@ export function OrganizePage() {
                 </ul>
               </div>
             )}
-            {!plan.categories.length && !plan.moves.length && <p className="empty">{t.organize.nothing}</p>}
+            {!plan.categories.length && !plan.moves.length && places.length > 0 && <p className="empty">{t.organize.nothing}</p>}
 
             {plan.categories.length > 0 && (
               <div className="card">
@@ -404,14 +473,10 @@ export function OrganizePage() {
                   </span>
                 </div>
                 <PickList
-                  books={plan.categories.map((c) => byId.get(c.bookId)!).filter(Boolean)}
+                  books={catBooks}
                   picked={pickedCats}
-                  onToggle={(id) => setPickedCats((s) => toggle(s, id))}
-                  sub={(b) => {
-                    const next = plan.categories.find((c) => c.bookId === b.id)!.category
-                    const now = catName(b)
-                    return now && now !== next ? `${now} → ${next}` : next
-                  }}
+                  onToggle={toggleCat}
+                  sub={catSub}
                 />
               </div>
             )}
@@ -435,7 +500,7 @@ export function OrganizePage() {
                   const chosen = ids.filter((id) => pickedMoves.has(id)).length
                   return (
                   <div key={dest} className="dest-group">
-                    {/* ติ๊กที่หัวข้อ = เลือกหรือไม่เลือกทั้งที่เก็บนี้ ติ๊กรายเล่มได้ด้านล่าง */}
+                    {/* ติ๊กที่หัวข้อ = เลือกหรือไม่เลือกทั้งที่เก็บนี้ รายเล่มอยู่ในส่วนพับด้านล่าง (กลุ่มเล็กเปิดไว้ให้) */}
                     <label className="check dest-head">
                       <input
                         type="checkbox"
@@ -455,16 +520,10 @@ export function OrganizePage() {
                         → {label(dest)} <span className="muted">{t.organize.pickedOf(chosen, ids.length)}</span>
                       </span>
                     </label>
-                    <PickList
-                      books={moves.map((m) => byId.get(m.bookId)!).filter(Boolean)}
-                      picked={pickedMoves}
-                      onToggle={(id) => setPickedMoves((s) => toggle(s, id))}
-                      sub={(b) => {
-                        const m = moves.find((x) => x.bookId === b.id)!
-                        const from = b.takenAt ? t.organize.inHand : label(b.placeId)
-                        return `${from} · ${m.reason}`
-                      }}
-                    />
+                    <details className="dest-books" open={ids.length <= 12 || undefined}>
+                      <summary>{t.organize.showBooks(ids.length)}</summary>
+                      <PickList books={destBooks.get(dest) ?? []} picked={pickedMoves} onToggle={toggleMove} sub={moveSub} />
+                    </details>
                   </div>
                   )
                 })}
@@ -474,9 +533,10 @@ export function OrganizePage() {
             <div className="actions">
               <button
                 className="btn primary"
-                disabled={!pickedCats.size && !pickedMoves.size}
+                disabled={applying || (!pickedCats.size && !pickedMoves.size)}
                 onClick={apply}
               >
+                {applying && <Ring size={18} />}
                 {t.organize.apply(pickedCats.size, pickedMoves.size)}
               </button>
               <button className="btn" onClick={() => setPlan(null)}>

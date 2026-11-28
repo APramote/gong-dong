@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { normName, repo } from '../db/repo'
@@ -28,8 +28,14 @@ export function CategoriesPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  // นับจำนวนเล่มต่อหมวดครั้งเดียว (แต่ละแถวถามหลายครั้ง คลังใหญ่จะช้าถ้านับใหม่ทุกครั้ง)
+  const counts = useMemo(() => {
+    const m = new Map<string | null, number>()
+    for (const b of books) m.set(b.categoryId ?? null, (m.get(b.categoryId ?? null) ?? 0) + 1)
+    return m
+  }, [books])
+  const count = (id: string | null) => counts.get(id) ?? 0
   if (!categories) return <p className="empty">{t.common.loading}</p>
-  const count = (id: string | null) => books.filter((b) => b.categoryId === id).length
 
   async function add() {
     if (!normName(name)) return
@@ -131,9 +137,9 @@ export function CategoriesPage() {
             }}
           />
         </label>
-        <p className={over > 0 ? 'error' : 'muted'}>
+        <p className="muted" role="status">
           {t.categories.status(categories.length, limit)}
-          {over > 0 && ` · ${t.categories.over(over)}`}
+          {over > 0 && <strong>{` · ${t.categories.over(over)}`}</strong>}
         </p>
         {aiOn() && <p className="muted">{t.categories.limitHint}</p>}
         {aiOn() && aiReady() && categories.length > 1 && !proposal && (
@@ -150,7 +156,7 @@ export function CategoriesPage() {
         {proposal && proposal.length === 0 && <p className="muted">{t.categories.aiMergeNone}</p>}
         {proposal && proposal.length > 0 && (
           <div className="card">
-            <h3>{t.categories.aiMergeTitle(proposal.length)}</h3>
+            <h2>{t.categories.aiMergeTitle(proposal.length)}</h2>
             <ul className="list">
               {proposal.map((row) => (
                 <li className="row" key={row.from}>
@@ -214,7 +220,7 @@ export function CategoriesPage() {
                     }}
                   >
                     <select autoFocus aria-label={t.categories.mergePick} value={mergeTo} onChange={(e) => setMergeTo(e.target.value)}>
-                      <option value="">{`${c.name} → ${t.categories.mergePick}`}</option>
+                      <option value="">{t.categories.mergePickFor(c.name)}</option>
                       {categories
                         .filter((x) => x.id !== c.id)
                         .map((x) => (
