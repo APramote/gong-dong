@@ -551,6 +551,7 @@ export const t = {
     shelfEmpty: 'ชั้นนี้ยังว่าง',
     addToShelf: 'เพิ่มหนังสือที่ชั้นนี้',
     closeCard: 'ปิด',
+    rowsSplit: (front: number, back: number) => `หน้า ${front} · หลัง ${back}`,
     full: 'ขยายเต็มจอ',
     exitFull: 'ย่อ',
     rowsLabel: 'เลือกแถวที่จะดู',

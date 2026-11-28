@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
@@ -10,7 +10,7 @@ import { FieldsForm } from '../components/FieldsForm'
 import { bookcaseFields } from '../placeFields'
 import { BookRow } from '../components/BookRow'
 import type { Pick3D } from '../three/scene'
-import { footprint, rowOf, rowsOf, shelfWidth } from '../lib/capacity'
+import { footprint, rowOf, rowsOf, shelfWidth, usage } from '../lib/capacity'
 import { bookcaseSizeFields } from '../placeFields'
 import { allTwoRows, bookcaseInitial, saveBookcase, someTwoRows } from '../lib/bookcaseSize'
 import { categoryLines } from '../lib/shelfLabel'
@@ -39,6 +39,8 @@ export function BookcaseViewPage() {
   const [spillMsg, setSpillMsg] = useState('')
   /** ขยายภาพ 3D เต็มจอ (กด Esc หรือปุ่มย่อเพื่อกลับ) */
   const [full, setFull] = useState(false)
+  /** กลุ่มการ์ดของสิ่งที่เลือก ใช้เลื่อนจอมาหาเมื่อเลือกจากรายการด้านล่าง */
+  const stackRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!full) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFull(false)
@@ -258,7 +260,7 @@ export function BookcaseViewPage() {
         </div>
       )}
 
-      <div className={`picked-stack${full ? ' floating' : ''}`}>
+      <div className={`picked-stack${full ? ' floating' : ''}`} ref={stackRef}>
       {pick && (
         <div className="card picked">
           <div className="row">
@@ -345,20 +347,38 @@ export function BookcaseViewPage() {
         <h2>{t.view.parts}</h2>
         <ul className="list">
           {/* ชั้นบนสุดก่อนเหมือนมองตู้จริง แล้วตามด้วยลิ้นชัก */}
-          {[...[...shelves].reverse(), ...drawers].map((p) => (
-            <li className="row" key={p.id}>
-              <Link to={`/place/${p.id}`} className="row-main">
-                <span className="row-title">{p.name}</span>
-                <span className="row-sub">
-                  {t.common.books(inPlace(p.id).length)}
-                  {inPlace(p.id).length > 0 && ` · ${inPlace(p.id).map((b) => b.title).join(', ')}`}
-                </span>
-              </Link>
-              <Link className="btn small" to={`/add?place=${p.id}`}>
-                {t.view.addBooks}
-              </Link>
-            </li>
-          ))}
+          {[...[...shelves].reverse(), ...drawers].map((p) => {
+            // สรุปสั้น ๆ ของแต่ละชั้น: จำนวนเล่ม หมวดหลัก และการใช้ที่ (รายชื่อเล่มดูได้โดยแตะแถวนี้)
+            const list = inPlace(p.id)
+            const behind = p.kind === 'shelf' && rowsOf(p) === 2 ? list.filter((x) => rowOf(x) === 1).length : 0
+            const u = p.kind === 'shelf' ? usage(p, bookcase, list) : null
+            const used = u ? Math.round(u.used.reduce((n, x) => n + x, 0)) : 0
+            const sub = [
+              t.common.books(list.length),
+              behind ? t.view.rowsSplit(list.length - behind, behind) : '',
+              categoryLines(list, catName).join(' · '),
+              u && u.capacity !== null && list.length ? t.shelf.fill(used, Math.round(u.capacity)) : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')
+            return (
+              <li className="row" key={p.id}>
+                <button
+                  className="row-main row-button"
+                  onClick={() => {
+                    setSelected({ kind: p.kind === 'drawer' ? 'drawer' : 'shelf', id: p.id })
+                    setTimeout(() => stackRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50)
+                  }}
+                >
+                  <span className="row-title">{p.name}</span>
+                  <span className="row-sub">{sub}</span>
+                </button>
+                <Link className="btn small" to={`/add?place=${p.id}`}>
+                  {t.view.addBooks}
+                </Link>
+              </li>
+            )
+          })}
         </ul>
       </section>
 

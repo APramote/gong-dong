@@ -2744,3 +2744,17 @@ body.no-scroll {
 .row-blurb .ai-badge {
   margin-left: 0;
 }
+
+/* แถวที่กดได้ทั้งแถว (หน้าตาเหมือนลิงก์ในรายการ) */
+.row-button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.picked-stack {
+  scroll-margin-top: 76px;
+}
