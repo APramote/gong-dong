@@ -11,7 +11,7 @@ import { ShelfSize } from '../components/ShelfSize'
 import { rowOf, rowsOf } from '../lib/capacity'
 import { readWidth } from '../lib/bookcaseSize'
 import type { Book } from '../db/types'
-import { categoryLabel } from '../lib/shelfLabel'
+import { categoryLines } from '../lib/shelfLabel'
 import type { Pick3D } from '../three/scene'
 import { t } from '../th'
 
@@ -41,7 +41,8 @@ export function PlacePage() {
   if (place === undefined) return <p className="empty">{t.common.loading}</p>
   if (!place && !isNone) return <p className="empty">{t.place.notFound}</p>
 
-  const pileLabel = categoryLabel(books, new Map(categories.map((c) => [c.id, c.name])))
+  const pileLines = categoryLines(books, new Map(categories.map((c) => [c.id, c.name])))
+  const pileLabel = pileLines.join(' · ')
   const pickedBook = picked?.kind === 'book' ? books.find((b) => b.id === picked.id) : undefined
   const title = place ? placeLabel(place, bookcases) : t.places.unplaced
   const detail = place ? [place.label, place.location].filter(Boolean).join(' · ') : ''
@@ -121,7 +122,7 @@ export function PlacePage() {
               <Storage3D
                 model={{
                   pile: books.map((b) => ({ id: b.id, title: b.title, pages: b.pages, spineColor: b.spineColor })),
-                  label: pileLabel,
+                  label: pileLines,
                 }}
                 label={t.place.pile3d(place.name, books.length)}
                 selected={pickedBook ? picked : null}

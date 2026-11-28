@@ -511,6 +511,8 @@ export const t = {
   },
 
   view: {
+    backRow: 'ดูแถวหลัง',
+    frontRow: 'ดูแถวหน้า',
     remove: 'ลบตู้',
     open: 'ดู 3D',
     openBookcase: 'ดูทั้งตู้แบบ 3D',

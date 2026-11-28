@@ -13,7 +13,7 @@ import type { Pick3D } from '../three/scene'
 import { rowOf, rowsOf } from '../lib/capacity'
 import { bookcaseSizeFields } from '../placeFields'
 import { allTwoRows, bookcaseInitial, saveBookcase, someTwoRows } from '../lib/bookcaseSize'
-import { categoryLabel } from '../lib/shelfLabel'
+import { categoryLines } from '../lib/shelfLabel'
 import { t } from '../th'
 
 const Storage3D = lazy(() => import('../three/Storage3D'))
@@ -28,6 +28,8 @@ export function BookcaseViewPage() {
   const categories = useLiveQuery(() => repo.listCategories(), []) ?? []
   const [selected, setSelected] = useState<Pick3D | null>(null)
   const [doorsOpen, setDoorsOpen] = useState(false)
+  /** ดูแถวหลัง: แถวหน้าจางลง แตะเลือกเล่มแถวหลังได้ */
+  const [backView, setBackView] = useState(false)
   /** ค่าที่กำลังแก้ ใช้แสดงทันทีระหว่างรอบันทึกลงฐานข้อมูล — null = ไม่ได้แก้อยู่ */
   const [draft, setDraft] = useState<Look | null>(null)
   const [renaming, setRenaming] = useState(false)
@@ -44,8 +46,9 @@ export function BookcaseViewPage() {
   )
   // ป้ายของชั้น: หมวดที่มีมากที่สุดสองหมวดบนชั้นนั้น (หมวดอื่นนับรวมเป็น +N)
   const catName = new Map(categories.map((c) => [c.id, c.name]))
-  const shelfLabels = onShelf.map((row) => categoryLabel(row, catName))
+  const shelfLabels = onShelf.map((row) => categoryLines(row, catName))
   const twoRows = (i: number) => rowsOf(shelves[i]) === 2
+  const hasBack = onShelf.some((row, i) => twoRows(i) && row.some((b) => rowOf(b) === 1))
   const drawers = places.filter((p) => p.kind === 'drawer' && p.bookcaseId === id)
   const inPlace = (pid: string) =>
     books.filter((b) => b.placeId === pid && !b.takenAt).sort((a, b) => a.position - b.position)
@@ -84,6 +87,7 @@ export function BookcaseViewPage() {
               shelves: onShelf.map((row, i) => row.filter((b) => !twoRows(i) || rowOf(b) === 0).map(as3D)),
               back: onShelf.map((row, i) => (twoRows(i) ? row.filter((b) => rowOf(b) === 1).map(as3D) : [])),
               labels: shelfLabels,
+              backView: backView && hasBack,
               shelfWidth: bookcase.shelfWidth ?? null,
               drawers: drawers.map((d) => ({ id: d.id, books: inPlace(d.id).map(as3D) })),
               look,
@@ -100,6 +104,11 @@ export function BookcaseViewPage() {
         {(look.doors ?? 0) > 0 && (
           <button className="btn small" onClick={() => setDoorsOpen((o) => !o)}>
             {doorsOpen ? t.shape.closeDoors : t.shape.openDoors}
+          </button>
+        )}
+        {hasBack && (
+          <button className="btn small" aria-pressed={backView} onClick={() => setBackView((v) => !v)}>
+            {backView ? t.view.frontRow : t.view.backRow}
           </button>
         )}
         <button className="btn small" onClick={() => setDraft((d) => (d ? null : look))}>

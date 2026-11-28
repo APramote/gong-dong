@@ -10,8 +10,10 @@ export interface BookcaseModel {
   shelves: Book3D[][]
   /** แถวหลังของแต่ละชั้น (ชั้นที่วางซ้อนสองแถว) ลำดับชั้นเดียวกับ shelves */
   back?: Book3D[][]
-  /** ป้ายข้อความของแต่ละชั้น (เช่น หมวดของหนังสือบนชั้น) ลำดับชั้นเดียวกับ shelves — ว่าง = ไม่แสดง */
-  labels?: string[]
+  /** ป้ายข้อความของแต่ละชั้น (เช่น หมวดของหนังสือบนชั้น) ลำดับชั้นเดียวกับ shelves — บรรทัดละรายการ, ว่าง = ไม่แสดง */
+  labels?: string[][]
+  /** ดูแถวหลัง: หนังสือแถวหน้าของชั้นที่วางซ้อนสองแถวจางลงและแตะไม่ได้ จะได้เห็นและเลือกเล่มแถวหลัง */
+  backView?: boolean
   /** ความกว้างด้านในของชั้น (ซม.) ถ้ารู้ ใช้เป็นความกว้างของตู้จริง */
   shelfWidth?: number | null
   /** ลิ้นชักที่เป็นที่เก็บจริง เรียงจากแถวล่างสุด ซ้ายไปขวา (ไม่มี id = ตัวอย่าง แตะไม่ได้) */
@@ -23,8 +25,8 @@ export interface BookcaseModel {
 /** กองหนังสือ: วางนอนซ้อนกัน เล่มแรกอยู่ล่างสุด */
 export interface PileModel {
   pile: Book3D[]
-  /** ป้ายข้อความเหนือกอง (เช่น หมวดของหนังสือในกอง) */
-  label?: string
+  /** ป้ายข้อความเหนือกอง (เช่น หมวดของหนังสือในกอง) บรรทัดละรายการ */
+  label?: string[]
 }
 
 /** สิ่งที่แตะเลือกได้ในตู้ */
@@ -91,13 +93,6 @@ function boxMesh(w: number, h: number, d: number, color: string, front?: THREE.T
   return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), materials)
 }
 
-/** จุดวางป้ายข้อความ (พิกัดภายในตู้) half = ครึ่งความกว้างของชั้น ใช้จำกัดความยาวป้าย */
-export interface Anchor {
-  text: string
-  at: THREE.Vector3
-  half: number
-}
-
 export interface Built {
   root: THREE.Group
   /** ขนาดรวม ใช้จัดมุมกล้อง */
@@ -106,23 +101,91 @@ export interface Built {
   pickable: THREE.Mesh[]
   /** ลิ้นชักที่เลื่อนเปิดได้ (userData.drawerId, userData.home) */
   drawerGroups: THREE.Group[]
-  /** ป้ายของชั้น วาดเป็นข้อความทับบนภาพ (คมชัดทุกระดับซูม) */
-  anchors: Anchor[]
-  /** ป้ายมองเห็นได้จากทุกด้าน (กองหนังสือ) — ตู้เห็นเฉพาะจากด้านหน้า */
-  allAround?: boolean
+}
+
+/** ความสูงของตัวอักษรบนป้าย (ซม.) */
+const SIGN_LINE = 3.6
+/** ป้ายยาวสุด (ซม.) ข้อความที่ยาวกว่านี้ตัดท้าย */
+const SIGN_MAX_W = 30
+/** ป้ายสูงสุดกี่บรรทัด (ชั้นหนึ่งสูง 30 ซม. ป้ายต้องไม่ล้นความสูงชั้น) */
+const SIGN_LINES = 4
+
+/**
+ * ป้ายลอย: แผ่นป้ายบาง ๆ มีความหนา ข้อความอยู่ด้านหน้า (มองจากด้านหลังเห็นแผ่นเปล่า)
+ * จุดอ้างอิงคือขอบขวากลางแผ่น (anchor = 'right') หรือกึ่งกลางล่าง (anchor = 'bottom')
+ */
+function sign(lines: string[], anchor: 'right' | 'bottom'): { group: THREE.Group; width: number; height: number } {
+  const px = 64 // พิกเซลต่อบรรทัด
+  const scale = SIGN_LINE / px / 0.62 // ตัวอักษรสูงราว 62% ของบรรทัด
+  const pad = 22
+  const font = `600 ${Math.round(px * 0.62)}px system-ui, "Noto Sans Thai", sans-serif`
+  const measure = document.createElement('canvas').getContext('2d')!
+  measure.font = font
+  const maxPx = SIGN_MAX_W / scale - pad * 2
+  const fits = (s: string) => measure.measureText(s).width <= maxPx
+  // ข้อความยาวตัดขึ้นบรรทัดใหม่ตามคำ (ภาษาไทยไม่มีเว้นวรรค ใช้ตัวตัดคำของเบราว์เซอร์) ไม่เกิน 4 บรรทัด
+  const words = (s: string): string[] => {
+    try {
+      return [...new Intl.Segmenter('th', { granularity: 'word' }).segment(s)].map((x) => x.segment)
+    } catch {
+      return [...s]
+    }
+  }
+  const wrapped: string[] = []
+  for (const l of lines) {
+    let cur = ''
+    for (const w of words(l)) {
+      if (cur && !fits(cur + w)) {
+        wrapped.push(cur.trim())
+        cur = w.trimStart()
+      } else cur += w
+    }
+    if (cur.trim()) wrapped.push(cur.trim())
+  }
+  const shown = wrapped.slice(0, SIGN_LINES).map((l, i) => {
+    let s = l + (i === SIGN_LINES - 1 && wrapped.length > SIGN_LINES ? '…' : '')
+    while (!fits(s) && s.length > 1) s = s.slice(0, -2) + '…'
+    return s
+  })
+  const textW = Math.max(...shown.map((l) => measure.measureText(l).width))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.ceil(textW + pad * 2)
+  canvas.height = Math.ceil(shown.length * px + pad)
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = '#faf6ee'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.fillStyle = '#2a241d'
+  ctx.font = font
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  shown.forEach((l, i) => ctx.fillText(l, pad, pad / 2 + px * i + px / 2 + 2))
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.anisotropy = 4
+  const width = canvas.width * scale
+  const height = canvas.height * scale
+  const edge = new THREE.MeshStandardMaterial({ color: '#d9cfbd', roughness: 0.7 })
+  // ด้านหน้าไม่รับแสง ตัวอักษรจึงคมและอ่านง่ายทุกมุม
+  const face = new THREE.MeshBasicMaterial({ map: tex })
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.8), [edge, edge, edge, edge, face, edge])
+  plate.position.set(anchor === 'right' ? -width / 2 : 0, anchor === 'right' ? 0 : height / 2, 0)
+  const group = new THREE.Group()
+  group.add(plate)
+  return { group, width, height }
 }
 
 const BOARD = 2
 const SHELF_SPACE = 30
 const DRAWER_H = 16
 const LEG_H = 10
+/** ระยะระหว่างป้ายกับข้างตู้ (ซม.) */
+const SIGN_GAP = 4
 
 function buildBookcase(model: BookcaseModel): Built {
   const { shelves, look, doorsOpen = false, back = [] } = model
   const root = new THREE.Group()
   const pickable: THREE.Mesh[] = []
   const drawerGroups: THREE.Group[] = []
-  const anchors: Anchor[] = []
   const wood = look?.color || '#8b6a4e'
   const darker = new THREE.Color(wood).multiplyScalar(0.7).getStyle()
   const lighter = new THREE.Color(wood).offsetHSL(0, 0, 0.05).getStyle()
@@ -142,6 +205,8 @@ function buildBookcase(model: BookcaseModel): Built {
   const innerW = model.shelfWidth && model.shelfWidth > 0 ? Math.max(30, model.shelfWidth) : Math.max(50, booksWidth + 6, fromRatio)
   const depth = 30
   const outerW = innerW + 2 * BOARD
+  /** ความกว้างของป้ายที่ลอยข้างตู้ (รวมช่องว่าง) ใช้จัดกล้องให้เห็นทั้งตู้และป้าย */
+  let signSpan = 0
   const y0 = legH // พื้นล่างของตัวตู้
 
   const part = (w: number, h: number, d: number, x: number, y: number, z: number, color = wood) => {
@@ -222,9 +287,20 @@ function buildBookcase(model: BookcaseModel): Built {
   for (let i = 0; i < levels; i++) {
     const floor = shelfBase + i * (SHELF_SPACE + BOARD)
     if (i < levels - 1) part(innerW, BOARD, depth, 0, floor + SHELF_SPACE + BOARD / 2, 0)
-    // ป้ายของชั้น: ช่องว่างเหนือหนังสือ ชิดขอบหน้า
-    const text = model.labels?.[i]
-    if (text) anchors.push({ text, at: new THREE.Vector3(0, floor + SHELF_SPACE - 2.6, depth / 2), half: innerW / 2 })
+    // ป้ายของชั้น: ลอยอยู่ข้างตู้ทางซ้าย ระดับเดียวกับชั้น มีเส้นโยงเข้าหาชั้น ไม่บังหนังสือ
+    const lines = model.labels?.[i]?.filter(Boolean) ?? []
+    if (lines.length) {
+      const s = sign(lines, 'right')
+      s.group.position.set(-outerW / 2 - SIGN_GAP, floor + SHELF_SPACE / 2, depth / 2 - 2)
+      const link = new THREE.Mesh(new THREE.BoxGeometry(SIGN_GAP, 0.3, 0.3), new THREE.MeshStandardMaterial({ color: '#b9ab94' }))
+      link.position.set(-outerW / 2 - SIGN_GAP / 2, floor + SHELF_SPACE / 2, depth / 2 - 2)
+      // เปิดบานตู้อยู่: บานที่กางออกจะชนป้าย ซ่อนป้ายไว้ก่อน (ยังกันที่ไว้ ตู้จะได้ไม่ขยับ)
+      s.group.visible = link.visible = !(doors && doorsOpen)
+      root.add(s.group, link)
+      signSpan = Math.max(signSpan, s.width + SIGN_GAP)
+    }
+    // ดูแถวหลัง: แถวหน้าของชั้นนี้จางลง (เฉพาะชั้นที่มีหนังสือแถวหลัง)
+    const ghostFront = Boolean(model.backView && (back[i]?.length ?? 0) > 0)
     // แถวหน้าชิดขอบหน้าชั้น แถวหลัง (ถ้ามี) ชิดผนังหลัง
     for (const [row, list] of [[0, shelves[i] ?? []], [1, back[i] ?? []]] as const) {
       let x = -innerW / 2 + 1
@@ -235,6 +311,17 @@ function buildBookcase(model: BookcaseModel): Built {
         const mesh = boxMesh(s.thick, s.height, s.depth, color, textTexture(b.title, color, true))
         const z = row === 0 ? depth / 2 - s.depth / 2 - 1.5 : -depth / 2 + s.depth / 2 + 1
         mesh.position.set(x + s.thick / 2, floor + s.height / 2, z)
+        if (row === 0 && ghostFront) {
+          // จางและแตะไม่ได้ แตะทะลุไปถึงเล่มแถวหลัง
+          for (const m of new Set(mesh.material as THREE.MeshStandardMaterial[])) {
+            m.transparent = true
+            m.opacity = 0.12
+            m.depthWrite = false
+          }
+          root.add(mesh)
+          x += s.thick + GAP
+          continue
+        }
         mesh.userData = { bookId: b.id, home: mesh.position.clone() }
         root.add(mesh)
         pickable.push(mesh)
@@ -282,8 +369,9 @@ function buildBookcase(model: BookcaseModel): Built {
   }
 
   const totalH = legH + outerH
-  root.position.y = -totalH / 2
-  return { root, size: new THREE.Vector3(outerW, totalH, depth), pickable, drawerGroups, anchors }
+  // จัดให้ตู้กับป้ายรวมกันอยู่กลางภาพ (ป้ายอยู่ทางซ้าย จึงเลื่อนทั้งหมดไปทางขวาครึ่งหนึ่งของความกว้างป้าย)
+  root.position.set(signSpan / 2, -totalH / 2, 0)
+  return { root, size: new THREE.Vector3(outerW + signSpan, totalH, depth), pickable, drawerGroups }
 }
 
 /** กองหนังสือ: แต่ละเล่มวางนอน หันสันออกด้านหน้า เหลื่อมและเอียงเล็กน้อยให้เหมือนกองจริง */
@@ -307,9 +395,18 @@ function buildPile(model: PileModel): Built {
     widest = Math.max(widest, s.height)
   }
   const total = Math.max(y, 4)
-  const anchors: Anchor[] = model.label ? [{ text: model.label, at: new THREE.Vector3(0, total + 3.5, 0), half: widest }] : []
-  root.position.y = -total / 2
-  return { root, size: new THREE.Vector3(widest + 4, total + 8, 16), pickable, drawerGroups: [], anchors, allAround: true }
+  // ป้ายหมวดลอยเหนือกอง
+  let top = total
+  const lines = model.label?.filter(Boolean) ?? []
+  if (lines.length) {
+    const s = sign(lines, 'bottom')
+    s.group.position.set(0, total + 3, 0)
+    root.add(s.group)
+    top = total + 3 + s.height
+    widest = Math.max(widest, s.width)
+  }
+  root.position.y = -top / 2
+  return { root, size: new THREE.Vector3(widest + 4, top + 4, 16), pickable, drawerGroups: [] }
 }
 
 export type Model3D = BookcaseModel | PileModel

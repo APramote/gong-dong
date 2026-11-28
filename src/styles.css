@@ -475,28 +475,7 @@ textarea {
   width: 100%;
   height: 100%;
 }
-/* ป้ายหมวดของแต่ละชั้น ทับบนภาพ 3D ไม่รับการแตะ (แตะทะลุไปถึงหนังสือ) */
-.view3d-labels {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-.view3d-labels span {
-  position: absolute;
-  left: 0;
-  top: 0;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: rgba(250, 246, 238, 0.92);
-  color: #2a241d;
-  font-size: 0.72rem;
-  line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-}
+
 .view3d canvas {
   display: block;
 }

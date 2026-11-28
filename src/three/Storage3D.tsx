@@ -29,7 +29,6 @@ export default function Storage3D({
     controls: OrbitControls
     built: Built | null
     render: () => void
-    overlay: HTMLDivElement
   } | null>(null)
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
@@ -51,39 +50,7 @@ export default function Storage3D({
     controls.enablePan = false
     controls.minPolarAngle = 0.2
     controls.maxPolarAngle = Math.PI / 2 + 0.15
-    // ป้ายของชั้นเป็นข้อความ HTML ทับบนภาพ ย้ายตามมุมกล้องทุกครั้งที่วาด
-    const overlay = document.createElement('div')
-    overlay.className = 'view3d-labels'
-    overlay.setAttribute('aria-hidden', 'true')
-    el.appendChild(overlay)
-    const p = new THREE.Vector3()
-    const q = new THREE.Vector3()
-    const placeLabels = () => {
-      const built = state.current?.built
-      if (!built) return
-      const w = el.clientWidth
-      const h = el.clientHeight
-      // มองจากด้านหลังตู้ ไม่เห็นหน้าชั้น ซ่อนป้าย
-      const front = built.allAround || camera.position.z > built.size.z / 2
-      built.anchors.forEach((a, i) => {
-        const tag = overlay.children[i] as HTMLElement | undefined
-        if (!tag) return
-        built.root.localToWorld(p.copy(a.at)).project(camera)
-        built.root.localToWorld(q.copy(a.at).setX(a.half)).project(camera)
-        const x = (p.x * 0.5 + 0.5) * w
-        const y = (-p.y * 0.5 + 0.5) * h
-        const room = Math.abs(q.x - p.x) * w
-        const show = front && p.z < 1 && room > 34
-        tag.style.display = show ? '' : 'none'
-        if (!show) return
-        tag.style.maxWidth = `${Math.round(room - 6)}px`
-        tag.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -50%)`
-      })
-    }
-    const render = () => {
-      renderer.render(scene, camera)
-      placeLabels()
-    }
+    const render = () => renderer.render(scene, camera)
     controls.addEventListener('change', render)
 
     const resize = () => {
@@ -119,7 +86,7 @@ export default function Storage3D({
     renderer.domElement.addEventListener('pointerdown', onDown)
     renderer.domElement.addEventListener('pointerup', onUp)
 
-    state.current = { renderer, scene, camera, controls, built: null, render, overlay }
+    state.current = { renderer, scene, camera, controls, built: null, render }
     resize()
     return () => {
       ro.disconnect()
@@ -131,7 +98,6 @@ export default function Storage3D({
       renderer.forceContextLoss()
       renderer.dispose()
       renderer.domElement.remove()
-      overlay.remove()
       state.current = null
     }
   }, [])
@@ -150,13 +116,6 @@ export default function Storage3D({
     const built = build(model)
     s.scene.add(built.root)
     s.built = built
-    s.overlay.replaceChildren(
-      ...built.anchors.map((a) => {
-        const tag = document.createElement('span')
-        tag.textContent = a.text
-        return tag
-      }),
-    )
     // ตั้งกล้องให้เห็นทั้งหมดเฉพาะครั้งแรก ครั้งต่อไปคงมุมที่ผู้ใช้หมุนไว้
     // (กองหนังสือ: ขนาดเปลี่ยนมากเมื่อเพิ่มหรือนำเล่มออก จัดกล้องใหม่เมื่อความสูงเปลี่ยน)
     const grew = 'pile' in model && Math.abs(built.size.y - lastHeight.current) > 1
