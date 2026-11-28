@@ -24,8 +24,10 @@ export function BookcaseViewPage() {
   const navigate = useNavigate()
   const bookcase = useLiveQuery(async () => (await repo.getBookcase(id)) ?? null, [id])
   const places = useLiveQuery(() => repo.listPlaces(), []) ?? []
-  const books = useLiveQuery(() => repo.listBooks(), []) ?? []
-  const categories = useLiveQuery(() => repo.listCategories(), []) ?? []
+  const booksRaw = useLiveQuery(() => repo.listBooks(), [])
+  const categoriesRaw = useLiveQuery(() => repo.listCategories(), [])
+  const books = booksRaw ?? []
+  const categories = categoriesRaw ?? []
   const [selected, setSelected] = useState<Pick3D | null>(null)
   const [doorsOpen, setDoorsOpen] = useState(false)
   /** ดูแถวหลัง: แถวหน้าจางลง แตะเลือกเล่มแถวหลังได้ */
@@ -34,7 +36,8 @@ export function BookcaseViewPage() {
   const [draft, setDraft] = useState<Look | null>(null)
   const [renaming, setRenaming] = useState(false)
 
-  if (bookcase === undefined) return <p className="empty">{t.common.loading}</p>
+  // รอหนังสือและหมวดด้วย ภาพ 3D จะได้จัดกล้องครั้งแรกพร้อมป้ายครบ ไม่ตกขอบจอ
+  if (bookcase === undefined || booksRaw === undefined || categoriesRaw === undefined) return <p className="empty">{t.common.loading}</p>
   if (!bookcase) return <p className="empty">{t.view.notFound}</p>
 
   // listPlaces เรียงตาม order อยู่แล้ว: ชั้นที่ 1 (ล่างสุด) มาก่อน

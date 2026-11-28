@@ -2558,3 +2558,16 @@ details.more[open] {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* แถบเลือกหลายเล่ม: ปุ่มคำสั่งสี่ปุ่มแบ่งความกว้างเท่ากันในแถวเดียว แถบจะได้ไม่สูงจนบังรายการ */
+.select-bar .chips {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.select-bar .chips button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 4px;
+  text-align: center;
+  white-space: nowrap;
+}

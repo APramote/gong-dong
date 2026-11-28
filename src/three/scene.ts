@@ -128,7 +128,8 @@ function sign(lines: string[], anchor: 'right' | 'bottom'): { group: THREE.Group
     try {
       return [...new Intl.Segmenter('th', { granularity: 'word' }).segment(s)].map((x) => x.segment)
     } catch {
-      return [...s]
+      // ไม่มีตัวตัดคำ: ตัดทีละตัวอักษร แต่ให้สระบน/ล่างและวรรณยุกต์ติดกับตัวหน้าเสมอ
+      return s.match(/.[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]*/gsu) ?? [s]
     }
   }
   const wrapped: string[] = []
@@ -143,9 +144,14 @@ function sign(lines: string[], anchor: 'right' | 'bottom'): { group: THREE.Group
     if (cur.trim()) wrapped.push(cur.trim())
   }
   const shown = wrapped.slice(0, SIGN_LINES).map((l, i) => {
-    let s = l + (i === SIGN_LINES - 1 && wrapped.length > SIGN_LINES ? '…' : '')
-    while (!fits(s) && s.length > 1) s = s.slice(0, -2) + '…'
-    return s
+    let s = l
+    let cut = i === SIGN_LINES - 1 && wrapped.length > SIGN_LINES
+    // ตัดท้ายทีละตัวอักษรพร้อมสระบน/ล่างและวรรณยุกต์ของตัวนั้น ไม่ให้เครื่องหมายค้างโดยไม่มีตัวหน้า
+    while (!fits(s + (cut ? '…' : '')) && s.length > 1) {
+      s = s.replace(/.[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]*$/su, '')
+      cut = true
+    }
+    return s + (cut ? '…' : '')
   })
   const textW = Math.max(...shown.map((l) => measure.measureText(l).width))
   const canvas = document.createElement('canvas')

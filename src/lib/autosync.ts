@@ -108,7 +108,10 @@ async function auto(): Promise<void> {
     if ((e as Error)?.message === 'cancelled') return
     error = e
     // สิทธิ์ใช้ไม่ได้แล้ว ต้องให้ผู้ใช้กด ส่วนปัญหาอื่น (เช่น เน็ตหลุด) ลองใหม่เองโดยเว้นช่วงนานขึ้นเรื่อย ๆ
+    const msg = (e as Error)?.message
     if ((e as { kind?: string })?.kind === 'auth') needsTap = true
+    // ไฟล์ใน Drive อ่านไม่ได้หรือมาจากแอปรุ่นใหม่กว่า: ลองซ้ำก็ไม่หาย ไม่ลองเอง รอผู้ใช้อัปเดตหรือกดเอง
+    else if (msg === 'bad-file' || msg === 'newer-file') needsTap = false
     else schedule(Math.min(DELAY * 2 ** retry++, 10 * DELAY))
     emit()
   }

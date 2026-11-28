@@ -79,7 +79,8 @@ export function DashboardPage() {
   if (!books) return <p className="empty">{t.common.loading}</p>
   const goals = { dailyMinutes: settings.dailyGoalMinutes, dailyPages: settings.dailyGoalPages, yearBooks: settings.yearGoalBooks }
   const setGoal = (patch: Partial<typeof settings>) => {
-    const next = { ...settings, ...patch }
+    // อ่านค่าล่าสุดก่อนบันทึก ไม่ทับค่าที่หน้าอื่นหรือการซิงก์เพิ่งบันทึกไป
+    const next = { ...loadSettings(), ...patch }
     setSettings(next)
     saveSettings(next)
   }

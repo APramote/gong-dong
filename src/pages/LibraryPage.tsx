@@ -50,7 +50,8 @@ const HINT_KEY = 'gong-dong.backupHintHidden'
 
 export function LibraryPage() {
   const books = useLiveQuery(() => repo.listBooks(), [])
-  const places = useLiveQuery(() => repo.listPlaces(), []) ?? []
+  const placesRaw = useLiveQuery(() => repo.listPlaces(), [])
+  const places = placesRaw ?? []
   const bookcases = useLiveQuery(() => repo.listBookcases(), []) ?? []
   const categories = useLiveQuery(() => repo.listCategories(), []) ?? []
   // ตัวกรองหมวดอยู่ใน URL (?cat=) เพื่อให้ลิงก์จากหน้าหมวดเปิดคลังที่กรองแล้วได้
@@ -79,7 +80,7 @@ export function LibraryPage() {
     !placeId ||
     placeId === IN_HAND ||
     placeId === NO_PLACE ||
-    places.length === 0 ||
+    placesRaw === undefined ||
     places.some((x) => x.id === placeId)
   useEffect(() => {
     if (!placeKnown) setPlaceId('')
@@ -101,6 +102,8 @@ export function LibraryPage() {
   /** ปลายทางที่เลือก ('' = ยังไม่ได้เลือก ปุ่มใช้จะกดไม่ได้) */
   const [target, setTarget] = useState('')
   const [applying, setApplying] = useState(false)
+  /** กำลังหาข้อมูลหลายเล่มอยู่: ล็อกการเลือกและปุ่มอื่นจนกว่าจะเสร็จหรือกดหยุด */
+  const [infoRunning, setInfoRunning] = useState(false)
   const barRef = useRef<HTMLDivElement>(null)
   const selectBtn = useRef<HTMLButtonElement>(null)
   const msgRef = useRef<HTMLParagraphElement>(null)
@@ -387,7 +390,7 @@ export function LibraryPage() {
               key={b.id}
               book={b}
               selected={selecting ? picked.has(b.id) : undefined}
-              onSelect={selecting ? togglePick : undefined}
+              onSelect={selecting && !infoRunning ? togglePick : undefined}
               sub={[
                 b.takenAt ? t.library.inHand : b.placeId ? labels.get(b.placeId) : t.library.noPlace,
                 b.categoryId && catName.get(b.categoryId),
@@ -412,13 +415,13 @@ export function LibraryPage() {
           <div className="select-row">
             <strong>{t.library.pickedN(pickedShown.length)}</strong>
             <span className="actions">
-              <button className="link-btn" onClick={() => setPicked(new Set(shown.map((b) => b.id)))}>
+              <button className="link-btn" disabled={infoRunning} onClick={() => setPicked(new Set(shown.map((b) => b.id)))}>
                 {t.library.pickAll(shown.length)}
               </button>
-              <button className="link-btn" disabled={picked.size === 0} onClick={() => setPicked(new Set())}>
+              <button className="link-btn" disabled={picked.size === 0 || infoRunning} onClick={() => setPicked(new Set())}>
                 {t.library.pickNone}
               </button>
-              <button className="link-btn" aria-label={t.common.cancel} onClick={closeSelect}>
+              <button className="link-btn" aria-label={t.common.cancel} disabled={infoRunning} onClick={closeSelect}>
                 ✕
               </button>
             </span>
@@ -432,6 +435,7 @@ export function LibraryPage() {
                 key={k}
                 className={bulk === k ? 'on' : ''}
                 aria-pressed={bulk === k}
+                disabled={infoRunning}
                 onClick={() => {
                   setBulk(k)
                   setTarget('')
@@ -444,6 +448,7 @@ export function LibraryPage() {
           {bulk === 'info' ? (
             <BulkInfo
               books={pickedShown}
+              onRunning={setInfoRunning}
               onDone={(message) => {
                 setMoveMsg(message)
                 closeSelect()

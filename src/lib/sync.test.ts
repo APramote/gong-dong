@@ -250,5 +250,16 @@ test('ไฟล์กลางรุ่น 2: เขียนเป็นรุ�
   expect(SNAPSHOT_VERSION).toBe(2)
   expect(parseSnapshot('{"version":2,"tables":{"books":[{"id":"1","updatedAt":5,"rating":-4}]}}').tables.books![0]).toMatchObject({ rating: -4 })
   expect(parseSnapshot('{"version":1,"tables":{}}').version).toBe(1)
-  expect(() => parseSnapshot('{"version":3,"tables":{}}')).toThrow('bad-file')
+  expect(() => parseSnapshot('{"version":3,"tables":{}}')).toThrow('newer-file')
+  expect(() => parseSnapshot('{"version":0,"tables":{}}')).toThrow('bad-file')
+})
+
+test('ไฟล์จากแอปรุ่นใหม่กว่า: แจ้งให้อัปเดต ไม่อ่านเป็นไฟล์เสีย ไฟล์สำรองเขียนเป็นรุ่นปัจจุบัน', async () => {
+  const { SNAPSHOT_VERSION } = await import('./sync')
+  expect(() => parseSnapshot(`{"version":${SNAPSHOT_VERSION + 1},"tables":{}}`)).toThrow('newer-file')
+  const { syncErrorText } = await import('./syncError')
+  expect(syncErrorText(new Error('newer-file'))).toMatch(/อัปเดตแอป/)
+  const a = device()
+  const file = JSON.parse(await (await exportBackup(a.db, false)).text())
+  expect(file.version).toBe(SNAPSHOT_VERSION)
 })

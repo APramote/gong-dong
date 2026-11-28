@@ -188,6 +188,8 @@ export function parseSnapshot(text: string, now = Date.now()): Snapshot {
 
 function readSnapshot(raw: unknown, now: number): Snapshot {
   const o = raw as Partial<Snapshot> | null
+  // ไฟล์จากแอปรุ่นใหม่กว่า: อ่านไม่ได้ และห้ามเขียนทับ ให้ผู้ใช้อัปเดตแอปก่อน
+  if (o && typeof o === 'object' && typeof o.version === 'number' && o.version > SNAPSHOT_VERSION) throw new Error('newer-file')
   if (!o || typeof o !== 'object' || (o.version !== 1 && o.version !== SNAPSHOT_VERSION) || typeof o.tables !== 'object' || o.tables === null) throw new Error('bad-file')
   const tables: Snapshot['tables'] = {}
   for (const name of TABLES) tables[name] = cleanRows(name, (o.tables as Record<string, unknown>)[name], now)
@@ -414,7 +416,7 @@ export async function exportBackup(db: GongDongDB, withCovers: boolean): Promise
     covers.push({ id: c.id, createdAt: c.createdAt, updatedAt: c.updatedAt, deletedAt: c.deletedAt })
     if (c.blob) images[c.id] = { type: c.blob.type || 'image/jpeg', data: await toBase64(c.blob) }
   }
-  const file: BackupFile = { app: 'gong-dong', version: 1, savedAt: Date.now(), tables, covers, images }
+  const file: BackupFile = { app: 'gong-dong', version: SNAPSHOT_VERSION, savedAt: Date.now(), tables, covers, images }
   return new Blob([JSON.stringify(file)], { type: 'application/json' })
 }
 
