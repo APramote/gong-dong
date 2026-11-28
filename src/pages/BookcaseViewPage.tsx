@@ -64,8 +64,9 @@ export function BookcaseViewPage() {
   )
   // ป้ายของชั้น: หมวดที่มีมากที่สุดสองหมวดบนชั้นนั้น (หมวดอื่นนับรวมเป็น +N)
   const catName = new Map(categories.map((c) => [c.id, c.name]))
-  const shelfLabels = onShelf.map((row) => categoryLines(row, catName))
   const twoRows = (i: number) => rowsOf(shelves[i]) === 2
+  // ป้ายของชั้น: จำนวนเล่มทั้งชั้นขึ้นก่อน (สั้น ไม่ถูกตัดเมื่อชื่อหมวดยาว) แล้วตามด้วยหมวด
+  const shelfLabels = onShelf.map((row) => [t.common.books(row.length), ...categoryLines(row, catName)])
   const anyTwoRows = shelves.some((_, i) => twoRows(i))
   // จำนวนเล่มแถวหน้าที่ล้นความกว้างของชั้นสองแถว (ย้ายไปแถวหลังได้)
   const overflow = onShelf.reduce((n, row, i) => {
