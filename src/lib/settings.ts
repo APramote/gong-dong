@@ -35,6 +35,8 @@ export interface Settings {
   lastSyncAt: number
   /** อีเมลบัญชี Google ที่เข้าสู่ระบบไว้ (ว่าง = ยังไม่เข้า) — เก็บไว้แสดงผล ไม่ใช่โทเคน */
   googleAccount: string
+  /** ซิงก์อัตโนมัติหลังแก้ไข (ปิด = ซิงก์เฉพาะตอนกดเอง) */
+  autoSync: boolean
 }
 
 const defaults: Settings = {
@@ -52,6 +54,7 @@ const defaults: Settings = {
   googleClientId: '',
   lastSyncAt: 0,
   googleAccount: '',
+  autoSync: true,
 }
 
 export function loadSettings(): Settings {

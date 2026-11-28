@@ -23,6 +23,8 @@ export interface AutoState {
   lastSyncAt: number
   /** อีเมลบัญชี Google ที่เชื่อมไว้ ('' = ยังไม่เข้าสู่ระบบ) */
   account: string
+  /** เปิดซิงก์อัตโนมัติอยู่ */
+  auto: boolean
 }
 
 const read = (key: string) => {
@@ -64,7 +66,8 @@ export function getState(): AutoState {
   if (!snapshot) {
     const s = loadSettings()
     const pending = Boolean(s.googleAccount && read(DIRTY))
-    snapshot = { phase, pending, needsTap: pending && needsTap, error, lastSyncAt: s.lastSyncAt, account: s.googleAccount }
+    // ปิดซิงก์อัตโนมัติ: ไม่ขึ้นแถบเตือนให้กดซิงก์ (ผู้ใช้เลือกซิงก์เอง)
+    snapshot = { phase, pending, needsTap: pending && needsTap && s.autoSync, error, lastSyncAt: s.lastSyncAt, account: s.googleAccount, auto: s.autoSync }
   }
   return snapshot
 }
@@ -86,14 +89,14 @@ function markDirty() {
   write(DIRTY, String(now))
   // นับ 1 นาทีใหม่ทุกครั้งที่แก้ จะได้ไม่ซิงก์กลางการพิมพ์หรือเพิ่มหนังสือทีละหลายเล่ม
   retry = 0
-  schedule()
+  if (loadSettings().autoSync) schedule()
   if (wasClean) emit()
 }
 
 /** ซิงก์เองถ้ามีของค้างและยังมีสิทธิ์อยู่ ไม่เปิดหน้าต่างใด ๆ */
 let retry = 0
 async function auto(): Promise<void> {
-  if (!getState().pending || phase === 'syncing') return
+  if (!getState().pending || !getState().auto || phase === 'syncing') return
   try {
     const r = await syncNow(false)
     retry = 0
@@ -187,6 +190,15 @@ export async function reset(): Promise<void> {
   emit()
 }
 
+/** เปิด/ปิดซิงก์อัตโนมัติ เปิดแล้วมีของค้างอยู่ ซิงก์ให้ในไม่กี่วินาที */
+export function setAutoSync(on: boolean): void {
+  saveSettings({ ...loadSettings(), autoSync: on })
+  clearTimeout(timer)
+  if (!on) needsTap = false
+  else if (read(DIRTY)) schedule(2000)
+  emit()
+}
+
 let started = false
 /** เริ่มเฝ้าการเปลี่ยนแปลงของข้อมูล เรียกครั้งเดียวตอนเปิดแอป */
 export function start(): void {
@@ -214,10 +226,10 @@ export function start(): void {
   })
   // เน็ตกลับมา ลองซิงก์ของที่ค้าง
   window.addEventListener('online', () => {
-    if (read(DIRTY)) schedule(2000)
+    if (read(DIRTY) && loadSettings().autoSync) schedule(2000)
   })
   // อีกแท็บหนึ่งแก้ไขหรือซิงก์ไป สถานะในแท็บนี้ต้องตามทัน
   window.addEventListener('storage', emit)
   // มีของค้างจากครั้งก่อน: ลองหลังเปิดแอปสักครู่ (ไม่มีสิทธิ์ก็จะขึ้นแถบให้กด)
-  if (read(DIRTY)) schedule(4000)
+  if (read(DIRTY) && loadSettings().autoSync) schedule(4000)
 }

@@ -3,7 +3,7 @@ import { db } from '../db/db'
 import { download } from '../lib/download'
 import { loadSettings, saveSettings } from '../lib/settings'
 import { dayKey, timeAgo } from '../lib/stats'
-import { refresh, reset, syncNow } from '../lib/autosync'
+import { refresh, reset, syncNow, setAutoSync } from '../lib/autosync'
 import { syncErrorText } from '../lib/syncError'
 import { t } from '../th'
 import { useAutoSync } from './SyncBanner'
@@ -119,7 +119,15 @@ export function SyncCard() {
             {auto.lastSyncAt ? t.sync.last(timeAgo(auto.lastSyncAt)) : t.sync.never}
             {auto.pending && ` · ${t.sync.pending}`}
           </p>
-          <p className="muted">{auto.error && auto.pending ? t.sync.autoRetry : t.sync.autoHint}</p>
+          <label className="switch-row">
+            <input type="checkbox" role="switch" checked={auto.auto} onChange={(e) => setAutoSync(e.target.checked)} />
+            <span>
+              <span className="row-title">{t.sync.autoSwitch}</span>
+              <span className="row-sub">
+                {!auto.auto ? t.sync.autoOff : auto.error && auto.pending ? t.sync.autoRetry : t.sync.autoHint}
+              </span>
+            </span>
+          </label>
         </>
       ) : (
         <div className="actions">
