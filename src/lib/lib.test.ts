@@ -7,6 +7,7 @@ import { ranges, summarize } from './series'
 import { dashboard } from './dashboard'
 import { yearReview } from './yearReview'
 import { emptyBook } from '../db/repo'
+import { buildSuggestPrompt, readSuggestion } from './suggest'
 import type { Book } from '../db/types'
 
 test('เลือกรุ่น Flash ตัวเสถียรที่เลขรุ่นสูงสุด', () => {
@@ -681,3 +682,32 @@ test('ผลค้นข้อมูลจาก AI: แยกคำโปรย
   expect(parseEnrichmentText(JSON.stringify({ found: true, blurb: 'x' }), []).blurbAi).toBe(true)
   expect(enrichPrompt({ title: 'ก', authors: '', publisher: '', isbn: '' })).toMatch(/blurbWritten/)
 })
+
+{
+  const base = (id: string) => ({ id, createdAt: 1, updatedAt: 1, deletedAt: null })
+  const cats = [{ ...base('c1'), name: 'นิยาย' }, { ...base('c2'), name: 'ธุรกิจ' }] as never[]
+  const place = (id: string, kind: string, name: string) => ({ ...base(id), kind, name, bookcaseId: null, order: 0, location: '', label: '' })
+  const places = [place('s1', 'shelf', 'ชั้น 1'), place('pl', 'pile', 'กอง'), place('bx', 'box', 'กล่อง')] as never[]
+  const bk = (id: string, placeId: string, categoryId: string | null, seriesId: string | null = null) =>
+    ({ ...base(id), title: id, placeId, categoryId, seriesId, takenAt: null, pages: 200 }) as never
+  const book = { title: 'เล่มใหม่', authors: '', publisher: '', tags: [], synopsis: '', blurb: '', seriesId: 'se' }
+
+  test('แนะนำ: คำถามไม่มีกอง บอกหมวดหลักและชุดเดียวกัน', () => {
+    const input = buildSuggestPrompt(book, cats, places, [], [bk('a', 's1', 'c1', 'se'), bk('b', 's1', 'c1'), bk('c', 'pl', 'c2')], 12)
+    expect(input.placeIds.size).toBe(2)
+    expect(input.prompt).not.toContain('"กอง"')
+    expect(input.prompt).toContain('"นิยาย" 2')
+    expect(input.prompt).toContain('same series')
+  })
+  test('แนะนำ: อ่านคำตอบ: สะกดตามหมวดเดิม รหัสแปลกไม่รับ หมวดเต็มไม่รับหมวดใหม่', () => {
+    const input = buildSuggestPrompt(book, cats, places, [], [bk('a', 's1', 'c1')], 12)
+    expect(readSuggestion({ category: ' นิยาย ', place: 'P1', reason: 'เข้าพวก' }, input)).toEqual({ category: 'นิยาย', categoryNew: false, placeId: 's1', reason: 'เข้าพวก' })
+    expect(readSuggestion({ category: 'กวี', place: 'p9', reason: '' }, input)).toMatchObject({ category: 'กวี', categoryNew: true, placeId: null })
+    const full = buildSuggestPrompt(book, cats, places, [], [], 2)
+    expect(readSuggestion({ category: 'กวี', place: '', reason: '' }, full).category).toBe('')
+    expect(readSuggestion(null, full)).toMatchObject({ category: '', placeId: null })
+  })
+  test('แนะนำ: เล่มในมือ: ไม่ถามที่เก็บ', () => {
+    expect(buildSuggestPrompt(book, cats, places, [], [], 12, false).placeIds.size).toBe(0)
+  })
+}

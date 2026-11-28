@@ -2879,3 +2879,26 @@ body.no-scroll {
   border-radius: 6px;
   box-shadow: 0 10px 40px rgb(0 0 0 / 0.5);
 }
+
+/* ---------- คำแนะนำหมวดและที่เก็บจาก AI ---------- */
+.tip-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tip-card {
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.tip-card p {
+  margin: 0 0 6px;
+}
+.tip-card .tip-head {
+  font-weight: 600;
+}
+.tip-card .actions {
+  margin-top: 8px;
+  flex-wrap: wrap;
+}

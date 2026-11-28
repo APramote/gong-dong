@@ -1,3 +1,6 @@
+/** ด้านยาวของรูปปกที่เก็บ (พิกเซล) — พอให้ขยายดูเต็มจอแล้วยังชัด */
+export const COVER_SIDE = 1200
+
 /** ย่อรูปให้ด้านยาวไม่เกิน maxSide แล้วแปลงเป็น JPEG */
 export async function resizeImage(file: Blob, maxSide: number, quality = 0.85): Promise<Blob> {
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })

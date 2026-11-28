@@ -16,11 +16,13 @@ import { CheckInForm } from '../components/CheckInForm'
 import { timerTotal } from '../lib/stats'
 import { SessionList } from '../components/SessionList'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { buildSuggestPrompt, readSuggestion, suggestSchema, type Suggestion } from '../lib/suggest'
 import { timeAgo } from '../lib/stats'
 import { placeLabel } from '../placeLabel'
-import { resizeImage } from '../lib/image'
+import { resizeImage, COVER_SIDE } from '../lib/image'
 import { lookupIsbnStatus, normalizeIsbn } from '../lib/isbn'
-import { aiOn, aiReady, enrich } from '../lib/ai'
+import { aiOn, aiReady, askJson, enrich } from '../lib/ai'
+import { loadSettings } from '../lib/settings'
 import { aiErrorText } from '../lib/aiError'
 import { MAX_VOLUMES } from '../lib/series'
 import { Ring } from '../components/Ring'
@@ -69,6 +71,10 @@ export function BookFormPage() {
   const [looking, setLooking] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)
   const [aiMsg, setAiMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  // คำแนะนำหมวดและที่เก็บจาก AI (แสดงให้เลือกใช้ ไม่เปลี่ยนฟอร์มเอง)
+  const [tipBusy, setTipBusy] = useState(false)
+  const [tip, setTip] = useState<Suggestion | null>(null)
+  const [tipMsg, setTipMsg] = useState('')
   // undefined = ยังไม่แตะรูปปก, null = ลบรูป, Blob = รูปใหม่
   const [newCover, setNewCover] = useState<Blob | null | undefined>(undefined)
   const [savedCover, setSavedCover] = useState<Blob | null>(null)
@@ -248,6 +254,36 @@ export function BookFormPage() {
     return filled
   }
 
+  async function suggestFromAi() {
+    if (!form.title.trim()) return setError(t.book.titleRequired)
+    setTipBusy(true)
+    setTip(null)
+    setTipMsg('')
+    try {
+      const [cats, allBooks] = await Promise.all([repo.listCategories(), repo.listBooks()])
+      const tags = tagsText.split(',').map((x) => x.trim()).filter(Boolean)
+      // เล่มในมือ: ที่เก็บล็อกอยู่ ถามแค่หมวด
+      const input = buildSuggestPrompt({ ...form, id, tags }, cats, places, bookcases, allBooks, loadSettings().maxCategories, !live?.takenAt)
+      const r = readSuggestion(await askJson(input.prompt, suggestSchema), input)
+      if (!r.category && !r.placeId) setTipMsg(t.book.tipNone)
+      else setTip(r)
+    } catch (e) {
+      setTipMsg(aiErrorText(e))
+    } finally {
+      setTipBusy(false)
+    }
+  }
+
+  /** ใช้คำแนะนำ: หมวดใหม่จะถูกสร้างตอนนี้ (ตอนที่ผู้ใช้กดรับ ไม่ใช่ตอน AI ตอบ) */
+  async function applyTip(what: 'both' | 'category' | 'place') {
+    if (!tip) return
+    const next: Partial<BookInput> = {}
+    if (what !== 'place' && tip.category) next.categoryId = await repo.ensureCategory(tip.category)
+    if (what !== 'category' && tip.placeId && places.some((p) => p.id === tip.placeId)) next.placeId = tip.placeId
+    setForm((f) => ({ ...f, ...next }))
+    setTip(null)
+  }
+
   async function fillFromAi() {
     if (!form.title.trim()) return setError(t.book.titleRequired)
     setAiBusy(true)
@@ -313,6 +349,8 @@ export function BookFormPage() {
     </label>
   )
 
+  const tipPlaceRow = tip?.placeId ? places.find((p) => p.id === tip.placeId) : undefined
+  const tipPlace = tipPlaceRow ? placeLabel(tipPlaceRow, bookcases) : ''
   // ที่เก็บ: เล่มที่มีอยู่แล้วแสดงไว้บนสุดให้เห็นทันที เล่มใหม่อยู่ตามลำดับกรอกเดิม
   const placeField = live?.takenAt ? (
     <label className="place-top">
@@ -445,7 +483,7 @@ export function BookFormPage() {
               const file = e.target.files?.[0]
               e.target.value = ''
               if (file) {
-                setNewCover(await resizeImage(file, 480))
+                setNewCover(await resizeImage(file, COVER_SIDE))
                 dropAi('cover')
               }
             }}
@@ -562,6 +600,60 @@ export function BookFormPage() {
       </div>
 
       {!id && placeField}
+
+      {aiOn() && (
+        <div className="tip-box">
+          <div className="actions">
+            <button type="button" className="btn small" disabled={tipBusy || !aiReady()} onClick={suggestFromAi}>
+              {tipBusy && <Ring size={18} />}
+              {tipBusy ? t.book.tipBusy : t.book.tipAsk}
+            </button>
+          </div>
+          {tipMsg && (
+            <p className="error" role="alert">
+              {tipMsg}
+            </p>
+          )}
+          {tip && (
+            <div className="tip-card" role="status">
+              <p className="tip-head">
+                {t.book.tipTitle}
+                <AiBadge />
+              </p>
+              {tip.category && (
+                <p>
+                  {t.book.category}: <strong>{tip.category}</strong>
+                  {tip.categoryNew && <span className="muted"> {t.book.tipNew}</span>}
+                </p>
+              )}
+              {tipPlace && (
+                <p>
+                  {t.book.place}: <strong>{tipPlace}</strong>
+                </p>
+              )}
+              {tip.reason && <p className="muted">{tip.reason}</p>}
+              <div className="actions">
+                <button type="button" className="btn small primary" onClick={() => applyTip('both')}>
+                  {t.book.tipUse}
+                </button>
+                {tip.category && tip.placeId && (
+                  <>
+                    <button type="button" className="btn small" onClick={() => applyTip('category')}>
+                      {t.book.tipUseCategory}
+                    </button>
+                    <button type="button" className="btn small" onClick={() => applyTip('place')}>
+                      {t.book.tipUsePlace}
+                    </button>
+                  </>
+                )}
+                <button type="button" className="btn small" onClick={() => setTip(null)}>
+                  {t.book.zoomClose}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {aiOn() && (
       <div className="ai-box">
