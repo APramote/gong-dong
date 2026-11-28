@@ -69,12 +69,27 @@ export function BookcaseViewPage() {
   const shelfLabels = onShelf.map((row) => [t.common.books(row.length), ...categoryLines(row, catName)])
   const anyTwoRows = shelves.some((_, i) => twoRows(i))
   // จำนวนเล่มแถวหน้าที่ล้นความกว้างของชั้นสองแถว (ย้ายไปแถวหลังได้)
-  const overflow = onShelf.reduce((n, row, i) => {
+  // และในจำนวนนั้น กี่เล่มที่แถวหลังยังรับได้ (กติกาเดียวกับปุ่มย้าย) — 0 = แถวหลังเต็มแล้ว เล่มที่เหลือวางไม่พอทั้งสองแถว
+  let overflow = 0
+  let movable = 0
+  onShelf.forEach((row, i) => {
     const width = shelfWidth(shelves[i], bookcase)
-    if (!twoRows(i) || width === null) return n
-    let used = 0
-    return n + row.filter((b) => rowOf(b) === 0).filter((b) => (used += footprint(b)) > width).length
-  }, 0)
+    if (!twoRows(i) || width === null) return
+    let front = 0
+    let back = row.filter((b) => rowOf(b) === 1).reduce((n, b) => n + footprint(b), 0)
+    for (const b of row) {
+      if (rowOf(b) === 1) continue
+      const size = footprint(b)
+      if (front + size <= width) front += size
+      else {
+        overflow++
+        if (back + size <= width) {
+          back += size
+          movable++
+        }
+      }
+    }
+  })
   const backCount = onShelf.reduce((n, row, i) => n + (twoRows(i) ? row.filter((b) => rowOf(b) === 1).length : 0), 0)
   const drawers = places.filter((p) => p.kind === 'drawer' && p.bookcaseId === id)
   const inPlace = (pid: string) =>
@@ -162,7 +177,8 @@ export function BookcaseViewPage() {
       {/* แถวหน้าล้นความกว้างชั้น (เล่มที่ล้นไม่ถูกวาด): ชวนย้ายเล่มที่ล้นไปแถวหลังในครั้งเดียว */}
       {overflow > 0 && (
         <p className="notice center">
-          {t.view.overflow(overflow)}{' '}
+          {movable > 0 ? t.view.overflow(overflow) : t.view.overflowFull(overflow)}{' '}
+          {movable > 0 && (
           <button
             className="btn small primary"
             onClick={async () => {
@@ -173,8 +189,9 @@ export function BookcaseViewPage() {
               if (n) switchRow(true)
             }}
           >
-            {t.view.spill}
+            {t.view.spillN(movable)}
           </button>
+          )}
         </p>
       )}
       {spillMsg && (
