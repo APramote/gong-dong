@@ -56,8 +56,8 @@ export const t = {
     pickNone: 'ล้าง',
     applyN: (n: number) => `ใช้กับ ${n} เล่ม`,
     bulkLabel: 'สิ่งที่จะทำกับเล่มที่เลือก',
-    bulk: { move: 'ย้าย', category: 'หมวด', status: 'สถานะ' },
-    bulkTarget: { move: 'เลือกที่เก็บปลายทาง', category: 'เลือกหมวด', status: 'เลือกสถานะ' },
+    bulk: { move: 'ย้าย', category: 'หมวด', status: 'สถานะ', info: 'หาข้อมูล' },
+    bulkTarget: { move: 'เลือกที่เก็บปลายทาง', category: 'เลือกหมวด', status: 'เลือกสถานะ', info: '' },
     unplace: 'นำออกจากที่เก็บ (ยังไม่ระบุที่เก็บ)',
     unplaced: (n: number, inHand: number) => `นำ ${n} เล่มออกจากที่เก็บแล้ว${inHand ? ` (ข้าม ${inHand} เล่มที่อยู่ในมือ)` : ''}`,
     confirmBulk: {
@@ -790,6 +790,27 @@ export const t = {
     noMatch: 'ไม่เจอประโยคที่ค้นหา',
   },
 
+  info: {
+    hint: (skip: number) =>
+      `AI ค้นข้อมูลจากอินเทอร์เน็ตทีละเล่ม แล้วบันทึกเองทันที เติมเฉพาะช่องที่ว่าง${skip ? ` (ข้าม ${skip} เล่มที่ข้อมูลครบแล้ว)` : ''}`,
+    allDone: 'เล่มที่เลือกมีข้อมูลครบแล้ว',
+    start: (n: number) => `หาข้อมูล ${n} เล่ม`,
+    confirm: (n: number, skip: number) =>
+      `หาข้อมูล ${n} เล่มจากอินเทอร์เน็ตแล้วบันทึกเลย?${skip ? `\nข้าม ${skip} เล่มที่ข้อมูลครบแล้ว` : ''}\nเติมเฉพาะช่องที่ว่าง ไม่ทับสิ่งที่กรอกไว้ · ใช้ AI เล่มละ 1 ครั้ง หยุดได้ทุกเมื่อ`,
+    progress: (i: number, n: number) => `กำลังหาข้อมูล ${i} จาก ${n} เล่ม`,
+    stop: 'หยุด',
+    waiting: (s: number) => `ใช้ AI ถี่เกินโควตารายนาที รออีก ${s} วินาทีแล้วทำต่อเอง`,
+    result: (filled: number, nothing: number, missing: number, failed: number) =>
+      [
+        `เติมข้อมูลแล้ว ${filled} เล่ม`,
+        nothing ? `ไม่มีอะไรใหม่ ${nothing} เล่ม` : '',
+        missing ? `ไม่พบข้อมูล ${missing} เล่ม` : '',
+        failed ? `ไม่สำเร็จ ${failed} เล่ม` : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    left: (n: number) => `ยังไม่ได้ทำ ${n} เล่ม เลือกแล้วกดหาข้อมูลอีกครั้งเพื่อทำต่อ (เล่มที่ครบแล้วจะถูกข้าม)`,
+  },
   rating: {
     stars: 'ให้ดาว (ชอบ)',
     eggs: 'ให้มะเขือ (ไม่ชอบ)',

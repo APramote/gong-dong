@@ -24,6 +24,20 @@ const alive = <T extends SyncFields>(rows: T[]) => rows.filter((r) => r.deletedA
 type SystemFields = 'position' | 'takenAt' | 'takenFrom' | 'finishedAt' | 'row' | 'rating'
 export type BookInput = Omit<Book, keyof SyncFields | SystemFields>
 
+/** ข้อมูลหนังสือที่หามาได้ (จาก AI ค้นเว็บ) */
+export interface BookInfo {
+  authors?: string
+  publisher?: string
+  year?: string
+  pages?: number | null
+  isbn?: string
+  synopsis?: string
+  blurb?: string
+  reviewSummary?: string
+  links?: { title: string; url: string }[]
+  category?: string
+}
+
 export interface ReturnInput {
   placeId: string | null
   page: number | null
@@ -573,6 +587,34 @@ export function createRepo(db: GongDongDB = defaultDb) {
     },
 
     /** ย้ายหนังสือไปแถวหน้า (0) หรือแถวหลัง (1) ของชั้นเดิม ไปต่อท้ายแถวนั้น */
+    /**
+     * เติมข้อมูลที่หามาได้ลงในเล่ม เฉพาะช่องที่ยังว่าง (ไม่ทับสิ่งที่ผู้ใช้กรอกไว้) อ่านค่าล่าสุดในฐานข้อมูลเสมอ
+     * หมวด: ตั้งให้เฉพาะเมื่อเล่มยังไม่มีหมวด และชื่อตรงกับหมวดที่มีอยู่แล้ว (ไม่สร้างหมวดใหม่ จะได้ไม่มีหมวดงอกเพิ่ม)
+     * คืนจำนวนช่องที่เติม
+     */
+    async fillBook(id: string, info: BookInfo): Promise<number> {
+      return db.transaction('rw', db.books, db.categories, async () => {
+        const b = await db.books.get(id)
+        if (!b || b.deletedAt !== null) return 0
+        const patch: Partial<Book> = {}
+        for (const k of ['authors', 'publisher', 'year', 'isbn', 'synopsis', 'blurb', 'reviewSummary'] as const) {
+          const v = (info[k] ?? '').trim()
+          if (!b[k] && v) patch[k] = v
+        }
+        if (!b.pages && info.pages && info.pages > 0 && info.pages < 20000) patch.pages = Math.round(info.pages)
+        const links = (info.links ?? []).filter((l) => /^https:\/\//i.test(l.url))
+        if (b.links.length === 0 && links.length) patch.links = links.slice(0, 5)
+        const want = normName(info.category ?? '').toLowerCase()
+        if (!b.categoryId && want) {
+          const match = alive(await db.categories.toArray()).find((c) => c.name.toLowerCase() === want)
+          if (match) patch.categoryId = match.id
+        }
+        const n = Object.keys(patch).length
+        if (n) await db.books.update(id, { ...patch, updatedAt: Date.now() })
+        return n
+      })
+    },
+
     /** ให้คะแนน: 1..5 = ดาว, -1..-5 = มะเขือ, 0 = ล้างคะแนน */
     async setRating(id: string, rating: number): Promise<void> {
       const value = Math.max(-5, Math.min(5, Math.trunc(rating) || 0))

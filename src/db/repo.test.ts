@@ -575,3 +575,29 @@ test('ฟอร์มที่ถือคะแนนเก่าไว้ บ�
   await r.updateBook(id, { ...stale, note: 'แก้โน้ต' })
   expect((await r.getBook(id))!).toMatchObject({ rating: 2, note: 'แก้โน้ต' })
 })
+
+test('เติมข้อมูลที่หามาได้: เฉพาะช่องว่าง หมวดเฉพาะชื่อที่มีอยู่แล้ว ลิงก์เฉพาะ https', async () => {
+  const db = new GongDongDB(`fill-${n++}`)
+  const r = createRepo(db)
+  const novel = await r.ensureCategory('นิยาย')
+  const a = await r.addBook({ ...emptyBook, title: 'ก', authors: 'ผู้แต่งที่กรอกเอง' })
+  const n1 = await r.fillBook(a, {
+    authors: 'คนอื่น',
+    publisher: 'สำนักพิมพ์',
+    pages: 320,
+    synopsis: 'ย่อ',
+    links: [{ title: 'x', url: 'http://bad' }, { title: 'y', url: 'https://ok' }],
+    category: ' นิยาย ',
+  })
+  const got = (await r.getBook(a))!
+  expect(got).toMatchObject({ authors: 'ผู้แต่งที่กรอกเอง', publisher: 'สำนักพิมพ์', pages: 320, synopsis: 'ย่อ', categoryId: novel })
+  expect(got.links).toEqual([{ title: 'y', url: 'https://ok' }])
+  expect(n1).toBe(5)
+  // หมวดที่ยังไม่มี: ไม่สร้างใหม่
+  const b = await r.addBook({ ...emptyBook, title: 'ข' })
+  await r.fillBook(b, { category: 'หมวดใหม่' })
+  expect((await r.getBook(b))!.categoryId).toBeNull()
+  expect((await r.listCategories()).length).toBe(1)
+  // ครบแล้วเติมซ้ำ ไม่มีอะไรเปลี่ยน
+  expect(await r.fillBook(a, { publisher: 'อื่น', pages: 10 })).toBe(0)
+})

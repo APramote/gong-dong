@@ -7,6 +7,8 @@ import { BookRow } from '../components/BookRow'
 import { CoverThumb } from '../components/Cover'
 import { placeGroups, placeLabel } from '../placeLabel'
 import { loadSettings } from '../lib/settings'
+import { aiOn } from '../lib/ai'
+import { BulkInfo } from '../components/BulkInfo'
 import { t } from '../th'
 
 const NO_PLACE = '__none__'
@@ -24,7 +26,12 @@ const RATING_FILTERS: Record<string, (r: number) => boolean> = {
 const FILTER_KEY = 'gong-dong.libraryFilter'
 const STATUSES = ['dong', 'reading', 'done', 'dropped']
 /** ตัวกรองที่จำไว้ (เฉพาะค่าที่รูปแบบถูกต้อง) */
-function saved(): { query?: string; status?: ReadingStatus; placeId?: string; rating?: string } {
+function saved(): {
+  query?: string
+  status?: ReadingStatus
+  placeId?: string
+  rating?: string
+} {
   try {
     const o = JSON.parse(sessionStorage.getItem(FILTER_KEY) ?? '{}') as Record<string, unknown>
     return {
@@ -68,12 +75,21 @@ export function LibraryPage() {
     }
   }, [query, status, placeId, rating])
   // ที่เก็บที่จำไว้ถูกลบไปแล้ว: กลับเป็นทุกที่เก็บ
-  const placeKnown = !placeId || placeId === IN_HAND || placeId === NO_PLACE || places.length === 0 || places.some((x) => x.id === placeId)
+  const placeKnown =
+    !placeId ||
+    placeId === IN_HAND ||
+    placeId === NO_PLACE ||
+    places.length === 0 ||
+    places.some((x) => x.id === placeId)
   useEffect(() => {
     if (!placeKnown) setPlaceId('')
   }, [placeKnown])
   // หมวดใน URL ถูกลบหรือรวมไปแล้ว: กลับเป็นทุกหมวด ไม่ค้างเป็นรายการว่าง
-  const catKnown = categoryId === '' || categoryId === NO_CATEGORY || categories.length === 0 || categories.some((c) => c.id === categoryId)
+  const catKnown =
+    categoryId === '' ||
+    categoryId === NO_CATEGORY ||
+    categories.length === 0 ||
+    categories.some((c) => c.id === categoryId)
   useEffect(() => {
     if (!catKnown) setParams({}, { replace: true })
   }, [catKnown, setParams])
@@ -81,7 +97,7 @@ export function LibraryPage() {
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   /** จะทำอะไรกับเล่มที่เลือก: ย้ายที่เก็บ ตั้งหมวด หรือเปลี่ยนสถานะ */
-  const [bulk, setBulk] = useState<'move' | 'category' | 'status'>('move')
+  const [bulk, setBulk] = useState<'move' | 'category' | 'status' | 'info'>('move')
   /** ปลายทางที่เลือก ('' = ยังไม่ได้เลือก ปุ่มใช้จะกดไม่ได้) */
   const [target, setTarget] = useState('')
   const [applying, setApplying] = useState(false)
@@ -114,19 +130,14 @@ export function LibraryPage() {
     }
   })
 
-  const labels = useMemo(
-    () => new Map(places.map((p) => [p.id, placeLabel(p, bookcases)])),
-    [places, bookcases],
-  )
+  const labels = useMemo(() => new Map(places.map((p) => [p.id, placeLabel(p, bookcases)])), [places, bookcases])
 
   const catName = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories])
 
   const shown = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
     return (books ?? [])
-      .filter((b) =>
-        !categoryId ? true : categoryId === NO_CATEGORY ? !b.categoryId : b.categoryId === categoryId,
-      )
+      .filter((b) => (!categoryId ? true : categoryId === NO_CATEGORY ? !b.categoryId : b.categoryId === categoryId))
       .filter((b) => !status || b.status === status)
       .filter((b) => RATING_FILTERS[rating]?.(b.rating ?? 0) ?? true)
       .filter((b) =>
@@ -165,13 +176,18 @@ export function LibraryPage() {
     setTimeout(() => selectBtn.current?.focus(), 0)
   }
   async function applyBulk() {
+    if (bulk === 'info') return
     const ids = pickedShown.map((b) => b.id)
     const n = ids.length
     const name =
       bulk === 'move'
-        ? target === NO_PLACE ? t.library.noPlace : (labels.get(target) ?? '')
+        ? target === NO_PLACE
+          ? t.library.noPlace
+          : (labels.get(target) ?? '')
         : bulk === 'category'
-          ? target === NO_CATEGORY ? t.categories.none : (catName.get(target) ?? '')
+          ? target === NO_CATEGORY
+            ? t.categories.none
+            : (catName.get(target) ?? '')
           : t.status[target as ReadingStatus]
     // ทำกับหลายเล่มพร้อมกันและย้อนกลับไม่ได้ ถามก่อนเสมอ
     if (!confirm(t.library.confirmBulk[bulk](n, name))) return
@@ -256,9 +272,7 @@ export function LibraryPage() {
                   <span className="now-text">
                     <span className="eyebrow">{t.library.continueReading}</span>
                     <span className="now-title">{b.title}</span>
-                    {b.currentPage ? (
-                      <span className="row-sub">{t.library.page(b.currentPage, b.pages)}</span>
-                    ) : null}
+                    {b.currentPage ? <span className="row-sub">{t.library.page(b.currentPage, b.pages)}</span> : null}
                     {pct > 0 && (
                       <span className="progress" aria-hidden>
                         <span style={{ width: `${pct}%` }} />
@@ -410,7 +424,10 @@ export function LibraryPage() {
             </span>
           </div>
           <div className="chips small" role="group" aria-label={t.library.bulkLabel}>
-            {(['move', 'category', 'status'] as const).map((k) => (
+            {(aiOn()
+              ? (['move', 'category', 'status', 'info'] as const)
+              : (['move', 'category', 'status'] as const)
+            ).map((k) => (
               <button
                 key={k}
                 className={bulk === k ? 'on' : ''}
@@ -424,54 +441,68 @@ export function LibraryPage() {
               </button>
             ))}
           </div>
-          <div className="select-apply">
-            {/* ต้องเลือกปลายทางเองก่อนเสมอ (ไม่มีค่าเริ่มต้น) กันกดพลาดแล้วหนังสือทั้งกลุ่มหลุดจากที่เก็บหรือหมวด */}
-            <select
-              aria-label={t.library.bulkTarget[bulk]}
-              value={target}
-              onChange={async (e) => {
-                if (e.target.value !== NEW_CATEGORY) return setTarget(e.target.value)
-                const name = prompt(t.categories.newName)?.trim()
-                if (name) setTarget(await repo.ensureCategory(name))
+          {bulk === 'info' ? (
+            <BulkInfo
+              books={pickedShown}
+              onDone={(message) => {
+                setMoveMsg(message)
+                closeSelect()
               }}
-            >
-              <option value="">{t.library.bulkTarget[bulk]}…</option>
-              {bulk === 'move' && (
-                <>
-                  <option value={NO_PLACE}>{t.library.unplace}</option>
-                  {placeGroups(places, bookcases).map((g) => (
-                    <optgroup key={g.title} label={g.title}>
-                      {g.options.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </>
-              )}
-              {bulk === 'category' && (
-                <>
-                  <option value={NO_CATEGORY}>{t.categories.none}</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
+            />
+          ) : (
+            <div className="select-apply">
+              {/* ต้องเลือกปลายทางเองก่อนเสมอ (ไม่มีค่าเริ่มต้น) กันกดพลาดแล้วหนังสือทั้งกลุ่มหลุดจากที่เก็บหรือหมวด */}
+              <select
+                aria-label={t.library.bulkTarget[bulk]}
+                value={target}
+                onChange={async (e) => {
+                  if (e.target.value !== NEW_CATEGORY) return setTarget(e.target.value)
+                  const name = prompt(t.categories.newName)?.trim()
+                  if (name) setTarget(await repo.ensureCategory(name))
+                }}
+              >
+                <option value="">{t.library.bulkTarget[bulk]}…</option>
+                {bulk === 'move' && (
+                  <>
+                    <option value={NO_PLACE}>{t.library.unplace}</option>
+                    {placeGroups(places, bookcases).map((g) => (
+                      <optgroup key={g.title} label={g.title}>
+                        {g.options.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </>
+                )}
+                {bulk === 'category' && (
+                  <>
+                    <option value={NO_CATEGORY}>{t.categories.none}</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                    <option value={NEW_CATEGORY}>{t.categories.addNew}</option>
+                  </>
+                )}
+                {bulk === 'status' &&
+                  Object.entries(t.status).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
                     </option>
                   ))}
-                  <option value={NEW_CATEGORY}>{t.categories.addNew}</option>
-                </>
-              )}
-              {bulk === 'status' &&
-                Object.entries(t.status).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-            </select>
-            <button className="btn primary" disabled={pickedShown.length === 0 || !target || applying} onClick={applyBulk}>
-              {t.library.applyN(pickedShown.length)}
-            </button>
-          </div>
+              </select>
+              <button
+                className="btn primary"
+                disabled={pickedShown.length === 0 || !target || applying}
+                onClick={applyBulk}
+              >
+                {t.library.applyN(pickedShown.length)}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </>
