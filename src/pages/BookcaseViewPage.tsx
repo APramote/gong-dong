@@ -41,6 +41,13 @@ export function BookcaseViewPage() {
   const [full, setFull] = useState(false)
   /** กลุ่มการ์ดของสิ่งที่เลือก ใช้เลื่อนจอมาหาเมื่อเลือกจากรายการด้านล่าง */
   const stackRef = useRef<HTMLDivElement>(null)
+  const spillTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(spillTimer.current), [])
+  // เต็มจอ: รายการของชั้นอยู่ในกรอบเลื่อนได้ เลื่อนให้เห็นเล่มที่เพิ่งแตะ
+  const pickedId = selected?.kind === 'book' ? selected.id : ''
+  useEffect(() => {
+    if (full && pickedId) stackRef.current?.querySelector('.row.is-picked')?.scrollIntoView({ block: 'nearest' })
+  }, [full, pickedId])
   useEffect(() => {
     if (!full) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFull(false)
@@ -71,21 +78,33 @@ export function BookcaseViewPage() {
   const shelfLabels = onShelf.map((row) => [t.common.books(row.length), ...categoryLines(row, catName)])
   const anyTwoRows = shelves.some((_, i) => twoRows(i))
   // จำนวนเล่มแถวหน้าที่ล้นความกว้างของชั้นสองแถว (ย้ายไปแถวหลังได้)
-  // และในจำนวนนั้น กี่เล่มที่แถวหลังยังรับได้ (กติกาเดียวกับปุ่มย้าย) — 0 = แถวหลังเต็มแล้ว เล่มที่เหลือวางไม่พอทั้งสองแถว
+  // นับทุกแถวของทุกชั้นที่รู้ความกว้าง (ชั้นแถวเดียว แถวหน้า และแถวหลัง) — กติกาเดียวกับภาพ: เล่มที่ไม่พอถูกข้าม เล่มถัดไปที่บางกว่ายังวางได้
+  // movable = ในจำนวนนั้น กี่เล่มของแถวหน้าที่แถวหลังยังรับได้ (กติกาเดียวกับปุ่มย้าย)
   let overflow = 0
   let movable = 0
   onShelf.forEach((row, i) => {
     const width = shelfWidth(shelves[i], bookcase)
-    if (!twoRows(i) || width === null) return
+    if (width === null) return
+    const two = twoRows(i)
     let front = 0
-    let back = row.filter((b) => rowOf(b) === 1).reduce((n, b) => n + footprint(b), 0)
+    // ที่ที่แถวหลังใช้ไปทั้งหมด (ปุ่มย้ายคิดจากค่านี้) และเล่มของแถวหลังเองที่วางไม่พอ
+    let back = 0
+    let backShown = 0
+    if (two)
+      for (const b of row) {
+        if (rowOf(b) !== 1) continue
+        const size = footprint(b)
+        back += size
+        if (backShown + size <= width) backShown += size
+        else overflow++
+      }
     for (const b of row) {
-      if (rowOf(b) === 1) continue
+      if (two && rowOf(b) === 1) continue
       const size = footprint(b)
       if (front + size <= width) front += size
       else {
         overflow++
-        if (back + size <= width) {
+        if (two && back + size <= width) {
           back += size
           movable++
         }
@@ -178,7 +197,8 @@ export function BookcaseViewPage() {
       </div>
       <p className="muted center">{backView && anyTwoRows && backCount ? t.view.backHint : t.view.hint}</p>
       {/* แถวหน้าล้นความกว้างชั้น (เล่มที่ล้นไม่ถูกวาด): ชวนย้ายเล่มที่ล้นไปแถวหลังในครั้งเดียว */}
-      {overflow > 0 && bookcase.fitsAll && (
+      {/* ยืนยันว่าวางพอไว้: บอกไว้เสมอและยกเลิกได้เสมอ (แม้ตอนนี้ไม่มีแถวไหนเกิน) */}
+      {bookcase.fitsAll && (
         <p className="muted center">
           {t.view.fitsOn}{' '}
           <button className="link-btn" onClick={() => repo.setFitsAll(id, false)}>
@@ -195,8 +215,9 @@ export function BookcaseViewPage() {
             onClick={async () => {
               const n = await repo.spillToBack(id)
               setSpillMsg(t.view.spilled(n))
-              // ข้อความผลลัพธ์อยู่ชั่วครู่ ไม่ค้างหลังสถานการณ์เปลี่ยน
-              setTimeout(() => setSpillMsg(''), 8000)
+              // ข้อความผลลัพธ์อยู่ชั่วครู่ ไม่ค้างหลังสถานการณ์เปลี่ยน (กดซ้ำเริ่มนับใหม่)
+              clearTimeout(spillTimer.current)
+              spillTimer.current = setTimeout(() => setSpillMsg(''), 8000)
               if (n) switchRow(true)
             }}
           >

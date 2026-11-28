@@ -89,7 +89,7 @@ export default function Storage3D({
         const ray = new THREE.Raycaster()
         ray.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), camera)
         const hit = ray.intersectObjects(built.pickable, false)[0]?.object.userData
-        if (hit?.bookId || hit?.drawerId) return
+        if (hit?.bookId || hit?.drawerId || hit?.sign) return
       }
       controls.reset()
       render()

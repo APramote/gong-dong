@@ -660,6 +660,9 @@ test('เดาเลขเล่มจากชื่อเรื่อง', as
   expect(guessVolumes(['1984', 'Sapiens'])).toEqual([null, null])
   expect(guessVolumes(['ชุด ก 2', 'ชุด ก 2'])).toEqual([null, null])
   expect(guessVolumes(['21 Lessons for the 21st Century'])).toEqual([null])
+  // เลขท้ายชื่อของเล่มที่ไม่ได้ขึ้นต้นเหมือนกัน ไม่ใช่เลขเล่ม
+  expect(guessVolumes(['Catch-22', 'Fahrenheit 451', 'Agent 007'])).toEqual([null, null, null])
+  expect(guessVolumes(['Catch-22'])).toEqual([null])
 })
 
 test('ผลค้นข้อมูลจาก AI: แยกคำโปรยที่ AI เขียนเอง แท็ก และสีปก', async () => {
@@ -674,5 +677,7 @@ test('ผลค้นข้อมูลจาก AI: แยกคำโปรย
   expect(q).toMatchObject({ blurbAi: false, tags: [], coverColor: '' })
   // บอกว่าเขียนเองแต่ไม่มีคำโปรย: ไม่นับ
   expect(parseEnrichmentText(JSON.stringify({ found: true, blurb: '', blurbWritten: true }), []).blurbAi).toBe(false)
+  // ไม่ได้บอกว่าอ้างจากแหล่งจริง: ถือว่า AI เขียน (ติดป้าย)
+  expect(parseEnrichmentText(JSON.stringify({ found: true, blurb: 'x' }), []).blurbAi).toBe(true)
   expect(enrichPrompt({ title: 'ก', authors: '', publisher: '', isbn: '' })).toMatch(/blurbWritten/)
 })

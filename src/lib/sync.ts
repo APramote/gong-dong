@@ -16,13 +16,13 @@ type CoverMeta = Pick<Cover, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>
 
 /**
  * รุ่นของไฟล์ข้อมูลกลางใน Drive
- * รุ่น 2 เพิ่มฟิลด์ใหม่ (คะแนน ความกว้างชั้น แถวหน้า/หลัง): แอปรุ่นเก่าที่ไม่รู้จักฟิลด์เหล่านี้จะอ่านไฟล์รุ่น 2 ไม่ได้
+ * รุ่น 2 เพิ่มฟิลด์ใหม่ (คะแนน ความกว้างชั้น แถวหน้า/หลัง) · รุ่น 3 เพิ่มป้าย AI ของหนังสือและการยืนยันว่าวางพอของตู้: แอปรุ่นเก่าที่ไม่รู้จักฟิลด์เหล่านี้จะอ่านไฟล์รุ่น 2 ไม่ได้
  * และหยุดซิงก์จนกว่าจะอัปเดต ดีกว่าปล่อยให้เขียนทับไฟล์กลางด้วยข้อมูลที่ฟิลด์ใหม่หายไป
  */
-export const SNAPSHOT_VERSION = 2
+export const SNAPSHOT_VERSION = 3
 
 export interface Snapshot {
-  version: 1 | 2
+  version: number
   savedAt: number
   tables: Partial<Record<TableName, Row[]>>
   /** รายการรูปปก (ตัวรูปอยู่ในไฟล์ cover-<id>) */
@@ -196,7 +196,7 @@ function readSnapshot(raw: unknown, now: number): Snapshot {
   const o = raw as Partial<Snapshot> | null
   // ไฟล์จากแอปรุ่นใหม่กว่า: อ่านไม่ได้ และห้ามเขียนทับ ให้ผู้ใช้อัปเดตแอปก่อน
   if (o && typeof o === 'object' && typeof o.version === 'number' && o.version > SNAPSHOT_VERSION) throw new Error('newer-file')
-  if (!o || typeof o !== 'object' || (o.version !== 1 && o.version !== SNAPSHOT_VERSION) || typeof o.tables !== 'object' || o.tables === null) throw new Error('bad-file')
+  if (!o || typeof o !== 'object' || !(typeof o.version === 'number' && Number.isInteger(o.version) && o.version >= 1 && o.version <= SNAPSHOT_VERSION) || typeof o.tables !== 'object' || o.tables === null) throw new Error('bad-file')
   const tables: Snapshot['tables'] = {}
   for (const name of TABLES) tables[name] = cleanRows(name, (o.tables as Record<string, unknown>)[name], now)
   const covers: CoverMeta[] = []

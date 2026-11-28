@@ -58,7 +58,11 @@ export async function makeCover(title: string, authors: string, color?: string):
   ctx.strokeStyle = 'rgba(255,255,255,0.55)'
   ctx.lineWidth = 2
   ctx.strokeRect(34, 30, W - 58, H - 110)
-  ctx.fillStyle = '#fdf8ee'
+  // พื้นสีอ่อน (ขาว ครีม เหลือง) ใช้ตัวอักษรเข้ม จะได้อ่านออก
+  const [r, g, bl] = [1, 3, 5].map((i) => parseInt(bg.slice(i, i + 2), 16) / 255)
+  const light = 0.2126 * r + 0.7152 * g + 0.0722 * bl > 0.6
+  const ink = light ? '#2a241d' : '#fdf8ee'
+  ctx.fillStyle = ink
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   let size = 62
@@ -69,12 +73,14 @@ export async function makeCover(title: string, authors: string, color?: string):
     lines = wrap(ctx, title.trim() || '—', W - 110, 5)
     if (lines.length <= 5 && !lines[lines.length - 1].endsWith('…')) break
   }
+  // ชื่อยาวมากจนออกจากลูปด้วยขนาดต่ำสุด: ใช้ขนาดที่วาดจริงคิดระยะบรรทัด
+  size = Math.max(size, 26)
   const lh = size * 1.45
   const top = 250 - ((lines.length - 1) * lh) / 2
   lines.forEach((l, i) => ctx.fillText(l, W / 2 + 6, top + i * lh))
   if (authors.trim()) {
     ctx.font = '500 22px "Noto Sans Thai", system-ui, sans-serif'
-    ctx.fillStyle = 'rgba(253,248,238,0.9)'
+    ctx.fillStyle = ink
     wrap(ctx, authors.trim(), W - 110, 2).forEach((l, i) => ctx.fillText(l, W / 2 + 6, 450 + i * 30))
   }
   // แถบกำกับ: ปกนี้ไม่ใช่ปกจริง

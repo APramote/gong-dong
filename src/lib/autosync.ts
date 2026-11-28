@@ -159,7 +159,7 @@ export async function syncNow(
     if (mine !== epoch) throw new Error('cancelled')
     // การตั้งค่าที่ใช้ร่วมกัน (AI และ key เป้าการอ่าน): ไฟล์แยกในโฟลเดอร์เดียวกัน
     const { syncShared } = await import('./sharedSettings')
-    const shared = await syncShared(store, { load: loadSettings, save: saveSettings, defaults: defaultSettings })
+    const shared = await syncShared(store, { load: loadSettings, save: (s) => saveSettings(s, true), defaults: defaultSettings })
     if (mine !== epoch) throw new Error('cancelled')
     if (shared === 'pulled' || shared === 'both') settingsVersion++
     const after = loadSettings()

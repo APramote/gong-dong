@@ -68,13 +68,14 @@ export function guessVolumes(titles: string[]): (number | null)[] {
     // ตัดตัวเลขท้ายส่วนที่ซ้ำออก ("… 0" จาก 01/02 ไม่ใช่ส่วนของชื่อ)
     prefix = prefix.replace(/\d+$/, '')
   }
+  const shared = prefix.trim().length >= 2
   const out = list.map((s) => {
     const afterPrefix = prefix.trim().length >= 2 ? volume(s.slice(prefix.length).match(/^\s*(\d{1,3})(?!\d)/)?.[1]) : null
     return (
       afterPrefix ??
       volume(s.match(/(?:เล่ม(?:ที่)?|ภาค(?:ที่)?|vol(?:ume)?\.?|#)\s*(\d{1,3})(?!\d)/i)?.[1]) ??
-      volume(s.match(/(?<!\d)0(\d{1,2})(?!\d)/)?.[1]) ??
-      volume(s.match(/(?<!\d)(\d{1,3})\s*$/)?.[1])
+      // เลขเติมศูนย์และเลขท้ายชื่อ เชื่อได้เฉพาะเมื่อเล่มที่เลือกขึ้นต้นเหมือนกัน (ไม่อย่างนั้น "Catch-22" จะกลายเป็นเล่ม 22)
+      (shared ? (volume(s.match(/(?<!\d)0(\d{1,2})(?!\d)/)?.[1]) ?? volume(s.match(/(?<!\d)(\d{1,3})\s*$/)?.[1])) : null)
     )
   })
   const seen = new Map<number, number>()

@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
 import type { Book, Bookcase, Place } from '../db/types'
 import type { BookcaseModel } from '../three/scene'
-import { rowOf, rowsOf } from '../lib/capacity'
+import { rowOf, rowsOf, shelfWidth } from '../lib/capacity'
 import { t } from '../th'
 import { useBlobUrl } from './Cover'
 
@@ -43,6 +43,7 @@ export function BookcaseCard({ bookcase, places, books }: { bookcase: Bookcase; 
     back: shelves.map((s) => (rowsOf(s) === 2 ? inPlace(s.id).filter((b) => rowOf(b) === 1).map(as3D) : [])),
     shelfWidth: bookcase.shelfWidth ?? null,
     fit: Boolean(bookcase.fitsAll),
+    widths: shelves.map((s) => shelfWidth(s, bookcase)),
     drawers: drawers.map((d) => ({ id: d.id, books: inPlace(d.id).map(as3D) })),
     look: bookcase.look,
   }

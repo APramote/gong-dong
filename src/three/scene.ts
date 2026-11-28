@@ -226,7 +226,12 @@ function buildBookcase(model: BookcaseModel): Built {
     return w && w > 0 ? w : null
   })
   const widest = Math.max(0, model.shelfWidth ?? 0, ...limits.map((w) => w ?? 0))
-  const innerW = widest > 0 ? Math.max(30, widest + 0.6) : Math.max(50, booksWidth + 6, fromRatio)
+  // ชั้นที่ยังไม่รู้ความกว้าง: ตู้ต้องกว้างพอให้หนังสือของชั้นนั้นวาดครบ (ไม่ถูกตัดตามความกว้างของชั้นอื่น)
+  const looseWidth = Math.max(
+    0,
+    ...shelves.map((_, i) => (limits[i] === null ? Math.max(...[shelves[i] ?? [], back[i] ?? []].map((row) => row.reduce((n, b) => n + bookSize(b).thick + GAP, 0))) : 0)),
+  )
+  const innerW = widest > 0 ? Math.max(30, widest + 0.6, looseWidth > 0 ? looseWidth + 6 : 0) : Math.max(50, booksWidth + 6, fromRatio)
   const depth = 30
   const outerW = innerW + 2 * BOARD
   /** ความกว้างของป้ายที่ลอยข้างตู้ (รวมช่องว่าง) ใช้จัดกล้องให้เห็นทั้งตู้และป้าย */
@@ -333,7 +338,7 @@ function buildBookcase(model: BookcaseModel): Built {
       // (ป้ายที่ซ่อนอยู่แตะไม่ได้)
       if (shelfId && !(doors === 2 && doorsOpen)) {
         const plate = s.group.children[0] as THREE.Mesh
-        plate.userData = { shelfId }
+        plate.userData = { shelfId, sign: true }
         pickable.push(plate)
       }
       s.group.position.set(signSide * (outerW / 2 + SIGN_GAP), floor + SHELF_SPACE / 2, depth / 2 - 2)
@@ -360,9 +365,12 @@ function buildBookcase(model: BookcaseModel): Built {
         const s = bookSize(b)
         s.thick *= squeeze
         const gap = GAP * squeeze
-        if (squeeze === 1 && (limit === null ? x + s.thick > innerW / 2 - 0.5 : x - start + s.thick + GAP > limit + 1e-6)) break // ล้นชั้น ไม่วาดต่อ
+        if (squeeze === 1 && limit === null && x + s.thick > innerW / 2 - 0.5) break // ล้นตู้ ไม่วาดต่อ
+        // รู้ความกว้าง: เล่มที่วางไม่พอถูกข้าม เล่มถัดไปที่บางกว่ายังวางได้ (กติกาเดียวกับตัวนับในหน้าและปุ่มย้ายไปแถวหลัง)
+        if (squeeze === 1 && limit !== null && x - start + s.thick + GAP > limit + 1e-6) continue
         const color = bookColor(b)
-        const mesh = boxMesh(s.thick, s.height, s.depth, color, textTexture(b.title, color, true))
+        // เล่มที่ถูกย่อจนบางมาก ชื่อบนสันอ่านไม่ออกอยู่แล้ว ไม่สร้างภาพตัวอักษร (ประหยัดหน่วยความจำเมื่อมีหลายร้อยเล่ม)
+        const mesh = boxMesh(s.thick, s.height, s.depth, color, s.thick < 0.8 ? undefined : textTexture(b.title, color, true))
         const z = row === 0 ? depth / 2 - s.depth / 2 - 1.5 : -depth / 2 + s.depth / 2 + 1
         mesh.position.set(x + s.thick / 2, floor + s.height / 2, z)
         if (row === 0 && ghostFront) {

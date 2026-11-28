@@ -247,10 +247,12 @@ test('ซิงก์ความกว้างชั้น จำนวนแ�
 
 test('ไฟล์กลางรุ่น 2: เขียนเป็นรุ่น 2 อ่านได้ทั้งรุ่น 1 และ 2 รุ่นที่ไม่รู้จักถูกปฏิเสธ', async () => {
   const { SNAPSHOT_VERSION } = await import('./sync')
-  expect(SNAPSHOT_VERSION).toBe(2)
+  expect(SNAPSHOT_VERSION).toBe(3)
   expect(parseSnapshot('{"version":2,"tables":{"books":[{"id":"1","updatedAt":5,"rating":-4}]}}').tables.books![0]).toMatchObject({ rating: -4 })
   expect(parseSnapshot('{"version":1,"tables":{}}').version).toBe(1)
-  expect(() => parseSnapshot('{"version":3,"tables":{}}')).toThrow('newer-file')
+  expect(() => parseSnapshot('{"version":3,"tables":{}}')).not.toThrow()
+  expect(() => parseSnapshot('{"version":4,"tables":{}}')).toThrow('newer-file')
+  expect(() => parseSnapshot('{"version":1.5,"tables":{}}')).toThrow('bad-file')
   expect(() => parseSnapshot('{"version":0,"tables":{}}')).toThrow('bad-file')
 })
 
@@ -324,4 +326,48 @@ test('การยืนยันว่าวางพอของตู้ซ�
   expect((await b.repo.listBookcases())[0].fitsAll).toBe(true)
   const snap = parseSnapshot(JSON.stringify({ version: 2, tables: { bookcases: [{ id: 'x', updatedAt: 1, fitsAll: 'yes' }] } }))
   expect(snap.tables.bookcases![0]).not.toHaveProperty('fitsAll')
+})
+
+test('การตั้งค่าร่วม: เปลี่ยนรุ่น AI ตามไปเครื่องอื่น เครื่องใหม่ที่แตะการตั้งค่าก่อนซิงก์ครั้งแรกไม่ทับของเดิม เครื่องเก่าสองเครื่องลงเอยตรงกัน', async () => {
+  const { syncShared, mergeShared, pickShared } = await import('./sharedSettings')
+  const base = {
+    aiEnabled: true, provider: 'gemini', geminiKey: '', geminiModel: '', claudeKey: '', claudeModel: 'c', dailyGoalMinutes: 20, dailyGoalPages: 20,
+    yearGoalBooks: 12, maxCategories: 12, organizeMode: 'minimal', googleClientId: '', lastSyncAt: 0, googleAccount: '', autoSync: true, syncSettings: true,
+    sharedAt: 0, geminiKeyAt: 0, claudeKeyAt: 0,
+  } as any
+  const device = (init: object) => {
+    let s = { ...base, ...init }
+    return { io: { load: () => s, save: (n: any) => (s = n), defaults: base }, get: () => s, set: (patch: object) => (s = { ...s, ...patch }) }
+  }
+  const T = 1_800_000_000_000
+  const drive = memoryStore()
+  // สองเครื่องใช้งานร่วมกันอยู่แล้ว
+  const phone = device({ provider: 'claude', claudeKey: 'CK', claudeModel: 'old', claudeKeyAt: T, sharedAt: T, lastSyncAt: T, maxCategories: 8 })
+  const pc = device({ provider: 'claude', claudeKey: 'CK', claudeModel: 'old', claudeKeyAt: T, sharedAt: T, lastSyncAt: T, maxCategories: 8 })
+  await syncShared(drive, phone.io, T + 1)
+  expect(await syncShared(drive, pc.io, T + 2)).toBe('none')
+  // มือถือเปลี่ยนรุ่น (saveSettings จดเวลาของชุด key ให้): PC ได้รุ่นใหม่ และไม่มีการส่งวนไปมา
+  phone.set({ claudeModel: 'new', claudeKeyAt: T + 10, sharedAt: T + 10 })
+  expect(await syncShared(drive, phone.io, T + 11)).toBe('pushed')
+  expect(await syncShared(drive, pc.io, T + 12)).toBe('pulled')
+  expect(pc.get().claudeModel).toBe('new')
+  expect(await syncShared(drive, phone.io, T + 13)).toBe('none')
+  expect(await syncShared(drive, pc.io, T + 14)).toBe('none')
+  // เครื่องใหม่: เลือกผู้ให้บริการก่อนเข้าสู่ระบบ (เวลาใหม่กว่า) แล้วซิงก์ครั้งแรก — ค่าเริ่มต้นของมันไม่ทับ maxCategories และ key ของเดิม
+  const fresh = device({ provider: 'gemini', sharedAt: T + 100, lastSyncAt: 0 })
+  await syncShared(drive, fresh.io, T + 101)
+  expect(fresh.get()).toMatchObject({ maxCategories: 8, claudeKey: 'CK', claudeModel: 'new' })
+  await syncShared(drive, pc.io, T + 102)
+  expect(pc.get()).toMatchObject({ maxCategories: 8, claudeKey: 'CK' })
+  // เครื่องเก่าสองเครื่อง (เวลา 0 ทั้งคู่) ที่มี key คนละตัว: ลงเอยตรงกัน ไม่ส่งทับกันไปมา
+  const d2 = memoryStore()
+  const a = device({ geminiKey: 'A', lastSyncAt: T })
+  const b = device({ geminiKey: 'B', lastSyncAt: T })
+  await syncShared(d2, a.io, T + 1)
+  await syncShared(d2, b.io, T + 2)
+  await syncShared(d2, a.io, T + 3)
+  expect(a.get().geminiKey).toBe(b.get().geminiKey)
+  expect(await syncShared(d2, b.io, T + 4)).toBe('none')
+  expect(await syncShared(d2, a.io, T + 5)).toBe('none')
+  expect(mergeShared(pickShared(base), 0, null, 0, pickShared(base), T).at).toBe(T)
 })

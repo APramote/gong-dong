@@ -169,7 +169,8 @@ export function parseEnrichmentText(
     blurb: clean(raw?.blurb),
     reviewSummary: clean(raw?.reviewSummary),
     links,
-    blurbAi: raw?.blurbWritten === true && Boolean(clean(raw?.blurb)),
+    // ไม่ได้บอกชัดว่าอ้างจากแหล่งจริง ถือว่า AI เขียนเอง (ติดป้ายเกินดีกว่าขาด)
+    blurbAi: raw?.blurbWritten !== false && Boolean(clean(raw?.blurb)),
     tags: Array.isArray(raw?.tags)
       ? [...new Set((raw.tags as unknown[]).map((x) => clean(x).replace(/^#/, '').slice(0, 30)).filter(Boolean))].slice(0, 5)
       : [],

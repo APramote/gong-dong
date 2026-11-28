@@ -201,6 +201,7 @@ export function SettingsPage() {
           <button
             className="btn danger"
             onClick={() => {
+              if (!confirm(t.settings.confirmClear)) return
               if (isClaude) update({ claudeKey: '' })
               else {
                 update({ geminiKey: '', geminiModel: '' })

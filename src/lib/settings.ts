@@ -100,7 +100,14 @@ export const onSharedChange = (fn: () => void) => {
   sharedListener = fn
 }
 
-export function saveSettings(s: Settings): void {
+/**
+ * บันทึกการตั้งค่า — fromSync = ค่าที่ตัวซิงก์รวมมาแล้ว (เวลาทุกตัวกำหนดมาเอง): ไม่จดเวลาใหม่และไม่นับเป็นการแก้ของผู้ใช้
+ */
+export function saveSettings(s: Settings, fromSync = false): void {
+  if (fromSync) {
+    localStorage.setItem(KEY, JSON.stringify(s))
+    return
+  }
   // การตั้งค่าที่ใช้ร่วมกันเปลี่ยน (และผู้เรียกไม่ได้กำหนดเวลามาเอง เช่น ค่าที่รับมาจาก Drive): จดเวลาไว้ให้ตัวซิงก์
   const before = loadSettings()
   const changed = SHARED.some((k) => before[k] !== s[k])
@@ -111,8 +118,9 @@ export function saveSettings(s: Settings): void {
     ? {
         ...s,
         sharedAt: now,
-        ...(before.geminiKey !== s.geminiKey && s.geminiKeyAt === before.geminiKeyAt && { geminiKeyAt: now }),
-        ...(before.claudeKey !== s.claudeKey && s.claudeKeyAt === before.claudeKeyAt && { claudeKeyAt: now }),
+        // key หรือรุ่นของมันเปลี่ยน: จดเวลาของชุด key นั้น (รุ่นเดินทางไปกับ key จึงต้องจดด้วย เครื่องอื่นจะได้รับรุ่นใหม่)
+        ...((before.geminiKey !== s.geminiKey || before.geminiModel !== s.geminiModel) && s.geminiKeyAt === before.geminiKeyAt && { geminiKeyAt: now }),
+        ...((before.claudeKey !== s.claudeKey || before.claudeModel !== s.claudeModel) && s.claudeKeyAt === before.claudeKeyAt && { claudeKeyAt: now }),
       }
     : s
   localStorage.setItem(KEY, JSON.stringify(next))

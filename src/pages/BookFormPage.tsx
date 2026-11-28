@@ -56,6 +56,8 @@ export function BookFormPage() {
   /** ชื่อหมวดที่แหล่งข้อมูลแนะนำ ผู้ใช้กดใช้เองถ้าเห็นด้วย */
   const [catSuggestion, setCatSuggestion] = useState(prefillCategory ?? '')
   const [tagsText, setTagsText] = useState('')
+  /** ชื่อเรื่องและผู้แต่งที่อยู่ในรูปปกจำลอง (ถ้ามี) ใช้ดูว่าต้องวาดใหม่ตอนบันทึกหรือไม่ */
+  const aiCoverText = useRef('')
   // ช่องราคาเก็บข้อความที่พิมพ์ไว้ (เช่น "250." ระหว่างพิมพ์) แยกจากตัวเลขในฟอร์ม
   const [priceText, setPriceText] = useState('')
   const [collectorOpen, setCollectorOpen] = useState(false)
@@ -137,6 +139,7 @@ export function BookFormPage() {
       setCollectorOpen(Boolean(b.edition || b.condition || b.price !== null || b.boughtAt || b.boughtFrom || b.signed))
       setBaseline(JSON.stringify({ form: input, tagsText: b.tags.join(', ') }))
       setSavedCover(cover ?? null)
+      aiCoverText.current = `${b.title}|${b.authors}`
       setState('ready')
     })
     return () => {
@@ -187,11 +190,22 @@ export function BookFormPage() {
     }
     const bookId = id ?? (await repo.addBook(input))
     if (id) await repo.updateBook(id, input)
-    if (newCover !== undefined) await repo.setCover(bookId, newCover)
+    // ปกจำลองมีชื่อเรื่องอยู่ในรูป: แก้ชื่อหรือผู้แต่งแล้ว วาดใหม่ให้ตรง
+    let cover = newCover
+    const coverText = `${title}|${input.authors}`
+    if (input.aiFields?.includes('cover') && cover !== null && coverText !== aiCoverText.current) {
+      try {
+        cover = await makeCover(title, input.authors, input.spineColor)
+        aiCoverText.current = coverText
+      } catch {
+        // วาดใหม่ไม่ได้ ใช้ปกเดิม
+      }
+    }
+    if (cover !== undefined) await repo.setCover(bookId, cover)
     setForm(input)
     setBaseline(JSON.stringify({ form: input, tagsText }))
-    if (newCover !== undefined) {
-      setSavedCover(newCover)
+    if (cover !== undefined) {
+      setSavedCover(cover)
       setNewCover(undefined)
     }
     return bookId
@@ -255,6 +269,7 @@ export function BookFormPage() {
       if (!coverUrl) {
         try {
           setNewCover(await makeCover(form.title, form.authors || rest.authors, aiColor))
+          aiCoverText.current = `${form.title.trim()}|${form.authors || rest.authors}`
           made.push('cover')
           extra++
         } catch {

@@ -146,6 +146,7 @@ export function CategoriesPage() {
           {t.categories.limit}
           <input
             inputMode="numeric"
+            key={limit}
             defaultValue={limit}
             onBlur={(e) => {
               const n = Math.min(50, Math.max(3, parseInt(e.target.value, 10) || 12))

@@ -68,12 +68,16 @@ export function mergeShared(
   remoteAt: number,
   defaults: Shared,
   now = Date.now(),
+  /** เครื่องนี้ยังไม่เคยซิงก์เลย: ค่าที่เพิ่งแตะก่อนเข้าสู่ระบบไม่ควรทับการตั้งค่าที่เครื่องอื่นใช้อยู่ทั้งชุด */
+  firstSync = false,
 ): { values: Shared; at: number } {
   if (!remote) return { values: local, at: localAt || now }
-  const remoteWins = remoteAt > localAt
+  // เครื่องที่ตั้งค่าไว้ก่อนมีระบบนี้ (เวลา 0) หรือเครื่องใหม่ที่ซิงก์ครั้งแรก: เริ่มจากของกลาง แล้วคงเฉพาะค่าที่เครื่องนี้ตั้งเอง (ต่างจากค่าเริ่มต้น)
+  const gentle = localAt === 0 || firstSync
+  const remoteWins = remoteAt > localAt || gentle
   const values: Shared = { ...(remoteWins ? remote : local) }
-  let at = Math.max(localAt, remoteAt)
-  if (remoteWins && localAt === 0) {
+  let at = gentle ? remoteAt : Math.max(localAt, remoteAt)
+  if (gentle) {
     let kept = false
     for (const k of PLAIN_KEYS)
       if (local[k] !== defaults[k] && local[k] !== remote[k]) {
@@ -85,7 +89,8 @@ export function mergeShared(
   }
   for (const set of KEY_SETS) {
     const [l, r] = [local[set.at], remote[set.at]]
-    const takeRemote = r > l || (r === l && !local[set.key] && Boolean(remote[set.key]))
+    // เวลาเท่ากัน: ฝั่งที่มี key ชนะฝั่งที่ว่าง — มีทั้งคู่ (เช่น เครื่องเก่าสองเครื่องที่เวลาเป็น 0) ใช้ของฝั่งที่ชนะค่าทั่วไป จะได้ลงเอยตรงกัน
+    const takeRemote = r > l || (r === l && Boolean(remote[set.key]) && (!local[set.key] || remoteWins))
     const from = takeRemote ? remote : local
     Object.assign(values, { [set.key]: from[set.key], [set.model]: from[set.model], [set.at]: from[set.at] })
   }
@@ -130,7 +135,7 @@ export async function syncShared(
   }
   // ยังไม่มีไฟล์ และเครื่องนี้ยังไม่มีอะไรให้แบ่ง (ไม่มี key และไม่เคยแก้การตั้งค่า): ไม่ต้องสร้างไฟล์
   if (!remote && !local.sharedAt && !mine.geminiKey && !mine.claudeKey) return 'absent'
-  const merged = mergeShared(mine, local.sharedAt, remote, remoteAt, pickShared(io.defaults), now)
+  const merged = mergeShared(mine, local.sharedAt, remote, remoteAt, pickShared(io.defaults), now, local.lastSyncAt === 0)
   const pull = !same(merged.values, mine)
   const push = !remote || !same(merged.values, remote) || merged.at !== remoteAt
   // ผู้ใช้แก้การตั้งค่าระหว่างรอเครือข่าย: รอบนี้ไม่บันทึกทับ ปล่อยให้รอบถัดไปรวมใหม่ (การแก้นั้นทำเครื่องหมายค้างซิงก์ไว้แล้ว)
