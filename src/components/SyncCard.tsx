@@ -81,8 +81,9 @@ export function SyncCard() {
     try {
       const { importBackup } = await import('../lib/sync')
       setMsg({ ok: true, text: t.sync.imported(await importBackup(db, file)) })
-    } catch {
-      setMsg({ ok: false, text: t.sync.badFile })
+    } catch (e) {
+      // ไฟล์จากแอปรุ่นใหม่กว่า: บอกให้อัปเดต ไม่ใช่บอกว่าไฟล์เสีย
+      setMsg({ ok: false, text: (e as Error)?.message === 'newer-file' ? t.sync.errors['newer-file'] : t.sync.badFile })
     }
     setBusy('')
   }

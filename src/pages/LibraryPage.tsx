@@ -115,9 +115,13 @@ export function LibraryPage() {
   useEffect(() => {
     if (moveMsg) msgRef.current?.scrollIntoView({ block: 'center' })
   }, [moveMsg])
+  // ระหว่างหาข้อมูลหลายเล่ม แตะแถวแล้วไม่เปลี่ยนการเลือก (แถวยังเป็นช่องติ๊ก ไม่กลายเป็นลิงก์ที่พาออกจากหน้า)
+  const lockPicks = useRef(false)
+  lockPicks.current = infoRunning
   const togglePick = useCallback(
     (id: string) =>
       setPicked((cur) => {
+        if (lockPicks.current) return cur
         const next = new Set(cur)
         if (next.has(id)) next.delete(id)
         else next.add(id)
@@ -390,7 +394,7 @@ export function LibraryPage() {
               key={b.id}
               book={b}
               selected={selecting ? picked.has(b.id) : undefined}
-              onSelect={selecting && !infoRunning ? togglePick : undefined}
+              onSelect={selecting ? togglePick : undefined}
               sub={[
                 b.takenAt ? t.library.inHand : b.placeId ? labels.get(b.placeId) : t.library.noPlace,
                 b.categoryId && catName.get(b.categoryId),

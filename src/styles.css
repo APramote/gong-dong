@@ -2588,3 +2588,12 @@ details.more[open] {
   padding: 4px 10px;
   font-size: 0.82rem;
 }
+
+/* ปุ่มสลับแถวบนภาพ 3D: เล็กพอไม่บังการแตะหนังสือ และอยู่ฝั่งตรงข้ามป้ายหมวด (ตู้บานเดียวป้ายอยู่ขวา ปุ่มจึงอยู่ซ้าย) */
+.view3d-rows.chips.small button {
+  min-height: 30px;
+}
+.view3d-rows.left {
+  right: auto;
+  left: 8px;
+}

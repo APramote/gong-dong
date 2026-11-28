@@ -23,7 +23,8 @@ export function BookcaseViewPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const bookcase = useLiveQuery(async () => (await repo.getBookcase(id)) ?? null, [id])
-  const places = useLiveQuery(() => repo.listPlaces(), []) ?? []
+  const placesRaw = useLiveQuery(() => repo.listPlaces(), [])
+  const places = placesRaw ?? []
   const booksRaw = useLiveQuery(() => repo.listBooks(), [])
   const categoriesRaw = useLiveQuery(() => repo.listCategories(), [])
   const books = booksRaw ?? []
@@ -37,7 +38,7 @@ export function BookcaseViewPage() {
   const [renaming, setRenaming] = useState(false)
 
   // รอหนังสือและหมวดด้วย ภาพ 3D จะได้จัดกล้องครั้งแรกพร้อมป้ายครบ ไม่ตกขอบจอ
-  if (bookcase === undefined || booksRaw === undefined || categoriesRaw === undefined) return <p className="empty">{t.common.loading}</p>
+  if (bookcase === undefined || booksRaw === undefined || categoriesRaw === undefined || placesRaw === undefined) return <p className="empty">{t.common.loading}</p>
   if (!bookcase) return <p className="empty">{t.view.notFound}</p>
 
   // listPlaces เรียงตาม order อยู่แล้ว: ชั้นที่ 1 (ล่างสุด) มาก่อน
@@ -61,6 +62,12 @@ export function BookcaseViewPage() {
   const pickShelf = pick && shelves.find((s) => s.id === pick.placeId)
   const drawer = selected?.kind === 'drawer' ? drawers.find((d) => d.id === selected.id) : undefined
   const drawerBooks = drawer ? inPlace(drawer.id) : []
+
+  /** สลับแถวที่ดู: เล่มที่เลือกค้างไว้อาจกลายเป็นเล่มที่จางอยู่ ล้างการเลือก */
+  const switchRow = (back: boolean) => {
+    setBackView(back)
+    setSelected(null)
+  }
 
   async function changeShape(l: Look) {
     // ลดลิ้นชักที่มีหนังสืออยู่ ต้องถามก่อน
@@ -87,11 +94,11 @@ export function BookcaseViewPage() {
       <div className="view3d-wrap">
         {/* ตู้ที่วางซ้อนสองแถว: สลับดูแถวหน้า/แถวหลังได้จากมุมบนของภาพ */}
         {anyTwoRows && (
-          <div className="chips small view3d-rows" role="group" aria-label={t.view.rowsLabel}>
-            <button className={backView ? '' : 'on'} aria-pressed={!backView} onClick={() => setBackView(false)}>
+          <div className={`chips small view3d-rows${(look.doors ?? 0) === 1 ? ' left' : ''}`} role="group" aria-label={t.view.rowsLabel}>
+            <button className={backView ? '' : 'on'} aria-pressed={!backView} onClick={() => switchRow(false)}>
               {t.view.frontRow}
             </button>
-            <button className={backView ? 'on' : ''} aria-pressed={backView} onClick={() => setBackView(true)}>
+            <button className={backView ? 'on' : ''} aria-pressed={backView} onClick={() => switchRow(true)}>
               {t.view.backRowN(backCount)}
             </button>
           </div>

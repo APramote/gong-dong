@@ -304,10 +304,12 @@ function buildBookcase(model: BookcaseModel): Built {
       s.group.position.set(signSide * (outerW / 2 + SIGN_GAP), floor + SHELF_SPACE / 2, depth / 2 - 2)
       const link = new THREE.Mesh(new THREE.BoxGeometry(SIGN_GAP, 0.3, 0.3), new THREE.MeshStandardMaterial({ color: '#b9ab94' }))
       link.position.set(signSide * (outerW / 2 + SIGN_GAP / 2), floor + SHELF_SPACE / 2, depth / 2 - 2)
+      // ตู้สองบานที่เปิดอยู่: บานซ้ายกางมาขวางป้าย ซ่อนป้ายไว้ก่อน (ตู้บานเดียวป้ายอยู่อีกฝั่ง เห็นได้ตลอด)
+      s.group.visible = link.visible = !(doors === 2 && doorsOpen)
       root.add(s.group, link)
       signSpan = Math.max(signSpan, s.width + SIGN_GAP)
     }
-    // ดูแถวหลัง: แถวหน้าของชั้นนี้จางลง (เฉพาะชั้นที่มีหนังสือแถวหลัง)
+    // ดูแถวหลัง: แถวหน้าของชั้นที่วางซ้อนสองแถวจางลง
     const ghostFront = Boolean(model.backView && model.twoRows?.[i])
     // แถวหน้าชิดขอบหน้าชั้น แถวหลัง (ถ้ามี) ชิดผนังหลัง
     for (const [row, list] of [[0, shelves[i] ?? []], [1, back[i] ?? []]] as const) {

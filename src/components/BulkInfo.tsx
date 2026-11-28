@@ -66,10 +66,13 @@ export function BulkInfo({
   /** ยังแสดงอยู่ (ออกจากหน้าแล้วไม่สรุปผล ไม่ไปแตะหน้าที่ปิดไปแล้ว) */
   const alive = useRef(true)
   useEffect(
-    () => () => {
-      stop.current = true
-      alive.current = false
-      onRunning?.(false)
+    () => {
+      alive.current = true
+      return () => {
+        stop.current = true
+        alive.current = false
+        onRunning?.(false)
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -116,7 +119,6 @@ export function BulkInfo({
       try {
         const r = await ask(b)
         if (r === STOPPED) break
-        markChecked(b.id)
         if (!r.found) missing++
         else {
           const { found: _f, isbn, ...rest } = r
@@ -124,6 +126,8 @@ export function BulkInfo({
           if (n) filled++
           else nothing++
         }
+        // จำว่าหาเล่มนี้แล้วหลังบันทึกสำเร็จเท่านั้น (บันทึกพลาดจะได้ลองใหม่รอบหน้า)
+        markChecked(b.id)
         errorsInRow = 0
       } catch (e) {
         failed++
