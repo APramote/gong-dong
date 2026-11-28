@@ -129,6 +129,13 @@ export function SyncCard() {
               </span>
             </span>
           </label>
+          <label className="switch-row">
+            <input type="checkbox" role="switch" checked={s.syncSettings} onChange={(e) => update({ syncSettings: e.target.checked })} />
+            <span>
+              <span className="row-title">{t.sync.settingsSwitch}</span>
+              <span className="row-sub">{s.syncSettings ? t.sync.settingsOn : t.sync.settingsOff}</span>
+            </span>
+          </label>
         </>
       ) : (
         <div className="actions">

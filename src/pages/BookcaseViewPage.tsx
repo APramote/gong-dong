@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
@@ -10,7 +10,7 @@ import { FieldsForm } from '../components/FieldsForm'
 import { bookcaseFields } from '../placeFields'
 import { BookRow } from '../components/BookRow'
 import type { Pick3D } from '../three/scene'
-import { rowOf, rowsOf } from '../lib/capacity'
+import { footprint, rowOf, rowsOf, shelfWidth } from '../lib/capacity'
 import { bookcaseSizeFields } from '../placeFields'
 import { allTwoRows, bookcaseInitial, saveBookcase, someTwoRows } from '../lib/bookcaseSize'
 import { categoryLines } from '../lib/shelfLabel'
@@ -36,6 +36,20 @@ export function BookcaseViewPage() {
   /** ค่าที่กำลังแก้ ใช้แสดงทันทีระหว่างรอบันทึกลงฐานข้อมูล — null = ไม่ได้แก้อยู่ */
   const [draft, setDraft] = useState<Look | null>(null)
   const [renaming, setRenaming] = useState(false)
+  const [spillMsg, setSpillMsg] = useState('')
+  /** ขยายภาพ 3D เต็มจอ (กด Esc หรือปุ่มย่อเพื่อกลับ) */
+  const [full, setFull] = useState(false)
+  useEffect(() => {
+    if (!full) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFull(false)
+    window.addEventListener('keydown', onKey)
+    // เต็มจอแล้วหน้าข้างหลังไม่ควรเลื่อนตาม
+    document.body.classList.add('no-scroll')
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.classList.remove('no-scroll')
+    }
+  }, [full])
 
   // รอหนังสือและหมวดด้วย ภาพ 3D จะได้จัดกล้องครั้งแรกพร้อมป้ายครบ ไม่ตกขอบจอ
   if (bookcase === undefined || booksRaw === undefined || categoriesRaw === undefined || placesRaw === undefined) return <p className="empty">{t.common.loading}</p>
@@ -53,6 +67,13 @@ export function BookcaseViewPage() {
   const shelfLabels = onShelf.map((row) => categoryLines(row, catName))
   const twoRows = (i: number) => rowsOf(shelves[i]) === 2
   const anyTwoRows = shelves.some((_, i) => twoRows(i))
+  // จำนวนเล่มแถวหน้าที่ล้นความกว้างของชั้นสองแถว (ย้ายไปแถวหลังได้)
+  const overflow = onShelf.reduce((n, row, i) => {
+    const width = shelfWidth(shelves[i], bookcase)
+    if (!twoRows(i) || width === null) return n
+    let used = 0
+    return n + row.filter((b) => rowOf(b) === 0).filter((b) => (used += footprint(b)) > width).length
+  }, 0)
   const backCount = onShelf.reduce((n, row, i) => n + (twoRows(i) ? row.filter((b) => rowOf(b) === 1).length : 0), 0)
   const drawers = places.filter((p) => p.kind === 'drawer' && p.bookcaseId === id)
   const inPlace = (pid: string) =>
@@ -91,14 +112,17 @@ export function BookcaseViewPage() {
           <p className="muted">{t.shelf.caseSummary(bookcase.shelfWidth ?? null, allTwoRows(id, places), someTwoRows(id, places))}</p>
         </div>
       </div>
-      <div className="view3d-wrap">
+      <div className={`view3d-wrap${full ? ' full' : ''}`}>
+        <button className="btn small view3d-full" aria-pressed={full} onClick={() => setFull((f) => !f)}>
+          {full ? t.view.exitFull : t.view.full}
+        </button>
         {/* ตู้ที่วางซ้อนสองแถว: สลับดูแถวหน้า/แถวหลังได้จากมุมบนของภาพ */}
         {anyTwoRows && (
           <div className={`chips small view3d-rows${(look.doors ?? 0) === 1 ? ' left' : ''}`} role="group" aria-label={t.view.rowsLabel}>
-            <button className={backView ? '' : 'on'} aria-pressed={!backView} onClick={() => switchRow(false)}>
+            <button className={backView && backCount > 0 ? '' : 'on'} aria-pressed={!(backView && backCount > 0)} onClick={() => switchRow(false)}>
               {t.view.frontRow}
             </button>
-            <button className={backView ? 'on' : ''} aria-pressed={backView} onClick={() => switchRow(true)}>
+            <button className={backView && backCount > 0 ? 'on' : ''} aria-pressed={backView && backCount > 0} disabled={backCount === 0} onClick={() => switchRow(true)}>
               {t.view.backRowN(backCount)}
             </button>
           </div>
@@ -109,7 +133,7 @@ export function BookcaseViewPage() {
               shelves: onShelf.map((row, i) => row.filter((b) => !twoRows(i) || rowOf(b) === 0).map(as3D)),
               back: onShelf.map((row, i) => (twoRows(i) ? row.filter((b) => rowOf(b) === 1).map(as3D) : [])),
               labels: shelfLabels,
-              backView: backView && anyTwoRows,
+              backView: backView && anyTwoRows && backCount > 0,
               twoRows: shelves.map((_, i) => twoRows(i)),
               shelfWidth: bookcase.shelfWidth ?? null,
               drawers: drawers.map((d) => ({ id: d.id, books: inPlace(d.id).map(as3D) })),
@@ -122,7 +146,29 @@ export function BookcaseViewPage() {
           />
         </Suspense>
       </div>
-      <p className="muted center">{backView && anyTwoRows ? (backCount ? t.view.backHint : t.view.backEmpty) : t.view.hint}</p>
+      <p className="muted center">{backView && anyTwoRows && backCount ? t.view.backHint : t.view.hint}</p>
+      {/* แถวหน้าล้นความกว้างชั้น (เล่มที่ล้นไม่ถูกวาด): ชวนย้ายเล่มที่ล้นไปแถวหลังในครั้งเดียว */}
+      {overflow > 0 && (
+        <p className="notice center">
+          {t.view.overflow(overflow)}{' '}
+          <button
+            className="btn small primary"
+            onClick={async () => {
+              const n = await repo.spillToBack(id)
+              setSpillMsg(t.view.spilled(n))
+              if (n) switchRow(true)
+            }}
+          >
+            {t.view.spill}
+          </button>
+        </p>
+      )}
+      {spillMsg && (
+        <p className="ok center" role="status">
+          {spillMsg}
+        </p>
+      )}
+      {anyTwoRows && backCount === 0 && overflow === 0 && <p className="muted center">{t.view.backEmpty}</p>}
       <div className="actions center-actions">
         {(look.doors ?? 0) > 0 && (
           <button className="btn small" onClick={() => setDoorsOpen((o) => !o)}>
@@ -169,7 +215,7 @@ export function BookcaseViewPage() {
       )}
 
       {pick && (
-        <div className="card picked">
+        <div className={`card picked${full ? ' floating' : ''}`}>
           <div className="row">
             <CoverThumb bookId={pick.id} title={pick.title} color={pick.spineColor} />
             <div className="row-main">
@@ -197,7 +243,7 @@ export function BookcaseViewPage() {
       )}
 
       {drawer && (
-        <div className="card picked">
+        <div className={`card picked${full ? ' floating' : ''}`}>
           <div className="section-head">
             <h3>{drawer.name}</h3>
             <Link className="btn small" to={`/place/${drawer.id}`}>

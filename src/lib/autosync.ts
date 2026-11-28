@@ -1,5 +1,5 @@
 import { db } from '../db/db'
-import { DEFAULT_GOOGLE_CLIENT_ID, loadSettings, saveSettings } from './settings'
+import { DEFAULT_GOOGLE_CLIENT_ID, loadSettings, onSharedChange, saveSettings } from './settings'
 import { isSyncWrite, TABLES, type SyncResult } from './sync'
 
 /**
@@ -154,8 +154,14 @@ export async function syncNow(
     error = null
     emit()
     const dirtyBefore = read(DIRTY)
-    const result = await syncAll(db, drive.driveStore(token), onProgress, () => mine !== epoch)
+    const store = drive.driveStore(token)
+    const result = await syncAll(db, store, onProgress, () => mine !== epoch)
     if (mine !== epoch) throw new Error('cancelled')
+    // การตั้งค่าที่ใช้ร่วมกัน (AI และ key เป้าการอ่าน): ไฟล์แยกในโฟลเดอร์เดียวกัน
+    const { syncShared } = await import('./sharedSettings')
+    const shared = await syncShared(store, { load: loadSettings, save: saveSettings })
+    if (mine !== epoch) throw new Error('cancelled')
+    if (shared === 'pulled' || shared === 'both') settingsVersion++
     // ระหว่างซิงก์ไม่มีการแก้ไขเพิ่ม = ไม่มีของค้างแล้ว (ถ้ามี จะซิงก์อีกรอบใน 1 นาที)
     if (read(DIRTY) === dirtyBefore) write(DIRTY, null)
     saveSettings({ ...loadSettings(), googleAccount: email, lastSyncAt: Date.now() })
@@ -202,11 +208,19 @@ export function setAutoSync(on: boolean): void {
   emit()
 }
 
+/** เพิ่มขึ้นทุกครั้งที่ได้การตั้งค่าใหม่จาก Drive หน้าตั้งค่าใช้ดูว่าต้องอ่านค่าใหม่ */
+let settingsVersion = 0
+export const getSettingsVersion = () => settingsVersion
+
 let started = false
 /** เริ่มเฝ้าการเปลี่ยนแปลงของข้อมูล เรียกครั้งเดียวตอนเปิดแอป */
 export function start(): void {
   if (started) return
   started = true
+  // แก้การตั้งค่าที่ใช้ร่วมกัน = มีของต้องส่งขึ้น เหมือนแก้ข้อมูล
+  onSharedChange(() => {
+    if (loadSettings().syncSettings) markDirty()
+  })
   for (const name of [...TABLES, 'covers'] as const) {
     const table = db.table(name)
     // การเขียนของตัวซิงก์เอง (ข้อมูลที่รับมาจาก Drive) ไม่นับเป็นการแก้ไขของผู้ใช้

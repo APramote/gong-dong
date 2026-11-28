@@ -652,6 +652,37 @@ export function createRepo(db: GongDongDB = defaultDb) {
       })
     },
 
+    /**
+     * จัดแถวให้ตู้ที่วางซ้อนสองแถว: เล่มที่ล้นความกว้างของแถวหน้าย้ายไปแถวหลัง (เท่าที่แถวหลังยังมีที่)
+     * ทำเฉพาะชั้นสองแถวที่รู้ความกว้าง ลำดับเล่มคงเดิม คืนจำนวนเล่มที่ย้าย
+     */
+    async spillToBack(bookcaseId: string): Promise<number> {
+      return db.transaction('rw', db.places, db.books, db.bookcases, async () => {
+        const bc = await db.bookcases.get(bookcaseId)
+        const shelves = alive(await db.places.where('bookcaseId').equals(bookcaseId).toArray()).filter((p) => p.kind === 'shelf' && rowsOf(p) === 2)
+        const now = Date.now()
+        let moved = 0
+        for (const p of shelves) {
+          const width = shelfWidth(p, bc)
+          if (width === null) continue
+          const list = (await booksIn(p.id)).filter((b) => !b.takenAt)
+          let back = list.filter((b) => b.row === 1).reduce((n, b) => n + footprint(b), 0)
+          let front = 0
+          for (const b of list) {
+            if (b.row === 1) continue
+            const size = footprint(b)
+            if (front + size <= width) front += size
+            else if (back + size <= width) {
+              back += size
+              await db.books.update(b.id, { row: 1, updatedAt: now })
+              moved++
+            }
+          }
+        }
+        return moved
+      })
+    },
+
     /** ตั้งความกว้างเฉพาะชั้น และจำนวนแถว (เปลี่ยนกลับเป็นแถวเดียว หนังสือแถวหลังกลับมาแถวหน้า) */
     async setShelfShape(placeId: string, shape: { width?: number | null; rows?: 1 | 2 }): Promise<void> {
       await db.transaction('rw', db.places, db.books, async () => {

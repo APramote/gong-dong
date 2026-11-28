@@ -137,7 +137,11 @@ function sign(lines: string[], anchor: 'right' | 'left' | 'bottom'): { group: TH
   const wrapped: string[] = []
   for (const l of lines) {
     let cur = ''
-    for (const w of words(l)) {
+    // "+2" ท้ายบรรทัด (จำนวนหมวดที่เหลือ) ต้องติดกับคำก่อนหน้า ไม่ถูกตัดไปอยู่คนละบรรทัด
+    const tail = l.match(/\s\+\d+$/)?.[0] ?? ''
+    const parts = words(tail ? l.slice(0, -tail.length) : l)
+    if (tail && parts.length) parts[parts.length - 1] += tail
+    for (const w of parts) {
       if (cur && !fits(cur + w)) {
         wrapped.push(cur.trim())
         cur = w.trimStart()
@@ -310,7 +314,8 @@ function buildBookcase(model: BookcaseModel): Built {
       signSpan = Math.max(signSpan, s.width + SIGN_GAP)
     }
     // ดูแถวหลัง: แถวหน้าของชั้นที่วางซ้อนสองแถวจางลง
-    const ghostFront = Boolean(model.backView && model.twoRows?.[i])
+    // (ชั้นที่แถวหลังยังว่าง ไม่จาง จะได้ไม่เห็นเป็นตู้มืด ๆ ที่ไม่มีอะไรให้ดู)
+    const ghostFront = Boolean(model.backView && model.twoRows?.[i] && (back[i]?.length ?? 0) > 0)
     // แถวหน้าชิดขอบหน้าชั้น แถวหลัง (ถ้ามี) ชิดผนังหลัง
     for (const [row, list] of [[0, shelves[i] ?? []], [1, back[i] ?? []]] as const) {
       let x = -innerW / 2 + 1

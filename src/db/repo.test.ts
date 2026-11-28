@@ -601,3 +601,21 @@ test('เติมข้อมูลที่หามาได้: เฉพา
   // ครบแล้วเติมซ้ำ ไม่มีอะไรเปลี่ยน
   expect(await r.fillBook(a, { publisher: 'อื่น', pages: 10 })).toBe(0)
 })
+
+test('จัดแถวให้ตู้สองแถว: เล่มที่ล้นแถวหน้าย้ายไปแถวหลังเท่าที่มีที่ ลำดับคงเดิม', async () => {
+  const db = new GongDongDB(`spillback-${n++}`)
+  const r = createRepo(db)
+  const caseId = await r.addBookcase({ name: 'ตู้', room: '' }, 2)
+  const [s1, s2] = (await r.listPlaces()).filter((p) => p.bookcaseId === caseId)
+  await r.setShelfWidth(caseId, 10) // เล่มละ 300 หน้า ~2.7 ซม. → แถวละ 3 เล่ม
+  for (let i = 0; i < 8; i++) await r.addBook({ ...emptyBook, title: `เล่ม ${i}`, pages: 300, placeId: s1.id })
+  await r.addBook({ ...emptyBook, title: 'ชั้นสอง', pages: 300, placeId: s2.id })
+  // ยังเป็นแถวเดียว: ไม่ทำอะไร
+  expect(await r.spillToBack(caseId)).toBe(0)
+  await r.setBookcaseRows(caseId, 2)
+  expect(await r.spillToBack(caseId)).toBe(3)
+  const rows = (await r.booksIn(s1.id)).map((b) => `${b.title}:${b.row ?? 0}`)
+  // 3 เล่มแรกอยู่แถวหน้า 3 เล่มถัดไปไปแถวหลัง 2 เล่มสุดท้ายไม่มีที่ทั้งสองแถว อยู่แถวหน้าตามเดิม
+  expect(rows).toEqual(['เล่ม 0:0', 'เล่ม 1:0', 'เล่ม 2:0', 'เล่ม 3:1', 'เล่ม 4:1', 'เล่ม 5:1', 'เล่ม 6:0', 'เล่ม 7:0'])
+  expect(await r.spillToBack(caseId)).toBe(0)
+})

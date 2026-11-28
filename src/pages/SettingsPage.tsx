@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import { getSettingsVersion, subscribe } from '../lib/autosync'
 import { aiErrorText } from '../lib/aiError'
 import { checkClaudeKey, listGeminiModels } from '../lib/ai'
 import { CLAUDE_MODELS } from '../lib/claudeModels'
@@ -17,6 +18,15 @@ export function SettingsPage() {
   )
   const [status, setStatus] = useState<Status>(null)
   const [busy, setBusy] = useState(false)
+  // ซิงก์แล้วได้การตั้งค่าใหม่จากเครื่องอื่น (เช่น API key): แสดงค่าใหม่ทันที ไม่ต้องเปิดหน้านี้ใหม่
+  const pulled = useSyncExternalStore(subscribe, getSettingsVersion)
+  useEffect(() => {
+    if (!pulled) return
+    const s = loadSettings()
+    setSettings(s)
+    setGeminiModels((m) => (s.geminiModel && !m.includes(s.geminiModel) ? [...m, s.geminiModel] : m))
+    setStatus({ ok: true, text: t.settings.pulled })
+  }, [pulled])
 
   const update = (patch: Partial<Settings>) => {
     // อ่านค่าล่าสุดจากเครื่องก่อนรวม (การ์ดซิงก์บันทึกบัญชีและเวลาซิงก์แยกต่างหาก ต้องไม่ถูกทับด้วยค่าเก่า)

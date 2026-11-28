@@ -263,3 +263,40 @@ test('ไฟล์จากแอปรุ่นใหม่กว่า: แจ
   const file = JSON.parse(await (await exportBackup(a.db, false)).text())
   expect(file.version).toBe(SNAPSHOT_VERSION)
 })
+
+test('การตั้งค่า AI ใช้ร่วมกันทุกเครื่อง: เครื่องใหม่ได้ key จากเครื่องเดิม key ว่างไม่ทับ key ที่มี ปิดสวิตช์แล้วไม่แตะไฟล์', async () => {
+  const { syncShared, SETTINGS_FILE } = await import('./sharedSettings')
+  const drive = memoryStore()
+  const base = {
+    aiEnabled: true, provider: 'gemini', geminiKey: '', geminiModel: '', claudeKey: '', claudeModel: 'c', dailyGoalMinutes: 20, dailyGoalPages: 20,
+    yearGoalBooks: 12, maxCategories: 12, organizeMode: 'minimal', googleClientId: '', lastSyncAt: 0, googleAccount: '', autoSync: true, syncSettings: true, sharedAt: 0,
+  } as any
+  const device = (init: object) => {
+    let s = { ...base, ...init }
+    return { io: { load: () => s, save: (n: any) => (s = n) }, get: () => s }
+  }
+  // มือถือ: ตั้ง key ไว้นานแล้ว (ก่อนมีระบบนี้ sharedAt ยังเป็น 0)
+  const phone = device({ geminiKey: 'KEY-PHONE', geminiModel: 'gemini-x', yearGoalBooks: 30, googleAccount: 'phone' })
+  // PC ใหม่: ยังไม่มีอะไร ซิงก์ก่อนมือถือก็ไม่สร้างไฟล์
+  const pc = device({ googleAccount: 'pc' })
+  expect(await syncShared(drive, pc.io)).toBe('none')
+  expect(drive.files.has(SETTINGS_FILE)).toBe(false)
+  expect(await syncShared(drive, phone.io)).toBe('pushed')
+  expect(await syncShared(drive, pc.io)).toBe('pulled')
+  expect(pc.get()).toMatchObject({ geminiKey: 'KEY-PHONE', geminiModel: 'gemini-x', yearGoalBooks: 30, googleAccount: 'pc' })
+  expect(await syncShared(drive, pc.io)).toBe('none')
+  // PC อีกเครื่องที่ยังไม่มี key แต่เพิ่งแก้เป้า (ใหม่กว่า): เป้าของมันชนะ แต่ key ว่างไม่ทับ key ที่มี
+  const laptop = device({ dailyGoalPages: 50, sharedAt: Date.now() + 1000 })
+  expect(await syncShared(drive, laptop.io)).toBe('both')
+  expect(laptop.get()).toMatchObject({ geminiKey: 'KEY-PHONE', dailyGoalPages: 50 })
+  await syncShared(drive, phone.io)
+  expect(phone.get()).toMatchObject({ geminiKey: 'KEY-PHONE', dailyGoalPages: 50, googleAccount: 'phone' })
+  // ปิดสวิตช์: ไม่อ่านไม่เขียน
+  const off = device({ syncSettings: false, geminiKey: 'LOCAL-ONLY', sharedAt: Date.now() + 5000 })
+  expect(await syncShared(drive, off.io)).toBe('none')
+  expect(JSON.parse(await drive.files.get(SETTINGS_FILE)!.text()).values.geminiKey).toBe('KEY-PHONE')
+  // ไฟล์ที่ถูกแก้ให้ค่าผิดชนิด: ค่าผิดถูกทิ้ง ใช้ค่าของเครื่อง
+  drive.files.set(SETTINGS_FILE, new Blob([JSON.stringify({ version: 1, sharedAt: Date.now() + 9000, values: { provider: 'evil', maxCategories: -3, geminiKey: 'NEW' } })]))
+  await syncShared(drive, pc.io)
+  expect(pc.get()).toMatchObject({ provider: 'gemini', maxCategories: 12, geminiKey: 'NEW' })
+})

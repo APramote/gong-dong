@@ -37,6 +37,10 @@ export interface Settings {
   googleAccount: string
   /** ซิงก์อัตโนมัติหลังแก้ไข (ปิด = ซิงก์เฉพาะตอนกดเอง) */
   autoSync: boolean
+  /** ซิงก์การตั้งค่า AI (รวม API key) และเป้าการอ่านไปทุกเครื่องผ่าน Google Drive ของผู้ใช้ */
+  syncSettings: boolean
+  /** เวลาที่การตั้งค่าที่ใช้ร่วมกันถูกแก้ล่าสุดในเครื่องนี้ (0 = ยังไม่เคยแก้) */
+  sharedAt: number
 }
 
 const defaults: Settings = {
@@ -55,6 +59,8 @@ const defaults: Settings = {
   lastSyncAt: 0,
   googleAccount: '',
   autoSync: true,
+  syncSettings: true,
+  sharedAt: 0,
 }
 
 export function loadSettings(): Settings {
@@ -65,6 +71,31 @@ export function loadSettings(): Settings {
   }
 }
 
+/** การตั้งค่าที่ซิงก์ไปทุกเครื่อง (ต้องตรงกับ SHARED_KEYS ใน sharedSettings.ts) */
+const SHARED: (keyof Settings)[] = [
+  'aiEnabled',
+  'provider',
+  'geminiKey',
+  'geminiModel',
+  'claudeKey',
+  'claudeModel',
+  'dailyGoalMinutes',
+  'dailyGoalPages',
+  'yearGoalBooks',
+  'maxCategories',
+  'organizeMode',
+]
+let sharedListener: (() => void) | null = null
+/** ตัวซิงก์อัตโนมัติลงทะเบียนไว้ จะได้รู้ว่ามีการตั้งค่าที่ต้องส่งขึ้น */
+export const onSharedChange = (fn: () => void) => {
+  sharedListener = fn
+}
+
 export function saveSettings(s: Settings): void {
-  localStorage.setItem(KEY, JSON.stringify(s))
+  // การตั้งค่าที่ใช้ร่วมกันเปลี่ยน (และผู้เรียกไม่ได้กำหนดเวลามาเอง เช่น ค่าที่รับมาจาก Drive): จดเวลาไว้ให้ตัวซิงก์
+  const before = loadSettings()
+  const changed = SHARED.some((k) => before[k] !== s[k])
+  const next = changed && s.sharedAt === before.sharedAt ? { ...s, sharedAt: Date.now() } : s
+  localStorage.setItem(KEY, JSON.stringify(next))
+  if (changed && next !== s) sharedListener?.()
 }

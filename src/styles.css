@@ -2597,3 +2597,43 @@ details.more[open] {
   right: auto;
   left: 8px;
 }
+
+/* ปุ่มสลับแถวที่กดไม่ได้ (แถวหลังยังว่าง) */
+.view3d-rows button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ภาพ 3D เต็มจอ: ทับทั้งหน้ารวมเมนูล่าง การ์ดของเล่มที่เลือกลอยอยู่ด้านล่าง */
+.view3d-full {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 1;
+}
+.view3d-wrap.full {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  width: auto;
+  height: 100dvh;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+}
+.card.picked.floating {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 56px;
+  z-index: 61;
+  max-width: 560px;
+  margin: 0 auto;
+  max-height: 45dvh;
+  overflow: auto;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+body.no-scroll {
+  overflow: hidden;
+}
