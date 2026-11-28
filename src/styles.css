@@ -2622,7 +2622,7 @@ details.more[open] {
   border-radius: 0;
   background: var(--bg);
 }
-.card.picked.floating {
+.picked-stack.floating {
   position: fixed;
   left: 12px;
   right: 12px;
@@ -2688,11 +2688,26 @@ body.no-scroll {
 .view3d-wrap.full .view3d-full {
   bottom: calc(8px + env(safe-area-inset-bottom, 0px));
 }
-.card.picked.floating {
+.picked-stack.floating {
   bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 }
 
 /* ข้อความผลการซิงก์มีหลายบรรทัด */
 #sync .ok {
   white-space: pre-line;
+}
+
+/* การ์ดของเล่มที่เลือกและรายการของชั้น: เรียงต่อกัน (ตอนเต็มจอลอยเป็นกลุ่มเดียว เลื่อนดูได้) */
+.picked-stack {
+  display: grid;
+  gap: 10px;
+}
+.picked-stack:empty {
+  display: none;
+}
+.picked-stack.floating {
+  box-shadow: none;
+}
+.picked-stack.floating .card {
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
 }

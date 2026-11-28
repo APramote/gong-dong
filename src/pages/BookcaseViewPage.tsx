@@ -86,9 +86,12 @@ export function BookcaseViewPage() {
   // แตะป้ายหรือที่ว่างของชั้น: แสดงรายการหนังสือของชั้นนั้นเหมือนลิ้นชัก (แถวหน้าก่อน แล้วแถวหลัง)
   const shelfPick = selected?.kind === 'shelf' ? shelves.find((x) => x.id === selected.id) : undefined
   const shelfBooks = shelfPick ? [...inPlace(shelfPick.id)].sort((a, b) => rowOf(a) - rowOf(b) || a.position - b.position) : []
-  const panel = drawer ?? shelfPick
-  const panelBooks = drawer ? drawerBooks : shelfBooks
-  const panelTwoRows = Boolean(shelfPick && rowsOf(shelfPick) === 2)
+  // แตะหนังสือ: แสดงรายการของชั้น (หรือลิ้นชัก) ที่เล่มนั้นอยู่ด้วย เล่มที่แตะถูกเน้นไว้
+  const pickPlace = pick ? [...shelves, ...drawers].find((x) => x.id === pick.placeId) : undefined
+  const panel = drawer ?? shelfPick ?? pickPlace
+  const panelIsDrawer = panel?.kind === 'drawer'
+  const panelBooks = !panel ? [] : panel === drawer ? drawerBooks : panel === shelfPick ? shelfBooks : [...inPlace(panel.id)].sort((a, b) => rowOf(a) - rowOf(b) || a.position - b.position)
+  const panelTwoRows = Boolean(panel && !panelIsDrawer && rowsOf(panel) === 2)
 
   /** สลับแถวที่ดู: เล่มที่เลือกค้างไว้อาจกลายเป็นเล่มที่จางอยู่ ล้างการเลือก */
   const switchRow = (back: boolean) => {
@@ -224,8 +227,9 @@ export function BookcaseViewPage() {
         </div>
       )}
 
+      <div className={`picked-stack${full ? ' floating' : ''}`}>
       {pick && (
-        <div className={`card picked${full ? ' floating' : ''}`}>
+        <div className="card picked">
           <div className="row">
             <CoverThumb bookId={pick.id} title={pick.title} color={pick.spineColor} />
             <div className="row-main">
@@ -256,12 +260,12 @@ export function BookcaseViewPage() {
       )}
 
       {panel && (
-        <div className={`card picked${full ? ' floating' : ''}`}>
+        <div className="card picked">
           <div className="section-head">
             <h3>{panel.name}</h3>
             <span className="actions">
               <Link className="btn small" to={`/place/${panel.id}`}>
-                {drawer ? t.view.openDrawer : t.view.openShelf}
+                {panelIsDrawer ? t.view.openDrawer : t.view.openShelf}
               </Link>
               <button className="btn small" aria-label={t.view.closeCard} onClick={() => setSelected(null)}>
                 ✕
@@ -269,13 +273,14 @@ export function BookcaseViewPage() {
             </span>
           </div>
           {panelBooks.length === 0 ? (
-            <p className="muted">{drawer ? t.view.drawerEmpty : t.view.shelfEmpty}</p>
+            <p className="muted">{panelIsDrawer ? t.view.drawerEmpty : t.view.shelfEmpty}</p>
           ) : (
             <ul className="list">
               {panelBooks.map((b) => (
                 <BookRow
                   key={b.id}
                   book={b}
+                  highlight={b.id === pick?.id}
                   sub={panelTwoRows ? (rowOf(b) === 1 ? t.shelf.back : t.shelf.front) : undefined}
                   actions={
                     <button
@@ -295,11 +300,13 @@ export function BookcaseViewPage() {
           )}
           <div className="actions">
             <Link className="btn primary" to={`/add?place=${panel.id}`}>
-              {drawer ? t.view.addToDrawer : t.view.addToShelf}
+              {panelIsDrawer ? t.view.addToDrawer : t.view.addToShelf}
             </Link>
           </div>
         </div>
       )}
+
+      </div>
 
       <section>
         <h2>{t.view.parts}</h2>

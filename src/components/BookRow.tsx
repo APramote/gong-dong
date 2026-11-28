@@ -13,6 +13,7 @@ export const BookRow = memo(function BookRow({
   selected,
   onSelect,
   detail,
+  highlight,
 }: {
   book: Book
   sub?: string
@@ -22,6 +23,8 @@ export const BookRow = memo(function BookRow({
   onSelect?: (id: string) => void
   /** แบบละเอียด: ปกใหญ่ขึ้น มีสำนักพิมพ์ ปี จำนวนหน้า และคำโปรย (ไม่มีคำโปรยใช้เรื่องย่อ) */
   detail?: boolean
+  /** เน้นแถวนี้ (เช่น เล่มที่แตะเลือกในภาพ 3D) */
+  highlight?: boolean
 }) {
   const facts = detail ? [book.publisher, book.year, book.pages ? t.common.pages(book.pages) : ''].filter(Boolean).join(' · ') : ''
   const blurb = detail ? book.blurb || book.synopsis : ''
@@ -48,7 +51,7 @@ export const BookRow = memo(function BookRow({
       </li>
     )
   return (
-    <li className={`row${detail ? ' detailed' : ''}`}>
+    <li className={`row${detail ? ' detailed' : ''}${highlight ? ' is-picked' : ''}`}>
       <CoverThumb bookId={book.id} title={book.title} color={book.spineColor} />
       <Link to={`/book/${book.id}`} className="row-main">
         <span className="row-title">{book.title}</span>
