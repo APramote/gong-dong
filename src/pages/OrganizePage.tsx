@@ -208,6 +208,18 @@ export function OrganizePage() {
   const groups = placeGroups(places, bookcases)
   const boxes = groups.filter((g) => g.title === t.places.boxes)
   // ปลายทางของเล่มที่ออกจากกล่อง: ชั้นและลิ้นชัก (กองไม่อยู่ในการจัดระเบียบ)
+  // ปลายทางที่เลือกในแผนย้าย: ไม่รวมกอง (กองไม่อยู่ในการจัดระเบียบ ลำดับในกองต้องไม่ถูกเรียงใหม่)
+  const destGroups = groups.filter((g) => g.title !== t.places.piles)
+  /** ปลายทางที่ใช้จริงของกลุ่ม: ที่ผู้ใช้เลือกแทน ถ้าที่นั้นยังอยู่ ไม่อย่างนั้นใช้ตามแผน */
+  const targetOf = (dest: string) => {
+    const to = destTo.get(dest)
+    return to && places.some((p) => p.id === to) ? to : dest
+  }
+  /** เล่มที่ติ๊กไว้และต้องย้ายจริง (ไม่นับเล่มในมือ และเล่มที่อยู่ปลายทางอยู่แล้ว) */
+  const realMoves = (plan?.moves ?? [])
+    .filter((m) => pickedMoves.has(m.bookId) && byId.has(m.bookId) && !byId.get(m.bookId)!.takenAt)
+    .map((m) => ({ ...m, toPlaceId: targetOf(m.toPlaceId) }))
+    .filter((m) => byId.get(m.bookId)!.placeId !== m.toPlaceId)
   const reachable = groups.filter((g) => g.title !== t.places.boxes && g.title !== t.places.piles)
   const quiet = !advice.toBox.length && !advice.outOfBox.length && !advice.unplaced.length
 
@@ -327,17 +339,15 @@ export function OrganizePage() {
       // เล่มที่ถูกลบหรือถูกหยิบไปหลังวิเคราะห์ ไม่ทำอะไรกับเล่มนั้น
       const cats = plan.categories.filter((c) => pickedCats.has(c.bookId) && byId.has(c.bookId))
       // ปลายทางใช้ตามที่ผู้ใช้ปรับ เล่มที่อยู่ที่นั่นอยู่แล้วไม่ต้องย้าย
-      const moves = plan.moves
-        .filter((m) => pickedMoves.has(m.bookId) && byId.has(m.bookId) && !byId.get(m.bookId)!.takenAt)
-        .map((m) => ({ ...m, toPlaceId: destTo.get(m.toPlaceId) ?? m.toPlaceId }))
-        .filter((m) => byId.get(m.bookId)!.placeId !== m.toPlaceId)
+      const moves = realMoves
       // ตั้งหมวดทีละหมวด และย้ายทีละปลายทาง ในธุรกรรมเดียวต่อกลุ่ม (เร็วกว่าเขียนทีละเล่มมาก)
       const byCategory = new Map<string, string[]>()
       for (const c of cats) byCategory.set(c.category, [...(byCategory.get(c.category) ?? []), c.bookId])
       for (const [name, ids] of byCategory) await repo.setCategoryMany(ids, await repo.ensureCategory(name))
       const byDest = new Map<string, string[]>()
       for (const m of moves) byDest.set(m.toPlaceId, [...(byDest.get(m.toPlaceId) ?? []), m.bookId])
-      for (const [placeId, ids] of byDest) await repo.moveBooks(ids, placeId)
+      let moved = 0
+      for (const [placeId, ids] of byDest) moved += await repo.moveBooks(ids, placeId)
       // เรียงหนังสือในที่เก็บที่มีการย้ายเข้า ใช้หมวดตามที่ผู้ใช้ติ๊กรับจริง (ข้อเสนอที่ไม่ได้ติ๊กไม่นับ)
       const cat = new Map(plannedCats)
       for (const c of plan.categories) if (!pickedCats.has(c.bookId)) cat.delete(c.bookId)
@@ -346,7 +356,7 @@ export function OrganizePage() {
         const inPlace = await repo.booksIn(placeId)
         sorted += await repo.setOrder(placeId, arrange(inPlace, mode, cat, seriesName))
       }
-      setDone(t.organize.applied(cats.length, moves.length) + (sorted ? ` ${t.organize.sorted}` : ''))
+      setDone(t.organize.applied(cats.length, moved) + (sorted ? ` ${t.organize.sorted}` : ''))
       setPlan(null)
     } catch {
       setError(t.organize.applyFailed)
@@ -522,7 +532,7 @@ export function OrganizePage() {
                 {[...movesByDest].map(([dest, moves]) => {
                   const ids = moves.map((m) => m.bookId)
                   const chosen = ids.filter((id) => pickedMoves.has(id)).length
-                  const target = destTo.get(dest) ?? dest
+                  const target = targetOf(dest)
                   const stay = (destBooks.get(dest) ?? []).filter((b) => b.placeId === target).length
                   return (
                   <div key={dest} className="dest-group">
@@ -559,7 +569,7 @@ export function OrganizePage() {
                           })
                         }
                       >
-                        {groups.map((g) => (
+                        {destGroups.map((g) => (
                           <optgroup key={g.title} label={g.title}>
                             {g.options.map((o) => (
                               <option key={o.id} value={o.id}>
@@ -589,11 +599,11 @@ export function OrganizePage() {
             <div className="actions">
               <button
                 className="btn primary"
-                disabled={applying || (!pickedCats.size && !pickedMoves.size)}
+                disabled={applying || (!pickedCats.size && !realMoves.length)}
                 onClick={apply}
               >
                 {applying && <Ring size={18} />}
-                {t.organize.apply(pickedCats.size, pickedMoves.size)}
+                {t.organize.apply(pickedCats.size, realMoves.length)}
               </button>
               <button className="btn" onClick={() => setPlan(null)}>
                 {t.common.cancel}

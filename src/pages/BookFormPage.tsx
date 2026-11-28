@@ -80,6 +80,7 @@ export function BookFormPage() {
   const bookcases = useLiveQuery(() => repo.listBookcases(), []) ?? []
   const [returning, setReturning] = useState(false)
   const [checkingIn, setCheckingIn] = useState(false)
+  const zoomRef = useRef<HTMLDialogElement>(null)
   const coverUrl = useBlobUrl(newCover === undefined ? savedCover : newCover)
   const titleRef = useRef<HTMLInputElement>(null)
 
@@ -392,7 +393,22 @@ export function BookFormPage() {
 
     <form className="form" onSubmit={submit}>
       <div className="cover-edit">
-        {coverUrl ? <img className="cover" src={coverUrl} alt={isAi('cover') ? t.book.coverAi : t.book.cover} /> : <span className="cover" />}
+        {coverUrl ? (
+          <button type="button" className="cover-zoom" aria-label={t.book.zoomCover} title={t.book.zoomCover} onClick={() => zoomRef.current?.showModal()}>
+            <img className="cover" src={coverUrl} alt={isAi('cover') ? t.book.coverAi : t.book.cover} />
+          </button>
+        ) : (
+          <span className="cover" />
+        )}
+        {coverUrl && (
+          // แตะตรงไหนก็ปิด (ปุ่ม Esc ปิดได้เองตามมาตรฐานของ dialog)
+          <dialog ref={zoomRef} className="cover-big" aria-label={t.book.zoomCover} onClick={() => zoomRef.current?.close()}>
+            <img src={coverUrl} alt={isAi('cover') ? t.book.coverAi : t.book.cover} />
+            <button type="button" className="btn small">
+              {t.book.zoomClose}
+            </button>
+          </dialog>
+        )}
         <div className="cover-side">
       <div className="cols">
         <label>

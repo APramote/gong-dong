@@ -2799,8 +2799,8 @@ body.no-scroll {
 }
 
 /* ที่เก็บบนสุดของหน้าแก้ไขหนังสือ: ป้ายเด่นกว่าช่องทั่วไป */
-.place-top,
-.place-top > label {
+.form .place-top,
+.form .place-top > label {
   color: var(--accent);
   font-weight: 600;
 }
@@ -2820,4 +2820,62 @@ body.no-scroll {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* จอแคบ: ช่องข้างรูปปกเรียงลงมาทีละช่อง ตัวเลือกสถานะจะไม่ถูกตัด */
+@media (max-width: 360px) {
+  .form .cover-side .cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- ลิงก์ย้อนกลับ: เป็นปุ่มชัด ๆ แตะง่าย ---------- */
+.back-line {
+  margin: 0 0 10px;
+}
+.back-line a,
+.back-line .link-btn {
+  min-height: 44px;
+  padding: 0 16px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+}
+.back-line a:hover,
+.back-line .link-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---------- รูปปก: แตะเพื่อดูขนาดใหญ่ ---------- */
+.cover-zoom {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  line-height: 0;
+}
+.cover-big {
+  max-width: 100vw;
+  max-height: 100dvh;
+  padding: 16px;
+  border: 0;
+  background: none;
+  text-align: center;
+  cursor: zoom-out;
+}
+.cover-big::backdrop {
+  background: rgb(0 0 0 / 0.8);
+}
+.cover-big img {
+  display: block;
+  max-width: min(92vw, 720px);
+  max-height: calc(100dvh - 110px);
+  margin: 0 auto 12px;
+  border-radius: 6px;
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.5);
 }
