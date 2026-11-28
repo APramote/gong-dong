@@ -14,6 +14,8 @@ export interface BookcaseModel {
   labels?: string[][]
   /** ดูแถวหลัง: หนังสือแถวหน้าของชั้นที่วางซ้อนสองแถวจางลงและแตะไม่ได้ จะได้เห็นและเลือกเล่มแถวหลัง */
   backView?: boolean
+  /** ชั้นไหนวางซ้อนสองแถว (ลำดับเดียวกับ shelves) */
+  twoRows?: boolean[]
   /** ความกว้างด้านในของชั้น (ซม.) ถ้ารู้ ใช้เป็นความกว้างของตู้จริง */
   shelfWidth?: number | null
   /** ลิ้นชักที่เป็นที่เก็บจริง เรียงจากแถวล่างสุด ซ้ายไปขวา (ไม่มี id = ตัวอย่าง แตะไม่ได้) */
@@ -112,9 +114,9 @@ const SIGN_LINES = 4
 
 /**
  * ป้ายลอย: แผ่นป้ายบาง ๆ มีความหนา ข้อความอยู่ด้านหน้า (มองจากด้านหลังเห็นแผ่นเปล่า)
- * จุดอ้างอิงคือขอบขวากลางแผ่น (anchor = 'right') หรือกึ่งกลางล่าง (anchor = 'bottom')
+ * จุดอ้างอิงคือขอบขวากลางแผ่น ('right') ขอบซ้ายกลางแผ่น ('left') หรือกึ่งกลางล่าง ('bottom')
  */
-function sign(lines: string[], anchor: 'right' | 'bottom'): { group: THREE.Group; width: number; height: number } {
+function sign(lines: string[], anchor: 'right' | 'left' | 'bottom'): { group: THREE.Group; width: number; height: number } {
   const px = 64 // พิกเซลต่อบรรทัด
   const scale = SIGN_LINE / px / 0.62 // ตัวอักษรสูงราว 62% ของบรรทัด
   const pad = 22
@@ -174,7 +176,7 @@ function sign(lines: string[], anchor: 'right' | 'bottom'): { group: THREE.Group
   // ด้านหน้าไม่รับแสง ตัวอักษรจึงคมและอ่านง่ายทุกมุม
   const face = new THREE.MeshBasicMaterial({ map: tex })
   const plate = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.8), [edge, edge, edge, edge, face, edge])
-  plate.position.set(anchor === 'right' ? -width / 2 : 0, anchor === 'right' ? 0 : height / 2, 0)
+  plate.position.set(anchor === 'right' ? -width / 2 : anchor === 'left' ? width / 2 : 0, anchor === 'bottom' ? height / 2 : 0, 0)
   const group = new THREE.Group()
   group.add(plate)
   return { group, width, height }
@@ -213,6 +215,7 @@ function buildBookcase(model: BookcaseModel): Built {
   const outerW = innerW + 2 * BOARD
   /** ความกว้างของป้ายที่ลอยข้างตู้ (รวมช่องว่าง) ใช้จัดกล้องให้เห็นทั้งตู้และป้าย */
   let signSpan = 0
+  const signSide = doors === 1 ? 1 : -1
   const y0 = legH // พื้นล่างของตัวตู้
 
   const part = (w: number, h: number, d: number, x: number, y: number, z: number, color = wood) => {
@@ -293,20 +296,19 @@ function buildBookcase(model: BookcaseModel): Built {
   for (let i = 0; i < levels; i++) {
     const floor = shelfBase + i * (SHELF_SPACE + BOARD)
     if (i < levels - 1) part(innerW, BOARD, depth, 0, floor + SHELF_SPACE + BOARD / 2, 0)
-    // ป้ายของชั้น: ลอยอยู่ข้างตู้ทางซ้าย ระดับเดียวกับชั้น มีเส้นโยงเข้าหาชั้น ไม่บังหนังสือ
+    // ป้ายของชั้น: ลอยอยู่ข้างตู้ ระดับเดียวกับชั้น มีเส้นโยงเข้าหาชั้น ไม่บังหนังสือ
+    // ตู้บานเดียว (บานพับอยู่ซ้าย เปิดออกทางซ้าย) ป้ายอยู่ทางขวา เปิดบานแล้วยังเห็นป้าย — ตู้อื่นป้ายอยู่ทางซ้าย
     const lines = model.labels?.[i]?.filter(Boolean) ?? []
     if (lines.length) {
-      const s = sign(lines, 'right')
-      s.group.position.set(-outerW / 2 - SIGN_GAP, floor + SHELF_SPACE / 2, depth / 2 - 2)
+      const s = sign(lines, signSide > 0 ? 'left' : 'right')
+      s.group.position.set(signSide * (outerW / 2 + SIGN_GAP), floor + SHELF_SPACE / 2, depth / 2 - 2)
       const link = new THREE.Mesh(new THREE.BoxGeometry(SIGN_GAP, 0.3, 0.3), new THREE.MeshStandardMaterial({ color: '#b9ab94' }))
-      link.position.set(-outerW / 2 - SIGN_GAP / 2, floor + SHELF_SPACE / 2, depth / 2 - 2)
-      // เปิดบานตู้อยู่: บานที่กางออกจะชนป้าย ซ่อนป้ายไว้ก่อน (ยังกันที่ไว้ ตู้จะได้ไม่ขยับ)
-      s.group.visible = link.visible = !(doors && doorsOpen)
+      link.position.set(signSide * (outerW / 2 + SIGN_GAP / 2), floor + SHELF_SPACE / 2, depth / 2 - 2)
       root.add(s.group, link)
       signSpan = Math.max(signSpan, s.width + SIGN_GAP)
     }
     // ดูแถวหลัง: แถวหน้าของชั้นนี้จางลง (เฉพาะชั้นที่มีหนังสือแถวหลัง)
-    const ghostFront = Boolean(model.backView && (back[i]?.length ?? 0) > 0)
+    const ghostFront = Boolean(model.backView && model.twoRows?.[i])
     // แถวหน้าชิดขอบหน้าชั้น แถวหลัง (ถ้ามี) ชิดผนังหลัง
     for (const [row, list] of [[0, shelves[i] ?? []], [1, back[i] ?? []]] as const) {
       let x = -innerW / 2 + 1
@@ -375,8 +377,8 @@ function buildBookcase(model: BookcaseModel): Built {
   }
 
   const totalH = legH + outerH
-  // จัดให้ตู้กับป้ายรวมกันอยู่กลางภาพ (ป้ายอยู่ทางซ้าย จึงเลื่อนทั้งหมดไปทางขวาครึ่งหนึ่งของความกว้างป้าย)
-  root.position.set(signSpan / 2, -totalH / 2, 0)
+  // จัดให้ตู้กับป้ายรวมกันอยู่กลางภาพ (เลื่อนตู้ไปฝั่งตรงข้ามป้ายครึ่งหนึ่งของความกว้างป้าย)
+  root.position.set((-signSide * signSpan) / 2, -totalH / 2, 0)
   return { root, size: new THREE.Vector3(outerW + signSpan, totalH, depth), pickable, drawerGroups }
 }
 

@@ -2571,3 +2571,20 @@ details.more[open] {
   text-align: center;
   white-space: nowrap;
 }
+
+/* สลับดูแถวหน้า/แถวหลัง ลอยอยู่มุมบนขวาของภาพ 3D */
+.view3d-wrap {
+  position: relative;
+}
+.view3d-rows {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.view3d-rows button {
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}

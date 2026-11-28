@@ -51,7 +51,8 @@ export function BookcaseViewPage() {
   const catName = new Map(categories.map((c) => [c.id, c.name]))
   const shelfLabels = onShelf.map((row) => categoryLines(row, catName))
   const twoRows = (i: number) => rowsOf(shelves[i]) === 2
-  const hasBack = onShelf.some((row, i) => twoRows(i) && row.some((b) => rowOf(b) === 1))
+  const anyTwoRows = shelves.some((_, i) => twoRows(i))
+  const backCount = onShelf.reduce((n, row, i) => n + (twoRows(i) ? row.filter((b) => rowOf(b) === 1).length : 0), 0)
   const drawers = places.filter((p) => p.kind === 'drawer' && p.bookcaseId === id)
   const inPlace = (pid: string) =>
     books.filter((b) => b.placeId === pid && !b.takenAt).sort((a, b) => a.position - b.position)
@@ -84,13 +85,25 @@ export function BookcaseViewPage() {
         </div>
       </div>
       <div className="view3d-wrap">
+        {/* ตู้ที่วางซ้อนสองแถว: สลับดูแถวหน้า/แถวหลังได้จากมุมบนของภาพ */}
+        {anyTwoRows && (
+          <div className="chips small view3d-rows" role="group" aria-label={t.view.rowsLabel}>
+            <button className={backView ? '' : 'on'} aria-pressed={!backView} onClick={() => setBackView(false)}>
+              {t.view.frontRow}
+            </button>
+            <button className={backView ? 'on' : ''} aria-pressed={backView} onClick={() => setBackView(true)}>
+              {t.view.backRowN(backCount)}
+            </button>
+          </div>
+        )}
         <Suspense fallback={null}>
           <Storage3D
             model={{
               shelves: onShelf.map((row, i) => row.filter((b) => !twoRows(i) || rowOf(b) === 0).map(as3D)),
               back: onShelf.map((row, i) => (twoRows(i) ? row.filter((b) => rowOf(b) === 1).map(as3D) : [])),
               labels: shelfLabels,
-              backView: backView && hasBack,
+              backView: backView && anyTwoRows,
+              twoRows: shelves.map((_, i) => twoRows(i)),
               shelfWidth: bookcase.shelfWidth ?? null,
               drawers: drawers.map((d) => ({ id: d.id, books: inPlace(d.id).map(as3D) })),
               look,
@@ -102,16 +115,11 @@ export function BookcaseViewPage() {
           />
         </Suspense>
       </div>
-      <p className="muted center">{t.view.hint}</p>
+      <p className="muted center">{backView && anyTwoRows ? (backCount ? t.view.backHint : t.view.backEmpty) : t.view.hint}</p>
       <div className="actions center-actions">
         {(look.doors ?? 0) > 0 && (
           <button className="btn small" onClick={() => setDoorsOpen((o) => !o)}>
             {doorsOpen ? t.shape.closeDoors : t.shape.openDoors}
-          </button>
-        )}
-        {hasBack && (
-          <button className="btn small" aria-pressed={backView} onClick={() => setBackView((v) => !v)}>
-            {backView ? t.view.frontRow : t.view.backRow}
           </button>
         )}
         <button className="btn small" onClick={() => setDraft((d) => (d ? null : look))}>
