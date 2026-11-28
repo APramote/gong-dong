@@ -2797,3 +2797,27 @@ body.no-scroll {
   margin: 0 0 4px 30px;
   font-size: 0.85rem;
 }
+
+/* ที่เก็บบนสุดของหน้าแก้ไขหนังสือ: ป้ายเด่นกว่าช่องทั่วไป */
+.place-top,
+.place-top > label {
+  color: var(--accent);
+  font-weight: 600;
+}
+.place-top select,
+.place-top input {
+  font-weight: 600;
+  border-color: var(--accent);
+}
+.place-top .muted {
+  font-weight: 400;
+}
+
+/* ข้างรูปปก: สถานะการอ่านและปุ่มรูปปก */
+.cover-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

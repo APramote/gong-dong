@@ -312,9 +312,23 @@ export function BookFormPage() {
     </label>
   )
 
+  // ที่เก็บ: เล่มที่มีอยู่แล้วแสดงไว้บนสุดให้เห็นทันที เล่มใหม่อยู่ตามลำดับกรอกเดิม
+  const placeField = live?.takenAt ? (
+    <label className="place-top">
+      {t.book.place}
+      <input value={t.library.inHand} disabled />
+      <span className="muted">{t.reading.placeLocked}</span>
+    </label>
+  ) : (
+    <div className={id ? 'place-top' : undefined}>
+      <PlaceSelect label={t.book.place} value={form.placeId} onChange={(v) => set('placeId', v)} />
+    </div>
+  )
+
   return (
     <div className="form">
       <h1>{id ? t.book.editTitle : t.book.newTitle}</h1>
+      {id && placeField}
       {live && <Rating book={live} />}
       {live && (
         <div className="hand-bar">
@@ -379,6 +393,30 @@ export function BookFormPage() {
     <form className="form" onSubmit={submit}>
       <div className="cover-edit">
         {coverUrl ? <img className="cover" src={coverUrl} alt={isAi('cover') ? t.book.coverAi : t.book.cover} /> : <span className="cover" />}
+        <div className="cover-side">
+      <div className="cols">
+        <label>
+          {t.book.status}
+          <select
+            value={form.status}
+            onChange={(e) => set('status', e.target.value as ReadingStatus)}
+          >
+            {Object.entries(t.status).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          {t.book.currentPage}
+          <input
+            inputMode="numeric"
+            value={form.currentPage ?? ''}
+            onChange={(e) => set('currentPage', toNumber(e.target.value))}
+          />
+        </label>
+      </div>
         <div className="actions">
           <input
             ref={coverInput}
@@ -426,6 +464,7 @@ export function BookFormPage() {
             </button>
           )}
         </div>
+        </div>
       </div>
 
       <label>
@@ -444,31 +483,6 @@ export function BookFormPage() {
         </p>
       )}
       {text('authors')}
-      <div className="cols">
-        {text('publisher')}
-        {text('year')}
-      </div>
-      <div className="cols">
-        <label>
-          {t.book.pages}
-          <input
-            inputMode="numeric"
-            value={form.pages ?? ''}
-            onChange={(e) => set('pages', toNumber(e.target.value))}
-          />
-        </label>
-        <label>
-          {t.book.isbn}
-          <input inputMode="numeric" value={form.isbn} onChange={(e) => set('isbn', e.target.value)} />
-        </label>
-      </div>
-      <div className="actions">
-        <button type="button" className="btn small" disabled={looking || !form.isbn} onClick={fillFromIsbn}>
-          {looking && <Ring size={18} />}
-          {looking ? t.book.searching : t.book.lookupIsbn}
-        </button>
-        {isbnMsg && <span className="muted">{isbnMsg}</span>}
-      </div>
       <div className="cols">
         <CategorySelect
           value={form.categoryId}
@@ -505,40 +519,33 @@ export function BookFormPage() {
           </label>
         )}
       </div>
-
-      {live?.takenAt ? (
-        <label>
-          {t.book.place}
-          <input value={t.library.inHand} disabled />
-          <span className="muted">{t.reading.placeLocked}</span>
-        </label>
-      ) : (
-        <PlaceSelect label={t.book.place} value={form.placeId} onChange={(v) => set('placeId', v)} />
-      )}
-
+      <div className="cols">
+        {text('publisher')}
+        {text('year')}
+      </div>
       <div className="cols">
         <label>
-          {t.book.status}
-          <select
-            value={form.status}
-            onChange={(e) => set('status', e.target.value as ReadingStatus)}
-          >
-            {Object.entries(t.status).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t.book.currentPage}
+          {t.book.pages}
           <input
             inputMode="numeric"
-            value={form.currentPage ?? ''}
-            onChange={(e) => set('currentPage', toNumber(e.target.value))}
+            value={form.pages ?? ''}
+            onChange={(e) => set('pages', toNumber(e.target.value))}
           />
         </label>
+        <label>
+          {t.book.isbn}
+          <input inputMode="numeric" value={form.isbn} onChange={(e) => set('isbn', e.target.value)} />
+        </label>
       </div>
+      <div className="actions">
+        <button type="button" className="btn small" disabled={looking || !form.isbn} onClick={fillFromIsbn}>
+          {looking && <Ring size={18} />}
+          {looking ? t.book.searching : t.book.lookupIsbn}
+        </button>
+        {isbnMsg && <span className="muted">{isbnMsg}</span>}
+      </div>
+
+      {!id && placeField}
 
       {aiOn() && (
       <div className="ai-box">
