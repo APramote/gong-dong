@@ -20,7 +20,7 @@ export function ShelfSize({ place, bookcase, books, onEdit }: { place: Place; bo
             label={names[i]}
             value={Math.min(used, u.width!)}
             max={u.width!}
-            text={used > u.width! ? t.shelf.over(cm(used - u.width!)) : t.shelf.used(cm(used), cm(u.width!))}
+            text={used > u.width! ? (bookcase?.fitsAll ? t.shelf.fitsConfirmed : t.shelf.over(cm(used - u.width!))) : t.shelf.used(cm(used), cm(u.width!))}
           />
         ))
       )}

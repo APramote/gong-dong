@@ -312,3 +312,16 @@ test('การตั้งค่า AI ใช้ร่วมกันทุก�
   expect(await syncShared(memoryStore(), device({}).io, T + 71)).toBe('absent')
   expect(JSON.parse(await drive.files.get(SETTINGS_FILE)!.text()).version).toBe(2)
 })
+
+test('การยืนยันว่าวางพอของตู้ซิงก์ไปเครื่องอื่น และค่าแปลกปลอมถูกทิ้ง', async () => {
+  const a = device()
+  const b = device()
+  const drive = memoryStore()
+  const caseId = await a.repo.addBookcase({ name: 'ตู้', room: '' }, 1)
+  await a.repo.setFitsAll(caseId, true)
+  await syncAll(a.db, drive)
+  await syncAll(b.db, drive)
+  expect((await b.repo.listBookcases())[0].fitsAll).toBe(true)
+  const snap = parseSnapshot(JSON.stringify({ version: 2, tables: { bookcases: [{ id: 'x', updatedAt: 1, fitsAll: 'yes' }] } }))
+  expect(snap.tables.bookcases![0]).not.toHaveProperty('fitsAll')
+})

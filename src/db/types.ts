@@ -143,6 +143,8 @@ export interface Bookcase extends SyncFields {
   look?: Look
   /** ความกว้างด้านในของชั้น (ซม.) ใช้กับทุกชั้นในตู้ — ไม่ใส่ = ยังไม่รู้ */
   shelfWidth?: number | null
+  /** ผู้ใช้ยืนยันว่าหนังสือวางพอจริง แม้แอปคำนวณว่าล้น (ความหนาที่ประมาณจากจำนวนหน้าคลาดได้) — ภาพย่อความหนาให้พอดีชั้น และไม่เตือนว่าล้น */
+  fitsAll?: boolean
 }
 
 export type PlaceKind = 'shelf' | 'drawer' | 'pile' | 'box'

@@ -682,6 +682,11 @@ export function createRepo(db: GongDongDB = defaultDb) {
     },
 
     /** ตั้งความกว้างของชั้นทั้งตู้ (ซม.) — null = ไม่ระบุ */
+    /** ผู้ใช้ยืนยัน (หรือยกเลิกการยืนยัน) ว่าหนังสือในตู้นี้วางพอจริง */
+    async setFitsAll(bookcaseId: string, fits: boolean): Promise<void> {
+      await db.bookcases.update(bookcaseId, { fitsAll: fits, updatedAt: Date.now() })
+    },
+
     async setShelfWidth(bookcaseId: string, width: number | null): Promise<void> {
       await db.bookcases.update(bookcaseId, { shelfWidth: width, updatedAt: Date.now() })
     },

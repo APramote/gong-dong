@@ -162,6 +162,7 @@ export function BookcaseViewPage() {
               twoRows: shelves.map((_, i) => twoRows(i)),
               shelfIds: shelves.map((x) => x.id),
               widths: shelves.map((x) => shelfWidth(x, bookcase)),
+              fit: Boolean(bookcase.fitsAll),
               shelfWidth: bookcase.shelfWidth ?? null,
               drawers: drawers.map((d) => ({ id: d.id, books: inPlace(d.id).map(as3D) })),
               look,
@@ -175,7 +176,15 @@ export function BookcaseViewPage() {
       </div>
       <p className="muted center">{backView && anyTwoRows && backCount ? t.view.backHint : t.view.hint}</p>
       {/* แถวหน้าล้นความกว้างชั้น (เล่มที่ล้นไม่ถูกวาด): ชวนย้ายเล่มที่ล้นไปแถวหลังในครั้งเดียว */}
-      {overflow > 0 && (
+      {overflow > 0 && bookcase.fitsAll && (
+        <p className="muted center">
+          {t.view.fitsOn}{' '}
+          <button className="link-btn" onClick={() => repo.setFitsAll(id, false)}>
+            {t.view.fitsUndo}
+          </button>
+        </p>
+      )}
+      {overflow > 0 && !bookcase.fitsAll && (
         <p className="notice center">
           {movable > 0 ? t.view.overflow(overflow) : t.view.overflowFull(overflow)}{' '}
           {movable > 0 && (
@@ -191,7 +200,11 @@ export function BookcaseViewPage() {
           >
             {t.view.spillN(movable)}
           </button>
-          )}
+          )}{' '}
+          {/* ของจริงวางได้ครบ: ให้ผู้ใช้ยืนยัน แอปจะวาดครบทุกเล่มและเลิกเตือน */}
+          <button className="btn small" onClick={() => repo.setFitsAll(id, true)}>
+            {t.view.fits}
+          </button>
         </p>
       )}
       {spillMsg && (

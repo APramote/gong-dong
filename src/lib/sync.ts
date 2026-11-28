@@ -117,6 +117,7 @@ const CLEAN: Record<TableName, (r: Record<string, unknown>) => Record<string, un
     room: str(r.room),
     ...(look(r.look) && { look: look(r.look) }),
     ...(size(r.shelfWidth) !== null && { shelfWidth: size(r.shelfWidth) }),
+    ...(r.fitsAll === true && { fitsAll: true }),
   }),
   places: (r) =>
     ['shelf', 'drawer', 'pile', 'box'].includes(r.kind as string)

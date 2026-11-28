@@ -16,6 +16,8 @@ export interface BookcaseModel {
   backView?: boolean
   /** ชั้นไหนวางซ้อนสองแถว (ลำดับเดียวกับ shelves) */
   twoRows?: boolean[]
+  /** ผู้ใช้ยืนยันว่าวางพอ: แถวที่ยาวเกินความกว้างชั้นถูกย่อความหนาของทุกเล่มให้พอดี (วาดครบทุกเล่ม) */
+  fit?: boolean
   /** id ของชั้น (ลำดับเดียวกับ shelves) มีแล้วแตะป้ายหรือที่ว่างของชั้นเพื่อเลือกชั้นได้ */
   shelfIds?: string[]
   /** ความกว้างที่ใช้ได้ของแต่ละชั้น (ซม.) ลำดับเดียวกับ shelves — null = ไม่รู้ (ชั้นที่ตั้งความกว้างเองต่างจากค่าของตู้) */
@@ -351,9 +353,14 @@ function buildBookcase(model: BookcaseModel): Built {
       const limit = limits[i]
       const start = limit === null ? -innerW / 2 + 1 : -innerW / 2 + 0.3
       let x = start
+      // ยืนยันว่าวางพอ: แถวนี้ยาวเกินชั้นเท่าไร ย่อความหนา (และช่องว่าง) ของทุกเล่มลงตามสัดส่วนนั้น
+      const total = list.reduce((n, b) => n + bookSize(b).thick + GAP, 0)
+      const squeeze = model.fit && limit !== null && total > limit ? limit / total : 1
       for (const b of list) {
         const s = bookSize(b)
-        if (limit === null ? x + s.thick > innerW / 2 - 0.5 : x - start + s.thick + GAP > limit + 1e-6) break // ล้นชั้น ไม่วาดต่อ
+        s.thick *= squeeze
+        const gap = GAP * squeeze
+        if (squeeze === 1 && (limit === null ? x + s.thick > innerW / 2 - 0.5 : x - start + s.thick + GAP > limit + 1e-6)) break // ล้นชั้น ไม่วาดต่อ
         const color = bookColor(b)
         const mesh = boxMesh(s.thick, s.height, s.depth, color, textTexture(b.title, color, true))
         const z = row === 0 ? depth / 2 - s.depth / 2 - 1.5 : -depth / 2 + s.depth / 2 + 1
@@ -366,13 +373,13 @@ function buildBookcase(model: BookcaseModel): Built {
             m.depthWrite = false
           }
           root.add(mesh)
-          x += s.thick + GAP
+          x += s.thick + gap
           continue
         }
         mesh.userData = { bookId: b.id, home: mesh.position.clone() }
         root.add(mesh)
         pickable.push(mesh)
-        x += s.thick + GAP
+        x += s.thick + gap
       }
     }
   }

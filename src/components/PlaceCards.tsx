@@ -42,6 +42,7 @@ export function BookcaseCard({ bookcase, places, books }: { bookcase: Bookcase; 
     shelves: shelves.map((s) => inPlace(s.id).filter((b) => rowsOf(s) === 1 || rowOf(b) === 0).map(as3D)),
     back: shelves.map((s) => (rowsOf(s) === 2 ? inPlace(s.id).filter((b) => rowOf(b) === 1).map(as3D) : [])),
     shelfWidth: bookcase.shelfWidth ?? null,
+    fit: Boolean(bookcase.fitsAll),
     drawers: drawers.map((d) => ({ id: d.id, books: inPlace(d.id).map(as3D) })),
     look: bookcase.look,
   }
