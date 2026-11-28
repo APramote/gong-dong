@@ -437,12 +437,8 @@ export function LibraryPage() {
               detail={view === 'detail'}
               selected={selecting ? picked.has(b.id) : undefined}
               onSelect={selecting ? togglePick : undefined}
-              sub={[
-                b.takenAt ? t.library.inHand : b.placeId ? labels.get(b.placeId) : t.library.noPlace,
-                b.categoryId && catName.get(b.categoryId),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
+              place={b.takenAt ? t.library.inHand : b.placeId ? labels.get(b.placeId) : t.library.noPlace}
+              sub={(b.categoryId && catName.get(b.categoryId)) || undefined}
             />
           ))}
         </ul>

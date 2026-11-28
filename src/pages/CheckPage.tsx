@@ -159,7 +159,7 @@ export function CheckPage() {
           {result.owned.length > 0 && (
             <ul className="list">
               {result.owned.slice(0, 5).map((b) => (
-                <BookRow key={b.id} book={b} sub={where(b.placeId, b.takenAt)} />
+                <BookRow key={b.id} book={b} place={where(b.placeId, b.takenAt)} />
               ))}
             </ul>
           )}
@@ -211,7 +211,7 @@ export function CheckPage() {
               <h2>{t.check.near}</h2>
               <ul className="list">
                 {result.near.map((b) => (
-                  <BookRow key={b.id} book={b} sub={where(b.placeId, b.takenAt)} />
+                  <BookRow key={b.id} book={b} place={where(b.placeId, b.takenAt)} />
                 ))}
               </ul>
             </section>

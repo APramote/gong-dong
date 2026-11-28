@@ -10,6 +10,7 @@ import { AiBadge } from './AiBadge'
 export const BookRow = memo(function BookRow({
   book,
   sub,
+  place,
   actions,
   selected,
   onSelect,
@@ -18,6 +19,8 @@ export const BookRow = memo(function BookRow({
 }: {
   book: Book
   sub?: string
+  /** ที่เก็บ: แสดงเป็นบรรทัดของตัวเอง มีหมุดนำ ให้เห็นแยกจากผู้แต่งและหมวด */
+  place?: string
   actions?: ReactNode
   /** โหมดเลือกหลายเล่ม: ส่ง onSelect มาเพื่อแสดงช่องติ๊กหน้าแถว (ต้องเป็นฟังก์ชันเดิมทุกครั้ง แถวจะไม่วาดใหม่เกินจำเป็น) */
   selected?: boolean
@@ -29,6 +32,21 @@ export const BookRow = memo(function BookRow({
 }) {
   const facts = detail ? [book.publisher, book.year, book.pages ? t.common.pages(book.pages) : ''].filter(Boolean).join(' · ') : ''
   const blurb = detail ? book.blurb || book.synopsis : ''
+  const where = place && (
+    <span className="row-place">
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+        <path
+          d="M12 21s-6.5-6.1-6.5-11A6.5 6.5 0 0 1 12 3.5 6.5 6.5 0 0 1 18.5 10c0 4.9-6.5 11-6.5 11z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+        <circle cx="12" cy="10" r="2.2" fill="currentColor" />
+      </svg>
+      {place}
+    </span>
+  )
   const more = detail && (
     <>
       {facts && <span className="row-sub">{facts}</span>}
@@ -50,6 +68,7 @@ export const BookRow = memo(function BookRow({
           <span className="row-main">
             <span className="row-title">{book.title}</span>
             <span className="row-sub">{[book.authors, sub, ratingText(book)].filter(Boolean).join(' · ')}</span>
+            {where}
             {more}
           </span>
           <span className={`status status-${book.status}`}>{t.status[book.status]}</span>
@@ -62,7 +81,8 @@ export const BookRow = memo(function BookRow({
       <Link to={`/book/${book.id}`} className="row-main">
         <span className="row-title">{book.title}</span>
         <span className="row-sub">{[book.authors, sub, ratingText(book)].filter(Boolean).join(' · ')}</span>
-            {more}
+        {where}
+        {more}
       </Link>
       <span className={`status status-${book.status}`}>{t.status[book.status]}</span>
       {actions}

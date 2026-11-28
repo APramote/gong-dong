@@ -2758,3 +2758,20 @@ body.no-scroll {
 .picked-stack {
   scroll-margin-top: 76px;
 }
+
+/* ที่เก็บในแถวหนังสือ: บรรทัดของตัวเอง มีหมุดนำ สีเด่นกว่าข้อมูลรอง */
+.row-place {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 3px;
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.row-place svg {
+  flex: none;
+  margin-top: 0.22em;
+}
