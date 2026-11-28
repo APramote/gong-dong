@@ -24,6 +24,7 @@ export function BookcaseViewPage() {
   const bookcase = useLiveQuery(async () => (await repo.getBookcase(id)) ?? null, [id])
   const places = useLiveQuery(() => repo.listPlaces(), []) ?? []
   const books = useLiveQuery(() => repo.listBooks(), []) ?? []
+  const categories = useLiveQuery(() => repo.listCategories(), []) ?? []
   const [selected, setSelected] = useState<Pick3D | null>(null)
   const [doorsOpen, setDoorsOpen] = useState(false)
   /** ค่าที่กำลังแก้ ใช้แสดงทันทีระหว่างรอบันทึกลงฐานข้อมูล — null = ไม่ได้แก้อยู่ */
@@ -40,6 +41,17 @@ export function BookcaseViewPage() {
   const onShelf = shelves.map((s) =>
     books.filter((b) => b.placeId === s.id && !b.takenAt).sort((a, b) => a.position - b.position),
   )
+  // ป้ายของชั้น: หมวดที่มีมากที่สุดสองหมวดบนชั้นนั้น (หมวดอื่นนับรวมเป็น +N)
+  const catName = new Map(categories.map((c) => [c.id, c.name]))
+  const shelfLabels = onShelf.map((row) => {
+    const count = new Map<string, number>()
+    for (const b of row) {
+      const name = b.categoryId ? catName.get(b.categoryId) : undefined
+      if (name) count.set(name, (count.get(name) ?? 0) + 1)
+    }
+    const names = [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'th')).map(([name]) => name)
+    return names.slice(0, 2).join(' · ') + (names.length > 2 ? ` +${names.length - 2}` : '')
+  })
   const twoRows = (i: number) => rowsOf(shelves[i]) === 2
   const drawers = places.filter((p) => p.kind === 'drawer' && p.bookcaseId === id)
   const inPlace = (pid: string) =>
@@ -78,6 +90,7 @@ export function BookcaseViewPage() {
             model={{
               shelves: onShelf.map((row, i) => row.filter((b) => !twoRows(i) || rowOf(b) === 0).map(as3D)),
               back: onShelf.map((row, i) => (twoRows(i) ? row.filter((b) => rowOf(b) === 1).map(as3D) : [])),
+              labels: shelfLabels,
               shelfWidth: bookcase.shelfWidth ?? null,
               drawers: drawers.map((d) => ({ id: d.id, books: inPlace(d.id).map(as3D) })),
               look,

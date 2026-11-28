@@ -10,6 +10,8 @@ export interface BookcaseModel {
   shelves: Book3D[][]
   /** แถวหลังของแต่ละชั้น (ชั้นที่วางซ้อนสองแถว) ลำดับชั้นเดียวกับ shelves */
   back?: Book3D[][]
+  /** ป้ายข้อความของแต่ละชั้น (เช่น หมวดของหนังสือบนชั้น) ลำดับชั้นเดียวกับ shelves — ว่าง = ไม่แสดง */
+  labels?: string[]
   /** ความกว้างด้านในของชั้น (ซม.) ถ้ารู้ ใช้เป็นความกว้างของตู้จริง */
   shelfWidth?: number | null
   /** ลิ้นชักที่เป็นที่เก็บจริง เรียงจากแถวล่างสุด ซ้ายไปขวา (ไม่มี id = ตัวอย่าง แตะไม่ได้) */
@@ -82,6 +84,13 @@ function boxMesh(w: number, h: number, d: number, color: string, front?: THREE.T
   return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), materials)
 }
 
+/** จุดวางป้ายข้อความ (พิกัดภายในตู้) half = ครึ่งความกว้างของชั้น ใช้จำกัดความยาวป้าย */
+export interface Anchor {
+  text: string
+  at: THREE.Vector3
+  half: number
+}
+
 export interface Built {
   root: THREE.Group
   /** ขนาดรวม ใช้จัดมุมกล้อง */
@@ -90,6 +99,8 @@ export interface Built {
   pickable: THREE.Mesh[]
   /** ลิ้นชักที่เลื่อนเปิดได้ (userData.drawerId, userData.home) */
   drawerGroups: THREE.Group[]
+  /** ป้ายของชั้น วาดเป็นข้อความทับบนภาพ (คมชัดทุกระดับซูม) */
+  anchors: Anchor[]
 }
 
 const BOARD = 2
@@ -102,6 +113,7 @@ function buildBookcase(model: BookcaseModel): Built {
   const root = new THREE.Group()
   const pickable: THREE.Mesh[] = []
   const drawerGroups: THREE.Group[] = []
+  const anchors: Anchor[] = []
   const wood = look?.color || '#8b6a4e'
   const darker = new THREE.Color(wood).multiplyScalar(0.7).getStyle()
   const lighter = new THREE.Color(wood).offsetHSL(0, 0, 0.05).getStyle()
@@ -201,6 +213,9 @@ function buildBookcase(model: BookcaseModel): Built {
   for (let i = 0; i < levels; i++) {
     const floor = shelfBase + i * (SHELF_SPACE + BOARD)
     if (i < levels - 1) part(innerW, BOARD, depth, 0, floor + SHELF_SPACE + BOARD / 2, 0)
+    // ป้ายของชั้น: ช่องว่างเหนือหนังสือ ชิดขอบหน้า
+    const text = model.labels?.[i]
+    if (text) anchors.push({ text, at: new THREE.Vector3(0, floor + SHELF_SPACE - 2.6, depth / 2), half: innerW / 2 })
     // แถวหน้าชิดขอบหน้าชั้น แถวหลัง (ถ้ามี) ชิดผนังหลัง
     for (const [row, list] of [[0, shelves[i] ?? []], [1, back[i] ?? []]] as const) {
       let x = -innerW / 2 + 1
@@ -259,7 +274,7 @@ function buildBookcase(model: BookcaseModel): Built {
 
   const totalH = legH + outerH
   root.position.y = -totalH / 2
-  return { root, size: new THREE.Vector3(outerW, totalH, depth), pickable, drawerGroups }
+  return { root, size: new THREE.Vector3(outerW, totalH, depth), pickable, drawerGroups, anchors }
 }
 
 export function build(model: BookcaseModel): Built {
