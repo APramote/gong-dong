@@ -21,7 +21,7 @@ const MAX_ESTIMATE_MINUTES = 180
 const alive = <T extends SyncFields>(rows: T[]) => rows.filter((r) => r.deletedAt === null)
 
 /** ฟิลด์ที่ระบบจัดการเอง ฟอร์มแก้ไขไม่ได้ */
-type SystemFields = 'position' | 'takenAt' | 'takenFrom' | 'finishedAt' | 'row'
+type SystemFields = 'position' | 'takenAt' | 'takenFrom' | 'finishedAt' | 'row' | 'rating'
 export type BookInput = Omit<Book, keyof SyncFields | SystemFields>
 
 export interface ReturnInput {
@@ -571,6 +571,12 @@ export function createRepo(db: GongDongDB = defaultDb) {
     },
 
     /** ย้ายหนังสือไปแถวหน้า (0) หรือแถวหลัง (1) ของชั้นเดิม ไปต่อท้ายแถวนั้น */
+    /** ให้คะแนน: 1..5 = ดาว, -1..-5 = มะเขือ, 0 = ล้างคะแนน */
+    async setRating(id: string, rating: number): Promise<void> {
+      const value = Math.max(-5, Math.min(5, Math.trunc(rating) || 0))
+      await db.books.update(id, { rating: value, updatedAt: Date.now() })
+    },
+
     async setRow(id: string, row: 0 | 1): Promise<void> {
       await db.transaction('rw', db.books, async () => {
         const b = await db.books.get(id)

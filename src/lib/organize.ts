@@ -21,6 +21,19 @@ export function lastActivity(book: Book, sessions: ReadingSession[] | Map<string
   return Math.max(book.createdAt, book.finishedAt ?? 0, last.get(book.id) ?? 0)
 }
 
+/** คะแนนของเล่ม: บวก = ดาว ลบ = มะเขือ */
+export const ratingOf = (b: Pick<Book, 'rating'>) => b.rating ?? 0
+/** ได้ 4 ดาวขึ้นไป: เล่มโปรด อยู่บนชั้นเสมอ ไม่เก็บลงกล่อง */
+export const KEEP_STARS = 4
+/** ได้มะเขือ 3 ขึ้นไป: เก็บลงกล่องได้เลย ไม่ต้องรอครบปี (ยกเว้นเล่มที่กำลังอ่าน) */
+export const BOX_EGGPLANTS = 3
+export const disliked = (b: Pick<Book, 'rating' | 'status'>) => ratingOf(b) <= -BOX_EGGPLANTS && b.status !== 'reading'
+/** ควรเก็บลงกล่อง: ไม่ชอบ หรืออ่านจบ/เลิกอ่านและไม่ได้แตะเกิน 1 ปี — เล่มโปรดไม่เก็บ */
+export function boxable(b: Book, last: Map<string, number>, now: number): boolean {
+  if (ratingOf(b) >= KEEP_STARS) return false
+  return disliked(b) || ((b.status === 'done' || b.status === 'dropped') && now - lastActivity(b, last) > YEAR)
+}
+
 export interface RuleAdvice {
   /** อ่านจบ/เลิกอ่าน และไม่ได้แตะนานกว่า 1 ปี แต่ยังอยู่นอกกล่อง */
   toBox: Book[]
@@ -49,10 +62,10 @@ export function ruleAdvice(
         b.placeId &&
         !inBox(b) &&
         !inPile(b) &&
-        (b.status === 'done' || b.status === 'dropped') &&
-        now - lastActivity(b, last) > YEAR,
+        boxable(b, last, now),
     ),
-    outOfBox: atHome.filter((b) => inBox(b) && (b.status === 'dong' || b.status === 'reading')),
+    // เล่มที่ให้มะเขือไว้ ปล่อยให้อยู่ในกล่องต่อ
+    outOfBox: atHome.filter((b) => inBox(b) && (b.status === 'dong' || b.status === 'reading') && !disliked(b)),
     unplaced: atHome.filter((b) => !b.placeId),
     noCategory: books.filter((b) => !b.categoryId),
   }
@@ -389,6 +402,7 @@ export const R = {
   series: (name: string) => `ชุด ${name} อยู่ด้วยกัน`,
   seriesToBox: (name: string) => `ชุด ${name} อ่านจบนานแล้ว เก็บลงกล่องด้วยกัน`,
   toBox: 'อ่านจบนานแล้ว เก็บลงกล่อง เปิดที่บนชั้น',
+  disliked: 'ให้มะเขือไว้ เก็บลงกล่อง เปิดที่บนชั้น',
   outOfBox: (category: string) => `ยังไม่ได้อ่านจบ ย้ายออกจากกล่องมาอยู่กับหมวด ${category}`,
   category: (category: string) => `รวมหมวด ${category} ไว้ด้วยกัน`,
 }
@@ -440,7 +454,7 @@ export function planMoves(
   // หนังสือในมือและหนังสือที่วางกองไว้ไม่อยู่ในแผนย้าย
   const atHome = books.filter((b) => !b.takenAt && !(b.placeId && kindOf.get(b.placeId) === 'pile'))
   const inBox = (b: Book) => (b.placeId ? kindOf.get(b.placeId) === 'box' : false)
-  const stale = (b: Book) => (b.status === 'done' || b.status === 'dropped') && now - lastActivity(b, last) > YEAR
+  const stale = (b: Book) => boxable(b, last, now)
 
   // รวมเล่มเป็นหน่วย: ชุดเดียวกัน = หน่วยเดียว
   const grouped = new Map<string, Book[]>()
@@ -473,7 +487,8 @@ export function planMoves(
     load.set(to, (load.get(to) ?? 0) + size(b, to))
     moves.push({ bookId: b.id, toPlaceId: to, reason })
   }
-  const active = (b: Book) => b.status === 'dong' || b.status === 'reading'
+  // เล่มที่ให้มะเขือไว้ไม่นับว่ายังอยากอ่าน (อยู่ในกล่องได้ ไม่ดึงกลับขึ้นชั้น)
+  const active = (b: Book) => (b.status === 'dong' || b.status === 'reading') && !disliked(b)
   const why = (u: Unit, b: Book) =>
     u.series
       ? R.series(u.series)
@@ -502,7 +517,7 @@ export function planMoves(
     const boxes = u.books.filter(inBox).map((b) => b.placeId!)
     const target = boxes.length ? mostCommon(boxes) : box
     for (const b of u.books)
-      if (!inBox(b) || (u.series && b.placeId !== target)) send(b, target, u.series ? R.seriesToBox(u.series) : R.toBox)
+      if (!inBox(b) || (u.series && b.placeId !== target)) send(b, target, u.series ? R.seriesToBox(u.series) : disliked(b) ? R.disliked : R.toBox)
   }
 
   // หน่วยที่มีผังของหมวดรองรับ กับหน่วยที่ไม่มี (ยังไม่มีหมวด หรือ AI ไม่ได้ให้ผังของหมวดนั้น)

@@ -86,6 +86,7 @@ const CLEAN: Record<TableName, (r: Record<string, unknown>) => Record<string, un
     placeId: ref(r.placeId),
     position: num(r.position) ?? 0,
     ...(r.row === 1 && { row: 1 }),
+    ...(typeof r.rating === 'number' && Number.isInteger(r.rating) && r.rating !== 0 && Math.abs(r.rating) <= 5 && { rating: r.rating }),
     takenAt: num(r.takenAt),
     takenFrom: ref(r.takenFrom),
     finishedAt: num(r.finishedAt),

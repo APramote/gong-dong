@@ -12,16 +12,26 @@ import { t } from '../th'
 const NO_PLACE = '__none__'
 const IN_HAND = '__hand__'
 const NO_CATEGORY = '__none__'
+/** ตัวกรองคะแนน: ดาว (ชอบ) และมะเขือ (ไม่ชอบ) */
+const RATING_FILTERS: Record<string, (r: number) => boolean> = {
+  star: (r) => r > 0,
+  star4: (r) => r >= 4,
+  star5: (r) => r === 5,
+  egg: (r) => r < 0,
+  egg3: (r) => r <= -3,
+  none: (r) => r === 0,
+}
 const FILTER_KEY = 'gong-dong.libraryFilter'
 const STATUSES = ['dong', 'reading', 'done', 'dropped']
 /** ตัวกรองที่จำไว้ (เฉพาะค่าที่รูปแบบถูกต้อง) */
-function saved(): { query?: string; status?: ReadingStatus; placeId?: string } {
+function saved(): { query?: string; status?: ReadingStatus; placeId?: string; rating?: string } {
   try {
     const o = JSON.parse(sessionStorage.getItem(FILTER_KEY) ?? '{}') as Record<string, unknown>
     return {
       query: typeof o.query === 'string' ? o.query : undefined,
       status: STATUSES.includes(o.status as string) ? (o.status as ReadingStatus) : undefined,
       placeId: typeof o.placeId === 'string' ? o.placeId : undefined,
+      rating: typeof o.rating === 'string' && o.rating in RATING_FILTERS ? o.rating : undefined,
     }
   } catch {
     return {}
@@ -49,13 +59,14 @@ export function LibraryPage() {
   const [limit, setLimit] = useState(PAGE)
   const [status, setStatus] = useState<ReadingStatus | ''>(() => saved().status ?? '')
   const [placeId, setPlaceId] = useState(() => saved().placeId ?? '')
+  const [rating, setRating] = useState(() => saved().rating ?? '')
   useEffect(() => {
     try {
-      sessionStorage.setItem(FILTER_KEY, JSON.stringify({ query, status, placeId }))
+      sessionStorage.setItem(FILTER_KEY, JSON.stringify({ query, status, placeId, rating }))
     } catch {
       // จำไม่ได้ก็ใช้ได้ตามปกติ
     }
-  }, [query, status, placeId])
+  }, [query, status, placeId, rating])
   // หมวดใน URL ถูกลบหรือรวมไปแล้ว: กลับเป็นทุกหมวด ไม่ค้างเป็นรายการว่าง
   const catKnown = categoryId === '' || categoryId === NO_CATEGORY || categories.length === 0 || categories.some((c) => c.id === categoryId)
   useEffect(() => {
@@ -112,6 +123,7 @@ export function LibraryPage() {
         !categoryId ? true : categoryId === NO_CATEGORY ? !b.categoryId : b.categoryId === categoryId,
       )
       .filter((b) => !status || b.status === status)
+      .filter((b) => RATING_FILTERS[rating]?.(b.rating ?? 0) ?? true)
       .filter((b) =>
         !placeId
           ? true
@@ -130,10 +142,10 @@ export function LibraryPage() {
             .includes(q),
       )
       .sort((a, b) => a.title.localeCompare(b.title, 'th'))
-  }, [books, deferredQuery, status, placeId, categoryId, catName])
+  }, [books, deferredQuery, status, placeId, categoryId, catName, rating])
 
   // เปลี่ยนเงื่อนไขค้นหาแล้วเริ่มแสดงหน้าแรกใหม่
-  useEffect(() => setLimit(PAGE), [deferredQuery, status, placeId, categoryId])
+  useEffect(() => setLimit(PAGE), [deferredQuery, status, placeId, categoryId, rating])
 
   if (!books) return <p className="empty">{t.common.loading}</p>
   // มีหนังสือแล้วแต่ยังไม่ได้เชื่อม Google: ข้อมูลอยู่ในเครื่องนี้ที่เดียว ชวนให้เข้าสู่ระบบ
@@ -175,7 +187,7 @@ export function LibraryPage() {
       setApplying(false)
     }
   }
-  const filtering = Boolean(deferredQuery.trim() || status || placeId || categoryId)
+  const filtering = Boolean(deferredQuery.trim() || status || placeId || categoryId || rating)
 
   return (
     <>
@@ -297,6 +309,14 @@ export function LibraryPage() {
             </option>
           ))}
         </select>
+        <select aria-label={t.rating.filter} value={rating} onChange={(e) => setRating(e.target.value)}>
+          <option value="">{t.rating.all}</option>
+          {Object.keys(RATING_FILTERS).map((k) => (
+            <option key={k} value={k}>
+              {t.rating.filters[k as keyof typeof t.rating.filters]}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* กรองหรือค้นอยู่: บอกจำนวนเล่มที่ตรง และล้างตัวกรองได้ในปุ่มเดียว */}
@@ -311,6 +331,7 @@ export function LibraryPage() {
                   setQuery('')
                   setStatus('')
                   setPlaceId('')
+                  setRating('')
                   setCategoryId('')
                 }}
               >

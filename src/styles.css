@@ -1403,9 +1403,14 @@ input[type='color'] {
   }
 }
 
-/* ตัวกรองของคลัง: ช่องค้นหาเต็มแถว ตัวเลือกสามช่องเรียงแถวเดียว */
+/* ตัวกรองของคลัง: ช่องค้นหาเต็มแถว ตัวเลือกสี่ช่อง (จอแคบเรียงสองแถว แถวละสอง) */
 .filters {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 560px) {
+  .filters {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 .filters input[type='search'] {
   grid-column: 1 / -1;
@@ -2507,5 +2512,50 @@ details.more[open] {
   gap: 4px;
 }
 .form .field > .muted {
+  font-size: 0.85rem;
+}
+
+/* ให้คะแนน: ดาว = ชอบ มะเขือ = ไม่ชอบ */
+.rating {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 14px;
+}
+.rating-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.rating-name {
+  width: 4.2em;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.rating-row button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--muted);
+  filter: grayscale(1);
+  opacity: 0.45;
+  cursor: pointer;
+}
+.rating-row button.on {
+  filter: none;
+  opacity: 1;
+}
+.rating-row.stars button.on {
+  color: #c9921a;
+  border-color: #c9921a;
+}
+.rating-row.eggs button.on {
+  border-color: #7a4c9c;
+}
+.rating p {
   font-size: 0.85rem;
 }

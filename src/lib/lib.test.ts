@@ -615,3 +615,30 @@ test('อ่านความกว้างชั้น: รับทศนิ
   expect(readWidth('๘๐.๒๕')).toBe(80.3)
   for (const bad of ['', '0', '-5', '1200', '1,200.5', 'กว้าง 80', '80cm']) expect(readWidth(bad)).toBeNull()
 })
+
+test('ดาวและมะเขือกับการเก็บลงกล่อง: มะเขือ 3 ขึ้นไปลงกล่อง เล่มโปรด 4 ดาวขึ้นไปอยู่บนชั้น', async () => {
+  const { ruleAdvice, buildLayoutPrompt, planMoves, R } = await import('./organize')
+  const now = new Date(2026, 10, 27).getTime()
+  const old = now - 500 * 86400000
+  const mk = (id: string, o: object) =>
+    ({ id, title: id, authors: '', categoryId: null, status: 'dong', placeId: 'A', takenAt: null, finishedAt: null, createdAt: now, seriesId: null, seriesNo: null, ...o }) as any
+  const place = (id: string, kind: string) => ({ id, kind, name: id, bookcaseId: null, label: '', location: '' })
+  const places = [place('A', 'shelf'), place('BOX', 'box')] as any
+  const books = [
+    mk('hate', { rating: -4 }), // ยังดองอยู่ แต่ไม่ชอบ → กล่อง
+    mk('meh', { rating: -2 }), // มะเขือน้อย ยังไม่ลงกล่อง
+    mk('hateReading', { rating: -5, status: 'reading' }), // กำลังอ่านอยู่ ไม่ลงกล่อง
+    mk('loveOld', { rating: 5, status: 'done', finishedAt: old, createdAt: old }), // เล่มโปรด อ่านจบนานแล้วก็อยู่บนชั้น
+    mk('plainOld', { status: 'done', finishedAt: old, createdAt: old }),
+    mk('hateInBox', { rating: -3, placeId: 'BOX' }), // ไม่ชอบและอยู่ในกล่องแล้ว ไม่ดึงออก
+    mk('dongInBox', { placeId: 'BOX' }),
+  ]
+  const advice = ruleAdvice(books, places, [], now)
+  expect(advice.toBox.map((b) => b.id).sort()).toEqual(['hate', 'plainOld'])
+  expect(advice.outOfBox.map((b) => b.id)).toEqual(['dongInBox'])
+  const categoryOf = new Map(books.map((b: any) => [b.id, 'นิยาย']))
+  const input = buildLayoutPrompt(books, places, [], categoryOf)
+  const moves = planMoves({ summary: '', tips: [], box: 'p2', layout: [{ category: 'นิยาย', places: ['p1'] }] }, input, books, places, [], categoryOf, { mode: 'full', now }).moves
+  expect(moves.map((m) => [m.bookId, m.toPlaceId]).sort()).toEqual([['dongInBox', 'A'], ['hate', 'BOX'], ['plainOld', 'BOX']])
+  expect(moves.find((m) => m.bookId === 'hate')!.reason).toBe(R.disliked)
+})

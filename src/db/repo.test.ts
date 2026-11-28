@@ -550,3 +550,17 @@ test('ย้ายหลายเล่มเข้าชั้นสองแ�
   const added = await r.addShelf(caseId)
   expect((await r.getPlace(added))!.rows).toBe(2)
 })
+
+test('ให้คะแนน: ดาวและมะเขือเก็บในช่องเดียว แก้ไขหนังสือแล้วคะแนนไม่หาย', async () => {
+  const db = new GongDongDB(`rating-${n++}`)
+  const r = createRepo(db)
+  const id = await r.addBook({ ...emptyBook, title: 'ก' })
+  await r.setRating(id, 4)
+  expect((await r.getBook(id))!.rating).toBe(4)
+  await r.updateBook(id, { ...emptyBook, title: 'ข' })
+  expect((await r.getBook(id))!).toMatchObject({ title: 'ข', rating: 4 })
+  await r.setRating(id, -9)
+  expect((await r.getBook(id))!.rating).toBe(-5)
+  await r.setRating(id, 0)
+  expect((await r.getBook(id))!.rating).toBe(0)
+})

@@ -7,6 +7,7 @@ import { PlaceSelect } from '../components/PlaceSelect'
 import { CategorySelect } from '../components/CategorySelect'
 import { SeriesSelect } from '../components/SeriesSelect'
 import { QuoteSection } from '../components/QuoteSection'
+import { Rating } from '../components/Rating'
 import { ReturnForm } from '../components/ReturnForm'
 import { CheckInForm } from '../components/CheckInForm'
 import { timerTotal } from '../lib/stats'
@@ -269,6 +270,7 @@ export function BookFormPage() {
   return (
     <div className="form">
       <h1>{id ? t.book.editTitle : t.book.newTitle}</h1>
+      {live && <Rating book={live} />}
       {live && (
         <div className="hand-bar">
           {live.takenAt ? (
