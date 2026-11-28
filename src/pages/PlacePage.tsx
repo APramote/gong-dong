@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { repo } from '../db/repo'
@@ -11,7 +11,11 @@ import { ShelfSize } from '../components/ShelfSize'
 import { rowOf, rowsOf } from '../lib/capacity'
 import { readWidth } from '../lib/bookcaseSize'
 import type { Book } from '../db/types'
+import { categoryLabel } from '../lib/shelfLabel'
+import type { Pick3D } from '../three/scene'
 import { t } from '../th'
+
+const Storage3D = lazy(() => import('../three/Storage3D'))
 
 export function PlacePage() {
   const { id = '' } = useParams()
@@ -23,6 +27,8 @@ export function PlacePage() {
   const bookcases = useLiveQuery(() => repo.listBookcases(), []) ?? []
   const books = useLiveQuery(() => repo.booksIn(placeId), [placeId]) ?? []
   const [editing, setEditing] = useState(false)
+  const categories = useLiveQuery(() => repo.listCategories(), []) ?? []
+  const [picked, setPicked] = useState<Pick3D | null>(null)
 
   // ชั้นที่วางซ้อนสองแถว: แยกรายการเป็นแถวหน้าและแถวหลัง (ที่เก็บอื่นมีกลุ่มเดียว)
   const twoRows = Boolean(place && rowsOf(place) === 2)
@@ -35,6 +41,8 @@ export function PlacePage() {
   if (place === undefined) return <p className="empty">{t.common.loading}</p>
   if (!place && !isNone) return <p className="empty">{t.place.notFound}</p>
 
+  const pileLabel = categoryLabel(books, new Map(categories.map((c) => [c.id, c.name])))
+  const pickedBook = picked?.kind === 'book' ? books.find((b) => b.id === picked.id) : undefined
   const title = place ? placeLabel(place, bookcases) : t.places.unplaced
   const detail = place ? [place.label, place.location].filter(Boolean).join(' · ') : ''
 
@@ -105,6 +113,32 @@ export function PlacePage() {
         </p>
       )}
       {place && (place.kind === 'pile' || place.kind === 'box') && <StoragePhoto id={place.id} />}
+      {place?.kind === 'pile' && books.length > 0 && (
+        <section>
+          {/* ภาพจำลองของกอง: วาดจากรายการหนังสือในกอง เล่มบนสุดอยู่บน แตะเล่มเพื่อเปิดดู */}
+          <div className="view3d-wrap small">
+            <Suspense fallback={null}>
+              <Storage3D
+                model={{
+                  pile: books.map((b) => ({ id: b.id, title: b.title, pages: b.pages, spineColor: b.spineColor })),
+                  label: pileLabel,
+                }}
+                label={t.place.pile3d(place.name, books.length)}
+                selected={pickedBook ? picked : null}
+                onSelect={setPicked}
+              />
+            </Suspense>
+          </div>
+          <p className="muted center">{pileLabel ? t.place.pileCats(pileLabel) : t.place.pileHint}</p>
+          {pickedBook && (
+            <p className="center">
+              <Link className="btn small" to={`/book/${pickedBook.id}`}>
+                {t.place.openPicked(pickedBook.title)}
+              </Link>
+            </p>
+          )}
+        </section>
+      )}
       {place?.kind === 'shelf' && <ShelfSize place={place} bookcase={bookcases.find((x) => x.id === place.bookcaseId)} books={books} onEdit={() => setEditing(true)} />}
 
       <div className="section-head">

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { build, dispose, type BookcaseModel, type Built, type Pick3D } from './scene'
+import { build, dispose, type Built, type Model3D, type Pick3D } from './scene'
 
 export type { Pick3D }
 
@@ -15,7 +15,7 @@ export default function Storage3D({
   onSelect,
   label,
 }: {
-  model: BookcaseModel
+  model: Model3D
   /** คำอธิบายสำหรับโปรแกรมอ่านหน้าจอ */
   label?: string
   selected?: Pick3D | null
@@ -64,7 +64,7 @@ export default function Storage3D({
       const w = el.clientWidth
       const h = el.clientHeight
       // มองจากด้านหลังตู้ ไม่เห็นหน้าชั้น ซ่อนป้าย
-      const front = camera.position.z > built.size.z / 2
+      const front = built.allAround || camera.position.z > built.size.z / 2
       built.anchors.forEach((a, i) => {
         const tag = overlay.children[i] as HTMLElement | undefined
         if (!tag) return
@@ -193,12 +193,14 @@ export default function Storage3D({
         s.controls.update()
       }
     }
+    // เล่มที่เลือก: ดึงออกมาจากชั้น (ในกองดึงออกมาน้อยกว่า กองจะได้ไม่ดูล้ม)
+    const pull = 'pile' in model ? 3 : 5
     for (const m of s.built.pickable) {
       if (!m.userData.bookId) continue
       const home = m.userData.home as THREE.Vector3
       const picked = m.userData.bookId === selectedBook
       m.position.copy(home)
-      if (picked) m.position.z += 5
+      if (picked) m.position.z += pull
       const mats = (Array.isArray(m.material) ? m.material : [m.material]) as THREE.MeshStandardMaterial[]
       for (const mat of new Set(mats)) mat.emissive.setHex(picked ? 0x332200 : 0x000000)
     }

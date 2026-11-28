@@ -13,6 +13,7 @@ import type { Pick3D } from '../three/scene'
 import { rowOf, rowsOf } from '../lib/capacity'
 import { bookcaseSizeFields } from '../placeFields'
 import { allTwoRows, bookcaseInitial, saveBookcase, someTwoRows } from '../lib/bookcaseSize'
+import { categoryLabel } from '../lib/shelfLabel'
 import { t } from '../th'
 
 const Storage3D = lazy(() => import('../three/Storage3D'))
@@ -43,15 +44,7 @@ export function BookcaseViewPage() {
   )
   // ป้ายของชั้น: หมวดที่มีมากที่สุดสองหมวดบนชั้นนั้น (หมวดอื่นนับรวมเป็น +N)
   const catName = new Map(categories.map((c) => [c.id, c.name]))
-  const shelfLabels = onShelf.map((row) => {
-    const count = new Map<string, number>()
-    for (const b of row) {
-      const name = b.categoryId ? catName.get(b.categoryId) : undefined
-      if (name) count.set(name, (count.get(name) ?? 0) + 1)
-    }
-    const names = [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'th')).map(([name]) => name)
-    return names.slice(0, 2).join(' · ') + (names.length > 2 ? ` +${names.length - 2}` : '')
-  })
+  const shelfLabels = onShelf.map((row) => categoryLabel(row, catName))
   const twoRows = (i: number) => rowsOf(shelves[i]) === 2
   const drawers = places.filter((p) => p.kind === 'drawer' && p.bookcaseId === id)
   const inPlace = (pid: string) =>

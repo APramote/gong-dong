@@ -20,6 +20,13 @@ export interface BookcaseModel {
   doorsOpen?: boolean
 }
 
+/** กองหนังสือ: วางนอนซ้อนกัน เล่มแรกอยู่ล่างสุด */
+export interface PileModel {
+  pile: Book3D[]
+  /** ป้ายข้อความเหนือกอง (เช่น หมวดของหนังสือในกอง) */
+  label?: string
+}
+
 /** สิ่งที่แตะเลือกได้ในตู้ */
 export type Pick3D = { kind: 'book' | 'drawer'; id: string }
 
@@ -101,6 +108,8 @@ export interface Built {
   drawerGroups: THREE.Group[]
   /** ป้ายของชั้น วาดเป็นข้อความทับบนภาพ (คมชัดทุกระดับซูม) */
   anchors: Anchor[]
+  /** ป้ายมองเห็นได้จากทุกด้าน (กองหนังสือ) — ตู้เห็นเฉพาะจากด้านหน้า */
+  allAround?: boolean
 }
 
 const BOARD = 2
@@ -277,8 +286,36 @@ function buildBookcase(model: BookcaseModel): Built {
   return { root, size: new THREE.Vector3(outerW, totalH, depth), pickable, drawerGroups, anchors }
 }
 
-export function build(model: BookcaseModel): Built {
-  return buildBookcase(model)
+/** กองหนังสือ: แต่ละเล่มวางนอน หันสันออกด้านหน้า เหลื่อมและเอียงเล็กน้อยให้เหมือนกองจริง */
+function buildPile(model: PileModel): Built {
+  const root = new THREE.Group()
+  const pickable: THREE.Mesh[] = []
+  let y = 0
+  let widest = 20
+  for (const b of model.pile) {
+    const s = bookSize(b)
+    const h = hash(b.id)
+    const color = bookColor(b)
+    // วางนอน: ด้านยาวของเล่มไปตามแนวนอน ความหนาเป็นความสูงของชั้นในกอง
+    const mesh = boxMesh(s.height, s.thick, s.depth, color, textTexture(b.title, color, false))
+    mesh.position.set(((h % 9) - 4) * 0.25, y + s.thick / 2, (((h >> 4) % 7) - 3) * 0.2)
+    mesh.rotation.y = (((h >> 8) % 9) - 4) * 0.012
+    mesh.userData = { bookId: b.id, home: mesh.position.clone() }
+    root.add(mesh)
+    pickable.push(mesh)
+    y += s.thick + 0.05
+    widest = Math.max(widest, s.height)
+  }
+  const total = Math.max(y, 4)
+  const anchors: Anchor[] = model.label ? [{ text: model.label, at: new THREE.Vector3(0, total + 3.5, 0), half: widest }] : []
+  root.position.y = -total / 2
+  return { root, size: new THREE.Vector3(widest + 4, total + 8, 16), pickable, drawerGroups: [], anchors, allAround: true }
+}
+
+export type Model3D = BookcaseModel | PileModel
+
+export function build(model: Model3D): Built {
+  return 'pile' in model ? buildPile(model) : buildBookcase(model)
 }
 
 /** คืนหน่วยความจำ GPU ของทุก mesh ในกลุ่ม */
