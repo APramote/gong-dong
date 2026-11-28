@@ -1,5 +1,6 @@
 import { db as defaultDb, type GongDongDB } from './db'
 import { pace, timerTotal } from '../lib/stats'
+import { footprint, rowsOf, shelfWidth } from '../lib/capacity'
 import type { Book, Bookcase, Category, Look, Place, PlaceKind, Quote, ReadingSession, Series, SyncFields, Wish } from './types'
 
 const newId = () => crypto.randomUUID()
@@ -472,15 +473,24 @@ export function createRepo(db: GongDongDB = defaultDb) {
      * (ข้ามเล่มที่อยู่ในมือ เล่มที่อยู่ที่นั้นอยู่แล้ว และไม่ย้ายถ้าที่ปลายทางถูกลบไปแล้ว)
      */
     async moveBooks(ids: string[], placeId: string | null): Promise<number> {
-      return db.transaction('rw', db.books, db.places, async () => {
+      return db.transaction('rw', db.books, db.places, db.bookcases, async () => {
         if (!(await placeAlive(placeId))) return 0
         let position = await nextPosition(placeId)
+        // ชั้นสองแถวที่รู้ความกว้าง: แถวหน้าเต็มแล้วเล่มถัดไปไปอยู่แถวหลัง
+        const place = placeId ? await db.places.get(placeId) : undefined
+        const width = place ? shelfWidth(place, place.bookcaseId ? await db.bookcases.get(place.bookcaseId) : null) : null
+        const spill = Boolean(place && rowsOf(place) === 2 && width !== null)
+        const used = [0, 0]
+        if (spill) for (const b of await booksIn(placeId)) if (!b.takenAt) used[b.row === 1 ? 1 : 0] += footprint(b)
         const now = Date.now()
         let moved = 0
         for (const id of ids) {
           const b = await db.books.get(id)
           if (!b || b.deletedAt !== null || b.takenAt || b.placeId === placeId) continue
-          await db.books.update(id, { placeId, position: position++, row: 0, updatedAt: now })
+          const size = footprint(b)
+          const row = spill && used[0] + size > width! && used[1] + size <= width! ? 1 : 0
+          used[row] += size
+          await db.books.update(id, { placeId, position: position++, row, updatedAt: now })
           moved++
         }
         return moved
@@ -903,6 +913,8 @@ export function createRepo(db: GongDongDB = defaultDb) {
         order,
         location: '',
         label: '',
+        // ตู้ที่วางซ้อนสองแถวทุกชั้น ชั้นใหม่ก็ซ้อนสองแถวด้วย
+        ...(shelves.length > 0 && shelves.every((s) => s.rows === 2) && { rows: 2 as const }),
       }
       await db.places.add(shelf)
       return shelf.id

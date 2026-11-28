@@ -89,7 +89,7 @@ export function PlacePage() {
           onSubmit={async (v) => {
             const rows = v.twoRows === '1' ? 2 : 1
             // กลับเป็นแถวเดียว: หนังสือแถวหลังจะมารวมกับแถวหน้า ถามก่อนถ้ามีเล่มอยู่แถวหลัง
-            if (place.kind === 'shelf' && rows === 1 && books.some((b) => b.row === 1) && !confirm(t.shelf.confirmOneRow)) return
+            if (place.kind === 'shelf' && rows === 1 && rowsOf(place) === 2 && books.some((b) => b.row === 1) && !confirm(t.shelf.confirmOneRow)) return
             await repo.updatePlace(place.id, { name: v.name, location: v.location ?? place.location, label: v.label ?? place.label })
             if (place.kind === 'shelf') await repo.setShelfShape(place.id, { width: readWidth(v.width ?? ''), rows })
             setEditing(false)

@@ -12,7 +12,7 @@ import { BookRow } from '../components/BookRow'
 import type { Pick3D } from '../three/scene'
 import { rowOf, rowsOf } from '../lib/capacity'
 import { bookcaseSizeFields } from '../placeFields'
-import { allTwoRows, bookcaseInitial, saveBookcase } from '../lib/bookcaseSize'
+import { allTwoRows, bookcaseInitial, saveBookcase, someTwoRows } from '../lib/bookcaseSize'
 import { t } from '../th'
 
 const Storage3D = lazy(() => import('../three/Storage3D'))
@@ -69,7 +69,7 @@ export function BookcaseViewPage() {
           <h1>{bookcase.name}</h1>
           {bookcase.room && <p className="muted">{bookcase.room}</p>}
           {/* ขนาดชั้นที่ตั้งไว้ แตะ "แก้ไขตู้" ด้านล่างเพื่อเปลี่ยน */}
-          <p className="muted">{t.shelf.caseSummary(bookcase.shelfWidth ?? null, allTwoRows(id, places))}</p>
+          <p className="muted">{t.shelf.caseSummary(bookcase.shelfWidth ?? null, allTwoRows(id, places), someTwoRows(id, places))}</p>
         </div>
       </div>
       <div className="view3d-wrap">

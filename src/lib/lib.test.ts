@@ -607,3 +607,11 @@ test('จัดระเบียบตามความกว้างชั�
     expect(moves.filter((m) => m.toPlaceId === 'WIDE')).toHaveLength(20)
   }
 })
+
+test('อ่านความกว้างชั้น: รับทศนิยม จุลภาค และเลขไทย ปฏิเสธค่าที่ไม่ใช่ตัวเลขหรือเกินช่วง', async () => {
+  const { readWidth } = await import('./readWidth')
+  expect(readWidth('80')).toBe(80)
+  expect(readWidth(' 80,5 ')).toBe(80.5)
+  expect(readWidth('๘๐.๒๕')).toBe(80.3)
+  for (const bad of ['', '0', '-5', '1200', '1,200.5', 'กว้าง 80', '80cm']) expect(readWidth(bad)).toBeNull()
+})

@@ -532,3 +532,21 @@ test('ตั้งสองแถวทั้งตู้: ทุกชั้น
   expect((await r.listPlaces()).filter((p) => p.bookcaseId === caseId).every((p) => p.rows === 1)).toBe(true)
   expect((await r.getBook(book))!.row ?? 0).toBe(0)
 })
+
+test('ย้ายหลายเล่มเข้าชั้นสองแถว: แถวหน้าเต็มแล้วไปแถวหลัง และชั้นใหม่ของตู้ซ้อนทั้งตู้ก็ซ้อนด้วย', async () => {
+  const db = new GongDongDB(`spill-${n++}`)
+  const r = createRepo(db)
+  const caseId = await r.addBookcase({ name: 'ตู้', room: '' }, 1)
+  const shelf = (await r.listPlaces()).find((p) => p.bookcaseId === caseId)!
+  await r.setShelfWidth(caseId, 10)
+  await r.setBookcaseRows(caseId, 2)
+  // เล่มละ 300 หน้า หนาราว 2.7 ซม. ชั้นกว้าง 10 ซม. วางได้แถวละ 3 เล่ม
+  const ids: string[] = []
+  for (let i = 0; i < 7; i++) ids.push(await r.addBook({ ...emptyBook, title: `เล่ม ${i}`, pages: 300 }))
+  expect(await r.moveBooks(ids, shelf.id)).toBe(7)
+  const rows = (await r.booksIn(shelf.id)).map((b) => b.row ?? 0)
+  // 3 เล่มแถวหน้า 3 เล่มแถวหลัง เล่มที่ล้นทั้งสองแถวอยู่แถวหน้า
+  expect(rows).toEqual([0, 0, 0, 1, 1, 1, 0])
+  const added = await r.addShelf(caseId)
+  expect((await r.getPlace(added))!.rows).toBe(2)
+})

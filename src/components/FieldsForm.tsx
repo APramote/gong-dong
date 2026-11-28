@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { t } from '../th'
+import { readWidth } from '../lib/readWidth'
 
 export interface Field {
   key: string
@@ -34,6 +35,9 @@ export function FieldsForm({
     e.preventDefault()
     const trimmed = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v.trim()]))
     if (fields.some((f) => f.required && !trimmed[f.key])) return setError(t.places.nameRequired)
+    // ช่องขนาด: ค่าที่อ่านไม่ออกต้องบอกผู้ใช้ ไม่บันทึกเป็น "ไม่ระบุ" เงียบ ๆ
+    if (fields.some((f) => f.decimal && trimmed[f.key] && readWidth(trimmed[f.key]) === null)) return setError(t.shelf.widthBad)
+    setError('')
     await onSubmit(trimmed)
   }
 
@@ -50,16 +54,23 @@ export function FieldsForm({
             {f.label}
           </label>
         ) : (
-          <label key={f.key}>
-            {f.label}
-            <input
-              autoFocus={i === 0}
-              inputMode={f.decimal ? 'decimal' : f.numeric ? 'numeric' : undefined}
-              value={values[f.key]}
-              onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-            />
-            {f.hint && <span className="muted">{f.hint}</span>}
-          </label>
+          <div key={f.key} className="field">
+            <label>
+              {f.label}
+              <input
+                autoFocus={i === 0}
+                inputMode={f.decimal ? 'decimal' : f.numeric ? 'numeric' : undefined}
+                aria-describedby={f.hint ? `hint-${f.key}` : undefined}
+                value={values[f.key]}
+                onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+              />
+            </label>
+            {f.hint && (
+              <span className="muted" id={`hint-${f.key}`}>
+                {f.hint}
+              </span>
+            )}
+          </div>
         ),
       )}
       {error && <p className="error">{error}</p>}

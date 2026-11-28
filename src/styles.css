@@ -2477,3 +2477,12 @@ details.more[open] {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+
+/* ช่องกรอกที่มีคำอธิบายใต้ช่อง */
+.form .field {
+  display: grid;
+  gap: 4px;
+}
+.form .field > .muted {
+  font-size: 0.85rem;
+}

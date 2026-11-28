@@ -2,18 +2,19 @@ import { repo } from '../db/repo'
 import type { Bookcase, Place } from '../db/types'
 import { rowsOf } from './capacity'
 import { t } from '../th'
+import { readWidth } from './readWidth'
 
-/** อ่านค่าความกว้างจากช่องกรอก: ตัวเลขบวกไม่เกิน 1,000 ซม. นอกนั้นถือว่าไม่ระบุ */
-export const readWidth = (text: string): number | null => {
-  const n = parseFloat(text.replace(',', '.'))
-  return Number.isFinite(n) && n > 0 && n <= 1000 ? Math.round(n * 10) / 10 : null
-}
+export { readWidth }
 
 /** ทุกชั้นของตู้วางซ้อนสองแถวอยู่หรือไม่ */
 export const allTwoRows = (bookcaseId: string, places: Place[]) => {
   const shelves = places.filter((p) => p.kind === 'shelf' && p.bookcaseId === bookcaseId)
   return shelves.length > 0 && shelves.every((p) => rowsOf(p) === 2)
 }
+
+/** มีบางชั้น (ไม่ใช่ทุกชั้น) ที่วางซ้อนสองแถว */
+export const someTwoRows = (bookcaseId: string, places: Place[]) =>
+  !allTwoRows(bookcaseId, places) && places.some((p) => p.kind === 'shelf' && p.bookcaseId === bookcaseId && rowsOf(p) === 2)
 
 /** ค่าเริ่มต้นของฟอร์มแก้ไขตู้ */
 export const bookcaseInitial = (bc: Bookcase, places: Place[]) => ({
@@ -26,6 +27,7 @@ export const bookcaseInitial = (bc: Bookcase, places: Place[]) => ({
 /** บันทึกฟอร์มแก้ไขตู้ (คืน false เมื่อผู้ใช้ยกเลิก): ชื่อ ห้อง ความกว้างชั้น และจำนวนแถว (เปลี่ยนจำนวนแถวเฉพาะเมื่อผู้ใช้เปลี่ยนช่องติ๊ก) */
 export async function saveBookcase(bc: Bookcase, places: Place[], v: Record<string, string>): Promise<boolean> {
   const want = v.twoRows === '1'
+  // ตู้ที่ซ้อนเพียงบางชั้น: ช่องติ๊กว่างอยู่ บันทึกโดยไม่ติ๊กจึงไม่แตะชั้นที่ตั้งไว้เอง
   const change = want !== allTwoRows(bc.id, places)
   if (change && !want) {
     // กลับเป็นแถวเดียว: หนังสือแถวหลังจะมารวมกับแถวหน้า ถามก่อนถ้ามีเล่มอยู่แถวหลัง

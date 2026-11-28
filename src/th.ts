@@ -341,8 +341,11 @@ export const t = {
     setSize: 'ตั้งขนาดชั้น',
     widthIs: (n: number) => `ชั้นกว้าง ${n} ซม.`,
     widthNone: 'ยังไม่ได้ใส่ความกว้างชั้น',
-    caseSummary: (width: number | null, twoRows: boolean) =>
-      [width ? `ชั้นกว้าง ${width} ซม.` : 'ยังไม่ได้ใส่ความกว้างชั้น', twoRows ? 'วางซ้อนสองแถว' : ''].filter(Boolean).join(' · '),
+    caseSummary: (width: number | null, twoRows: boolean, some = false) =>
+      [width ? `ชั้นกว้าง ${width} ซม.` : 'ยังไม่ได้ใส่ความกว้างชั้น', twoRows ? 'วางซ้อนสองแถว' : some ? 'วางซ้อนสองแถวบางชั้น' : '']
+        .filter(Boolean)
+        .join(' · '),
+    widthBad: 'ความกว้างต้องเป็นตัวเลขมากกว่า 0 และไม่เกิน 1,000 ซม. (หรือเว้นว่างไว้)',
     editCase: 'แก้ไขตู้',
     toBack: 'ไปแถวหลัง',
     toFront: 'มาแถวหน้า',
