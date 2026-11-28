@@ -25,6 +25,7 @@ const DashboardPage = page(() => import('./pages/DashboardPage'), 'DashboardPage
 const CategoriesPage = page(() => import('./pages/CategoriesPage'), 'CategoriesPage')
 const RandomPage = page(() => import('./pages/RandomPage'), 'RandomPage')
 const CheckPage = page(() => import('./pages/CheckPage'), 'CheckPage')
+const DuplicatesPage = page(() => import('./pages/DuplicatesPage'), 'DuplicatesPage')
 const WishlistPage = page(() => import('./pages/WishlistPage'), 'WishlistPage')
 const SeriesListPage = page(() => import('./pages/SeriesPage'), 'SeriesListPage')
 const SeriesPage = page(() => import('./pages/SeriesPage'), 'SeriesPage')
@@ -86,7 +87,7 @@ const GROUPS: { root: string; label: string; paths: string[] }[] = [
   { root: '/reading', label: t.nav.reading, paths: ['/reading'] },
   { root: '/places', label: t.nav.places, paths: ['/places', '/place', '/view', '/labels', '/organize', '/scan'] },
   { root: '/stats', label: t.nav.stats, paths: ['/stats', '/year'] },
-  { root: '/', label: t.nav.library, paths: ['/add', '/book', '/check', '/wishlist', '/series', '/quotes', '/random', '/categories'] },
+  { root: '/', label: t.nav.library, paths: ['/add', '/book', '/check', '/duplicates', '/wishlist', '/series', '/quotes', '/random', '/categories'] },
 ]
 /** หน้าที่มีลิงก์ย้อนกลับของตัวเองอยู่แล้ว */
 const OWN_BACK = ['/categories', '/place', '/view']
@@ -186,6 +187,7 @@ const router = createHashRouter([
       { path: 'categories', element: <CategoriesPage /> },
       { path: 'random', element: <RandomPage /> },
       { path: 'check', element: <CheckPage /> },
+      { path: 'duplicates', element: <DuplicatesPage /> },
       { path: 'wishlist', element: <WishlistPage /> },
       { path: 'series', element: <SeriesListPage /> },
       { path: 'series/:id', element: <SeriesPage /> },

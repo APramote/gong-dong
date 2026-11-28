@@ -1,6 +1,6 @@
 import type { Book, Bookcase, Category, Place } from '../db/types'
 import { placeLabel } from '../placeLabel'
-import { usage } from './capacity'
+import { footprint, usage } from './capacity'
 
 /** หนังสือที่ขอคำแนะนำ (จากฟอร์ม อาจยังไม่ได้บันทึก) */
 export interface SuggestBook {
@@ -12,6 +12,7 @@ export interface SuggestBook {
   synopsis: string
   blurb: string
   seriesId?: string | null
+  pages?: number | null
 }
 
 export interface SuggestInput {
@@ -37,8 +38,9 @@ const clip = (text: string, max: number) => {
 }
 const q = (text: string, max: number) => JSON.stringify(clip(text, max) || '-')
 
-/** ที่เก็บในคำถามมีได้มากสุดเท่านี้ (เลือกที่มีหนังสือมากก่อน คำถามจะไม่ยาวเกิน) */
+/** ที่เก็บในคำถามมีได้มากสุดเท่านี้ คำถามจะไม่ยาวเกิน: ที่มีหนังสือมากก่อน และกันที่ไว้ให้ที่เก็บว่างด้วย */
 const MAX_PLACES = 60
+const MAX_EMPTY = 15
 
 /**
  * คำถามให้ AI แนะนำหมวดและที่เก็บของหนังสือหนึ่งเล่ม
@@ -68,7 +70,14 @@ export function buildSuggestPrompt(
     .filter((p) => p.kind !== 'pile')
     .map((p) => ({ p, list: inPlace.get(p.id) ?? [] }))
     .sort((a, b) => b.list.length - a.list.length)
-    .slice(0, MAX_PLACES)
+    // เกินเพดาน: ตัดที่เก็บที่มีหนังสือน้อยออกก่อน แต่ที่เก็บว่าง (บ้านของหมวดใหม่) ยังได้เข้า
+    .filter((x, _i, all) => {
+      if (all.length <= MAX_PLACES) return true
+      const empties = all.filter((y) => y.list.length === 0)
+      const keepEmpty = new Set(empties.slice(0, MAX_EMPTY))
+      const filled = all.filter((y) => y.list.length > 0).slice(0, MAX_PLACES - keepEmpty.size)
+      return x.list.length === 0 ? keepEmpty.has(x) : filled.includes(x)
+    })
     .map(({ p, list }, i) => {
       const code = `p${i + 1}`
       placeIds.set(code, p.id)
@@ -79,7 +88,8 @@ export function buildSuggestPrompt(
       }
       const top = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name, n]) => `${JSON.stringify(name)} ${n}`)
       const u = usage(p, p.bookcaseId ? bookcases.find((c) => c.id === p.bookcaseId) : null, list)
-      const room = u.capacity === null ? 'unknown' : `${Math.max(0, Math.round(u.capacity - u.used.reduce((a, b) => a + b, 0)))} cm free`
+      // ชั้นสองแถว: บอกแถวที่ว่างมากที่สุด (เล่มหนึ่งต้องลงในแถวเดียว)
+      const room = u.width === null ? 'unknown' : `${Math.max(0, Math.round(u.width - Math.min(...u.used)))} cm free`
       const series = book.seriesId && list.some((b) => b.seriesId === book.seriesId) ? ' | holds other volumes of the same series' : ''
       return `${code} | ${p.kind} | ${JSON.stringify(placeLabel(p, bookcases))} | ${list.length} books | ${top.join(', ') || 'no categories yet'} | ${room}${series}`
     })
@@ -97,7 +107,8 @@ export function buildSuggestPrompt(
       ? '\n\nStorage places (code | kind | name | books there | main categories with counts | free space):\n' +
         lines.join('\n') +
         '\nChoose the one place code where this book fits best: prefer a place that holds other volumes of the same series, ' +
-        'then a place whose main categories match the chosen category, and avoid places with 0 cm free. ' +
+        `then a place whose main categories match the chosen category. The book needs about ${Math.ceil(footprint({ pages: book.pages ?? null }))} cm of shelf: ` +
+        'avoid places whose free space is smaller than that. ' +
         'Boxes are for books the reader has put away; choose a box only when nothing else fits. ' +
         'Answer with an empty place if no place is suitable.'
       : '\n\nThere are no storage places to choose from: answer with an empty place.') +

@@ -8,7 +8,7 @@ import { Scanner } from '../components/Scanner'
 import { useLeaveGuard } from '../components/useLeaveGuard'
 import { aiOn, aiReady, covers, recognize } from '../lib/ai'
 import { aiErrorText } from '../lib/aiError'
-import { blobToBase64, cropImage, resizeImage, COVER_SIDE } from '../lib/image'
+import { blobToBase64, cropImage, resizeImage, COVER_QUALITY, COVER_SIDE } from '../lib/image'
 import { lookupIsbnStatus } from '../lib/isbn'
 import { Ring } from '../components/Ring'
 import { t } from '../th'
@@ -45,7 +45,7 @@ export function AddPage() {
       const box = found[i].box
       // ไม่รู้กรอบแต่มีเล่มเดียว ใช้ทั้งรูปเป็นปก
       if (box) result[i].cover = await cropImage(image, box, COVER_SIDE)
-      else if (found.length === 1) result[i].cover = await resizeImage(image, COVER_SIDE)
+      else if (found.length === 1) result[i].cover = await resizeImage(image, COVER_SIDE, COVER_QUALITY)
     }
     return result
   }

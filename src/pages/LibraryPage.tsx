@@ -11,6 +11,7 @@ import { aiOn } from '../lib/ai'
 import { guessVolumes } from '../lib/series'
 import { BulkInfo } from '../components/BulkInfo'
 import { t } from '../th'
+import { duplicateGroups, loadIgnored } from '../lib/duplicates'
 
 const NO_PLACE = '__none__'
 const IN_HAND = '__hand__'
@@ -195,6 +196,7 @@ export function LibraryPage() {
   // มีหนังสือแล้วแต่ยังไม่ได้เชื่อม Google: ข้อมูลอยู่ในเครื่องนี้ที่เดียว ชวนให้เข้าสู่ระบบ
   const showBackupHint = !hintHidden && books.length > 0 && !loadSettings().googleAccount
   const dong = books.filter((b) => b.status === 'dong').length
+  const dupCount = duplicateGroups(books, loadIgnored()).length
   // นับเฉพาะเล่มที่เลือกไว้และยังอยู่ในรายการที่กรองอยู่ (เปลี่ยนตัวกรองแล้วเล่มที่มองไม่เห็นจะไม่ถูกย้าย)
   const pickedShown = selecting ? shown.filter((b) => picked.has(b.id)) : []
   const closeSelect = () => {
@@ -294,6 +296,7 @@ export function LibraryPage() {
         <Link to="/wishlist">{t.tools.wishlist}</Link>
         <Link to="/series">{t.tools.series}</Link>
         <Link to="/quotes">{t.tools.quotes}</Link>
+        {dupCount > 0 && <Link to="/duplicates">{t.tools.duplicates(dupCount)}</Link>}
       </nav>
 
       {/* หนังสือที่อยู่ในมือ: ทางลัดกลับไปอ่านต่อ */}

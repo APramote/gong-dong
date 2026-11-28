@@ -2902,3 +2902,21 @@ body.no-scroll {
   margin-top: 8px;
   flex-wrap: wrap;
 }
+
+/* ---------- เล่มซ้ำ ---------- */
+.dup-group {
+  margin-bottom: 14px;
+}
+.dup-group .row {
+  flex-wrap: wrap;
+}
+.dup-keep {
+  flex: 1 0 100%;
+  justify-content: flex-end;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.dup-group .actions {
+  margin-top: 8px;
+  flex-wrap: wrap;
+}

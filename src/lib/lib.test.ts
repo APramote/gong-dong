@@ -8,6 +8,7 @@ import { dashboard } from './dashboard'
 import { yearReview } from './yearReview'
 import { emptyBook } from '../db/repo'
 import { buildSuggestPrompt, readSuggestion } from './suggest'
+import { bestOf, duplicateGroups, groupKey } from './duplicates'
 import type { Book } from '../db/types'
 
 test('เลือกรุ่น Flash ตัวเสถียรที่เลขรุ่นสูงสุด', () => {
@@ -709,5 +710,44 @@ test('ผลค้นข้อมูลจาก AI: แยกคำโปรย
   })
   test('แนะนำ: เล่มในมือ: ไม่ถามที่เก็บ', () => {
     expect(buildSuggestPrompt(book, cats, places, [], [], 12, false).placeIds.size).toBe(0)
+  })
+}
+
+{
+  const bk = (id: string, title: string, over: Partial<Book> = {}): Book => ({ ...emptyBook, id, createdAt: Number(id.replace(/\D/g, '')) || 1, updatedAt: 1, deletedAt: null, title, ...over }) as Book
+  test('เล่มซ้ำ: ISBN เดียวกันหรือชื่อเดียวกัน ผู้แต่งไม่ขัดกัน', () => {
+    const books = [
+      bk('b1', 'Sapiens', { isbn: '9780062316097' }),
+      bk('b2', 'เซเปียนส์', { isbn: '0062316095' }),
+      bk('b3', 'ข้างหลังภาพ', { authors: 'ศรีบูรพา' }),
+      bk('b4', 'ข้างหลัง ภาพ'),
+      bk('b5', 'ข้างหลังภาพ', { authors: 'คนอื่น' }),
+      bk('b6', 'สามก๊ก เล่ม 1'),
+      bk('b7', 'สามก๊ก เล่ม 10'),
+      bk('b8', 'คนละเรื่อง'),
+    ]
+    const groups = duplicateGroups(books).map((g) => g.map((b) => b.id).sort())
+    expect(groups).toContainEqual(['b1', 'b2'])
+    expect(groups.some((g) => g.includes('b3') && g.includes('b4'))).toBe(true)
+    expect(groups.flat()).not.toContain('b6')
+    expect(groups.flat()).not.toContain('b8')
+  })
+  test('เล่มซ้ำ: ISBN ต่างกัน เลขเล่มต่างกัน หรือกลุ่มที่บอกว่าไม่ซ้ำ ไม่นับ', () => {
+    const a = bk('b1', 'เรื่องเดียวกัน', { isbn: '9786160000012' })
+    const b = bk('b2', 'เรื่องเดียวกัน', { isbn: '9786160000029' })
+    expect(duplicateGroups([a, b])).toEqual([])
+    const c = bk('b3', 'การ์ตูน', { seriesNo: 1 })
+    const d = bk('b4', 'การ์ตูน', { seriesNo: 2 })
+    expect(duplicateGroups([c, d])).toEqual([])
+    const e = bk('b5', 'ซ้ำจริง')
+    const f = bk('b6', 'ซ้ำจริง')
+    expect(duplicateGroups([e, f])).toHaveLength(1)
+    expect(duplicateGroups([e, f], new Set([groupKey([f, e])]))).toEqual([])
+  })
+  test('เล่มซ้ำ: เล่มที่ควรเก็บคือเล่มที่ข้อมูลมากกว่า เท่ากันเลือกเล่มเก่า', () => {
+    const thin = bk('b1', 'ก')
+    const rich = bk('b2', 'ก', { authors: 'x', pages: 100, status: 'reading' })
+    expect(bestOf([thin, rich]).id).toBe('b2')
+    expect(bestOf([bk('b9', 'ก'), bk('b3', 'ก')]).id).toBe('b3')
   })
 }

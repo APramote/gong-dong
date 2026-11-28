@@ -19,7 +19,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { buildSuggestPrompt, readSuggestion, suggestSchema, type Suggestion } from '../lib/suggest'
 import { timeAgo } from '../lib/stats'
 import { placeLabel } from '../placeLabel'
-import { resizeImage, COVER_SIDE } from '../lib/image'
+import { resizeImage, COVER_QUALITY, COVER_SIDE } from '../lib/image'
 import { lookupIsbnStatus, normalizeIsbn } from '../lib/isbn'
 import { aiOn, aiReady, askJson, enrich } from '../lib/ai'
 import { loadSettings } from '../lib/settings'
@@ -239,19 +239,23 @@ export function BookFormPage() {
 
   /** เติมเฉพาะช่องที่ยังว่าง ไม่ทับสิ่งที่ผู้ใช้พิมพ์ไว้ คืนจำนวนช่องที่เติม */
   function fillEmpty(values: Partial<BookInput>): number {
-    let filled = 0
-    const next = { ...form }
-    for (const [k, v] of Object.entries(values) as [keyof BookInput, never][]) {
-      const cur = next[k] as unknown
-      const empty = cur === '' || cur === null || (Array.isArray(cur) && cur.length === 0)
-      const has = v !== null && v !== '' && !(Array.isArray(v) && (v as unknown[]).length === 0)
-      if (empty && has) {
-        next[k] = v
-        filled++
+    const merge = (base: BookInput) => {
+      let filled = 0
+      const next = { ...base }
+      for (const [k, v] of Object.entries(values) as [keyof BookInput, never][]) {
+        const cur = next[k] as unknown
+        const empty = cur === '' || cur === null || (Array.isArray(cur) && cur.length === 0)
+        const has = v !== null && v !== '' && !(Array.isArray(v) && (v as unknown[]).length === 0)
+        if (empty && has) {
+          next[k] = v
+          filled++
+        }
       }
+      return { next, filled }
     }
-    setForm(next)
-    return filled
+    // เติมบนฟอร์มล่าสุด (ระหว่างรอ AI ผู้ใช้อาจพิมพ์หรือรับคำแนะนำอื่นไปแล้ว) จำนวนนับจากฟอร์มตอนนี้
+    setForm((f) => merge(f).next)
+    return merge(form).filled
   }
 
   async function suggestFromAi() {
@@ -263,7 +267,7 @@ export function BookFormPage() {
       const [cats, allBooks] = await Promise.all([repo.listCategories(), repo.listBooks()])
       const tags = tagsText.split(',').map((x) => x.trim()).filter(Boolean)
       // เล่มในมือ: ที่เก็บล็อกอยู่ ถามแค่หมวด
-      const input = buildSuggestPrompt({ ...form, id, tags }, cats, places, bookcases, allBooks, loadSettings().maxCategories, !live?.takenAt)
+      const input = buildSuggestPrompt({ ...form, id, tags, pages: form.pages }, cats, places, bookcases, allBooks, loadSettings().maxCategories, !live?.takenAt)
       const r = readSuggestion(await askJson(input.prompt, suggestSchema), input)
       if (!r.category && !r.placeId) setTipMsg(t.book.tipNone)
       else setTip(r)
@@ -279,7 +283,7 @@ export function BookFormPage() {
     if (!tip) return
     const next: Partial<BookInput> = {}
     if (what !== 'place' && tip.category) next.categoryId = await repo.ensureCategory(tip.category)
-    if (what !== 'category' && tip.placeId && places.some((p) => p.id === tip.placeId)) next.placeId = tip.placeId
+    if (what !== 'category' && tip.placeId && tipPlace) next.placeId = tip.placeId
     setForm((f) => ({ ...f, ...next }))
     setTip(null)
   }
@@ -350,7 +354,8 @@ export function BookFormPage() {
   )
 
   const tipPlaceRow = tip?.placeId ? places.find((p) => p.id === tip.placeId) : undefined
-  const tipPlace = tipPlaceRow ? placeLabel(tipPlaceRow, bookcases) : ''
+  // เล่มในมือที่เก็บล็อกอยู่ ที่เก็บที่ถูกลบไปแล้วไม่เสนอ
+  const tipPlace = tipPlaceRow && !live?.takenAt ? placeLabel(tipPlaceRow, bookcases) : ''
   // ที่เก็บ: เล่มที่มีอยู่แล้วแสดงไว้บนสุดให้เห็นทันที เล่มใหม่อยู่ตามลำดับกรอกเดิม
   const placeField = live?.takenAt ? (
     <label className="place-top">
@@ -483,7 +488,7 @@ export function BookFormPage() {
               const file = e.target.files?.[0]
               e.target.value = ''
               if (file) {
-                setNewCover(await resizeImage(file, COVER_SIDE))
+                setNewCover(await resizeImage(file, COVER_SIDE, COVER_QUALITY))
                 dropAi('cover')
               }
             }}
@@ -636,7 +641,7 @@ export function BookFormPage() {
                 <button type="button" className="btn small primary" onClick={() => applyTip('both')}>
                   {t.book.tipUse}
                 </button>
-                {tip.category && tip.placeId && (
+                {tip.category && tipPlace && (
                   <>
                     <button type="button" className="btn small" onClick={() => applyTip('category')}>
                       {t.book.tipUseCategory}

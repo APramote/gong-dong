@@ -7,7 +7,7 @@ const DAY = 24 * 60 * 60 * 1000
 export const titleKey = (s: string) => s.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '')
 
 /** ISBN-10 กับ ISBN-13 ของเล่มเดียวกันให้ค่าเดียวกัน (ตัด 978 และหลักตรวจสอบ) */
-function isbnKey(raw: string): string {
+export function isbnKey(raw: string): string {
   const s = normalizeIsbn(raw)
   if (!s) return ''
   if (s.length === 10) return s.slice(0, 9)
@@ -18,7 +18,7 @@ function isbnKey(raw: string): string {
  * ชื่อเดียวกันหรือไม่: ตรงกัน หรือชื่อหนึ่งคือชื่ออีกเล่มที่มีคำต่อท้ายสั้น ๆ เช่น "(ปกแข็ง)"
  * ส่วนที่เกินต้องไม่มีตัวเลข ("เล่ม 1" กับ "เล่ม 10" เป็นคนละเล่ม) และต้องสั้นกว่าชื่อหลักมาก
  */
-function sameKey(x: string, y: string): boolean {
+export function sameKey(x: string, y: string): boolean {
   if (!x || !y) return false
   if (x === y) return true
   const [short, long] = x.length < y.length ? [x, y] : [y, x]

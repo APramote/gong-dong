@@ -765,6 +765,49 @@ export function createRepo(db: GongDongDB = defaultDb) {
       })
     },
 
+    /**
+     * รวมเล่มซ้ำเป็นเล่มเดียว: เติมช่องว่างของเล่มที่เก็บด้วยข้อมูลจากเล่มอื่น ย้ายประวัติการอ่าน
+     * โควต และรูปปก (ถ้าเล่มที่เก็บยังไม่มี) มาไว้ที่เล่มที่เก็บ แล้วลบเล่มอื่น คืนจำนวนเล่มที่ลบ
+     */
+    async mergeBooks(keepId: string, otherIds: string[]): Promise<number> {
+      return db.transaction('rw', [db.books, db.sessions, db.covers, db.quotes], async () => {
+        const keep = await db.books.get(keepId)
+        if (!keep || keep.deletedAt !== null) return 0
+        const now = Date.now()
+        const patch: Partial<Book> = {}
+        const cur = { ...keep }
+        let removed = 0
+        for (const id of otherIds) {
+          const o = id === keepId ? undefined : await db.books.get(id)
+          if (!o || o.deletedAt !== null) continue
+          for (const k of ['authors', 'publisher', 'year', 'isbn', 'synopsis', 'blurb', 'reviewSummary', 'note', 'spineColor'] as const)
+            if (!cur[k] && o[k]) cur[k] = patch[k] = o[k]
+          for (const k of ['pages', 'categoryId', 'seriesId', 'seriesNo', 'rating'] as const)
+            if (!cur[k] && o[k]) (cur[k] as unknown) = (patch[k] as unknown) = o[k]
+          if (!cur.tags.length && o.tags.length) cur.tags = patch.tags = o.tags
+          if (!cur.links.length && o.links.length) cur.links = patch.links = o.links
+          // เล่มที่เก็บยังไม่มีที่เก็บและไม่ได้อยู่ในมือ: ใช้ที่เก็บของเล่มที่ลบ
+          if (!cur.placeId && !cur.takenAt && o.placeId && !o.takenAt) {
+            cur.placeId = patch.placeId = o.placeId
+            cur.position = patch.position = o.position
+            if (o.row !== undefined) cur.row = patch.row = o.row
+          }
+          // ประวัติการอ่านที่จบแล้วและโควตย้ายมาอยู่กับเล่มที่เก็บ (การหยิบที่ค้างอยู่ของเล่มที่ลบถูกปิดตอนลบ)
+          await db.sessions.where('bookId').equals(id).filter((x) => x.deletedAt === null && x.endedAt !== null).modify({ bookId: keepId, updatedAt: now })
+          await db.quotes.where('bookId').equals(id).filter((x) => x.deletedAt === null).modify({ bookId: keepId, updatedAt: now })
+          const mine = await db.covers.get(keepId)
+          const theirs = await db.covers.get(id)
+          if (!(mine && mine.deletedAt === null && mine.blob) && theirs && theirs.deletedAt === null && theirs.blob) await putCover(db, keepId, theirs.blob)
+          await db.books.update(id, { deletedAt: now, updatedAt: now })
+          for (const open of await openSessions(id)) await db.sessions.update(open.id, { deletedAt: now, updatedAt: now })
+          await putCover(db, id, null)
+          removed++
+        }
+        if (removed) await db.books.update(keepId, { ...patch, updatedAt: now })
+        return removed
+      })
+    },
+
     // ---------- หยิบไปอ่าน / วางคืน ----------
     /** หยิบหนังสือออกจากที่เก็บ เริ่มบันทึกการอ่าน */
     async takeBook(id: string): Promise<void> {
